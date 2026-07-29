@@ -46,9 +46,9 @@ export default function AddToPlanModal({ request, onClose, onDone }) {
           {request.employee_name} — {request.dept}{request.sube ? ' / ' + request.sube : ''} — <b>{request.training_title}</b>
         </div>
 
-        {budgetStatus === 'Büdcələnməmiş' ? (
+        {budgetStatus === 'Büdcədən kənar' ? (
           <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412', fontSize: 12.5, padding: '10px 12px', borderRadius: 8, marginBottom: 14 }}>
-            Bu təlim illik büdcə planlaşdırma dövründən (Oktyabr–Yanvar) kənarda təsdiqlənir, ona görə <b>&quot;Büdcələnməmiş&quot;</b> kateqoriyasında qeyd olunacaq. Əvvəlcədən planlaşdırılmış büdcəyə daxil olmadığı üçün əlavə təsdiq tələb oluna bilər.
+            Bu təlim illik büdcə planlaşdırma dövründən (Oktyabr–Yanvar) kənarda təsdiqlənir, ona görə <b>&quot;Büdcədən kənar&quot;</b> kateqoriyasında qeyd olunacaq. Əvvəlcədən planlaşdırılmış büdcəyə daxil olmadığı üçün əlavə təsdiq tələb oluna bilər.
           </div>
         ) : (
           <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', fontSize: 12.5, padding: '10px 12px', borderRadius: 8, marginBottom: 14 }}>
