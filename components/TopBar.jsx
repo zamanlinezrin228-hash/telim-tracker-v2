@@ -8,6 +8,14 @@ export default function TopBar({ view, setView }) {
 
   return (
     <div className="topbar" style={{ position: 'relative' }}>
+      <button
+        className="nav-btn"
+        onClick={() => setView('home')}
+        title="Əsas səhifə"
+        style={{ position: 'absolute', left: 24, fontWeight: 800 }}
+      >
+        🏠 Təlim Tracker
+      </button>
       <button className={'nav-btn' + (view === 'dashboard' ? ' active' : '')} onClick={() => setView('dashboard')}>Dashboard</button>
       <button className={'nav-btn' + (view === 'tracking' ? ' active' : '')} onClick={() => setView('tracking')}>İzləmə Cədvəli</button>
       <button className={'nav-btn' + (view === 'requests' ? ' active' : '')} onClick={() => setView('requests')}>Təlim Sorğuları</button>
