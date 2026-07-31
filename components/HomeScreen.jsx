@@ -33,18 +33,6 @@ export default function HomeScreen({ profile, team, setView }) {
     },
   ];
 
-  if (profile.role === 'ld') {
-    cards.push({
-      key: 'admin',
-      title: 'Admin Panel',
-      desc: 'İzləmə Cədvəlindəki qeydləri redaktə et və ya sil.',
-      icon: '⚙️',
-      accent: '#7c3aed',
-      iconBg: 'radial-gradient(circle at 30% 30%, #c4b5fd, #7c3aed)',
-      linkLabel: 'Admin Panelə keç',
-    });
-  }
-
   return (
     <div>
       <div className="hero" style={{ padding: '56px 32px 72px' }}>
