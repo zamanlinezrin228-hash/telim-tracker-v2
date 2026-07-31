@@ -57,14 +57,14 @@ export default function HomeScreen({ profile, team, setView }) {
               onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(11,37,69,0.10)'; }}
             >
               <div style={{
-                background: '#f1f5f9', borderRadius: 14, height: 130,
+                background: '#f1f5f9', borderRadius: 14, height: 190,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 marginBottom: 18,
               }}>
                 <div style={{
-                  width: 76, height: 76, borderRadius: '50%', background: c.iconBg,
+                  width: 108, height: 108, borderRadius: '50%', background: c.iconBg,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 34, boxShadow: `0 8px 18px ${c.accent}40`,
+                  fontSize: 48, boxShadow: `0 8px 18px ${c.accent}40`,
                 }}>
                   {c.icon}
                 </div>
