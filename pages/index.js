@@ -3,6 +3,7 @@ import Head from 'next/head';
 import { sb } from '../lib/supabase';
 import LoginScreen from '../components/LoginScreen';
 import TopBar from '../components/TopBar';
+import HomeScreen from '../components/HomeScreen';
 import DashboardView from '../components/DashboardView';
 import TrackingView from '../components/TrackingView';
 import RequestsView from '../components/RequestsView';
@@ -14,7 +15,7 @@ export default function Home() {
   const [team, setTeam] = useState([]);
   const [trainings, setTrainings] = useState([]);
   const [requests, setRequests] = useState([]);
-  const [view, setView] = useState('dashboard');
+  const [view, setView] = useState('home');
 
   const loadData = useCallback(async (currentProfile) => {
     const { data: tData } = await sb.from('trainings').select('*').order('id');
@@ -71,6 +72,7 @@ export default function Home() {
     <>
       <Head><title>Təlim Tracker — Mars Overseas</title></Head>
       <TopBar view={view} setView={setView} />
+      {view === 'home' && <HomeScreen profile={profile} team={team} setView={setView} />}
       {view === 'dashboard' && <DashboardView trainings={trainings} />}
       {view === 'tracking' && <TrackingView trainings={trainings} profile={profile} />}
       {view === 'requests' && (
