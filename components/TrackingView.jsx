@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { sb } from '../lib/supabase';
 import { fmtMoney, statusMeta, priorityMeta } from '../lib/helpers';
+import ColumnFilterHeader from './ColumnFilterHeader';
 
 const STATUS_OPTIONS = [
   'Scheduled to Commence on Planned Date', 'In Progress', 'Postponed', 'Completed', 'Canceled',
@@ -10,12 +11,15 @@ const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical'];
 const COMP_CAT_OPTIONS = ['Hard Skills', 'Soft Skills'];
 const BUDGET_STATUS_OPTIONS = ['Büdcələnmiş', 'Büdcədən kənar'];
 
+const FILTER_FIELDS = ['dept', 'position', 'skill', 'comp_cat', 'vendor', 'status', 'priority', 'budget_status'];
+
+function displayVal(v) {
+  return v === null || v === undefined || v === '' ? '—' : String(v);
+}
+
 export default function TrackingView({ trainings, profile, onDataChanged }) {
   const [search, setSearch] = useState('');
-  const [filterDept, setFilterDept] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [filterCompCat, setFilterCompCat] = useState('all');
-  const [filterPriority, setFilterPriority] = useState('all');
+  const [filters, setFilters] = useState({});
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -24,16 +28,31 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
   const canExport = profile && (profile.role === 'hr' || profile.role === 'ld');
   const isAdmin = profile && profile.role === 'ld';
 
-  function uniqueVals(field) {
-    return [...new Set(trainings.map(t => t[field]).filter(Boolean))].sort();
+  const uniqueValsByField = useMemo(() => {
+    const map = {};
+    FILTER_FIELDS.forEach(f => {
+      map[f] = [...new Set(trainings.map(t => displayVal(t[f])))].sort();
+    });
+    return map;
+  }, [trainings]);
+
+  useEffect(() => {
+    const initial = {};
+    FILTER_FIELDS.forEach(f => { initial[f] = new Set(uniqueValsByField[f]); });
+    setFilters(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trainings.length]);
+
+  function setFieldFilter(field, selectedSet) {
+    setFilters(prev => ({ ...prev, [field]: selectedSet }));
   }
 
   const filtered = useMemo(() => {
     return trainings.filter(t => {
-      if (filterDept !== 'all' && t.dept !== filterDept) return false;
-      if (filterStatus !== 'all' && t.status !== filterStatus) return false;
-      if (filterCompCat !== 'all' && t.comp_cat !== filterCompCat) return false;
-      if (filterPriority !== 'all' && t.priority !== filterPriority) return false;
+      for (const f of FILTER_FIELDS) {
+        const sel = filters[f];
+        if (sel && !sel.has(displayVal(t[f]))) return false;
+      }
       if (search) {
         const q = search.toLowerCase();
         if (!(t.employee_name || '').toLowerCase().includes(q) &&
@@ -43,7 +62,16 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
       }
       return true;
     });
-  }, [trainings, search, filterDept, filterStatus, filterCompCat, filterPriority]);
+  }, [trainings, search, filters]);
+
+  const activeFilterCount = FILTER_FIELDS.filter(f => filters[f] && filters[f].size < uniqueValsByField[f].length).length;
+
+  function clearAllFilters() {
+    const reset = {};
+    FILTER_FIELDS.forEach(f => { reset[f] = new Set(uniqueValsByField[f]); });
+    setFilters(reset);
+    setSearch('');
+  }
 
   function exportToExcel() {
     const rows = filtered.map(t => ({
@@ -64,11 +92,9 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
     setError('');
     setEditing({ ...row });
   }
-
   function upd(field, value) {
     setEditing((e) => ({ ...e, [field]: value }));
   }
-
   async function saveEdit() {
     setSaving(true);
     setError('');
@@ -79,7 +105,6 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
     setEditing(null);
     if (onDataChanged) await onDataChanged();
   }
-
   async function confirmDelete() {
     setSaving(true);
     const { error: err } = await sb.from('trainings').delete().eq('id', deleting.id);
@@ -89,45 +114,25 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
     if (onDataChanged) await onDataChanged();
   }
 
+  if (!filters.dept) return null;
+
   return (
     <div className="page">
-      <div className="filter-panel">
-        <div className="filter-grid">
-          <div>
-            <div className="filter-label">Axtar</div>
-            <input type="text" placeholder="Ad, vəzifə, vendor..." style={{ width: '100%' }} value={search} onChange={e => setSearch(e.target.value)} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
+        <input
+          type="text" placeholder="Ad, vəzifə, vendor axtar..." style={{ width: 260 }}
+          value={search} onChange={e => setSearch(e.target.value)}
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ fontSize: 13, color: '#64748b' }}>
+            {filtered.length} / {trainings.length} nəticə
+            {activeFilterCount > 0 && <span style={{ color: '#2563eb', fontWeight: 600 }}> ({activeFilterCount} sütun filtrlənib)</span>}
           </div>
-          <div>
-            <div className="filter-label">Departament</div>
-            <select style={{ width: '100%' }} value={filterDept} onChange={e => setFilterDept(e.target.value)}>
-              <option value="all">Hamısı</option>
-              {uniqueVals('dept').map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
-          </div>
-          <div>
-            <div className="filter-label">Status</div>
-            <select style={{ width: '100%' }} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-              <option value="all">Hamısı</option>
-              {uniqueVals('status').map(s => <option key={s} value={s}>{statusMeta(s).label}</option>)}
-            </select>
-          </div>
-          <div>
-            <div className="filter-label">Səriştə Kateqoriyası</div>
-            <select style={{ width: '100%' }} value={filterCompCat} onChange={e => setFilterCompCat(e.target.value)}>
-              <option value="all">Hamısı</option>
-              {uniqueVals('comp_cat').map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-          <div>
-            <div className="filter-label">Prioritet</div>
-            <select style={{ width: '100%' }} value={filterPriority} onChange={e => setFilterPriority(e.target.value)}>
-              <option value="all">Hamısı</option>
-              {uniqueVals('priority').map(p => <option key={p} value={p}>{priorityMeta(p).label}</option>)}
-            </select>
-          </div>
-        </div>
-        <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: 13, color: '#64748b' }}>{filtered.length} / {trainings.length} nəticə</div>
+          {activeFilterCount > 0 && (
+            <button onClick={clearAllFilters} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', fontSize: 12.5 }}>
+              Filtrləri təmizlə
+            </button>
+          )}
           {canExport && (
             <button onClick={exportToExcel} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#059669', color: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>
               Excel-ə ixrac et
@@ -140,9 +145,16 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
         <table>
           <thead>
             <tr>
-              <th>Departament</th><th>Ad Soyad</th><th>Vəzifə</th><th>İnkişaf istiqaməti</th>
-              <th>Kateqoriya</th><th>Vendor</th><th>Status</th><th>Prioritet</th>
-              <th>Başlama</th><th>Bitmə</th><th>Büdcə</th><th>Büdcə Statusu</th>
+              <ColumnFilterHeader label="Departament" values={uniqueValsByField.dept} selected={filters.dept} onChange={s => setFieldFilter('dept', s)} />
+              <th>Ad Soyad</th>
+              <ColumnFilterHeader label="Vəzifə" values={uniqueValsByField.position} selected={filters.position} onChange={s => setFieldFilter('position', s)} />
+              <ColumnFilterHeader label="İnkişaf istiqaməti" values={uniqueValsByField.skill} selected={filters.skill} onChange={s => setFieldFilter('skill', s)} />
+              <ColumnFilterHeader label="Kateqoriya" values={uniqueValsByField.comp_cat} selected={filters.comp_cat} onChange={s => setFieldFilter('comp_cat', s)} />
+              <ColumnFilterHeader label="Vendor" values={uniqueValsByField.vendor} selected={filters.vendor} onChange={s => setFieldFilter('vendor', s)} />
+              <ColumnFilterHeader label="Status" values={uniqueValsByField.status} selected={filters.status} onChange={s => setFieldFilter('status', s)} />
+              <ColumnFilterHeader label="Prioritet" values={uniqueValsByField.priority} selected={filters.priority} onChange={s => setFieldFilter('priority', s)} />
+              <th>Başlama</th><th>Bitmə</th><th>Büdcə</th>
+              <ColumnFilterHeader label="Büdcə Statusu" values={uniqueValsByField.budget_status} selected={filters.budget_status} onChange={s => setFieldFilter('budget_status', s)} />
               {isAdmin && <th>Əməliyyat</th>}
             </tr>
           </thead>
@@ -175,7 +187,6 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
         <div className="modal-overlay">
           <div className="modal-card" style={{ width: 520 }}>
             <div style={{ fontWeight: 800, fontSize: 17, marginBottom: 16 }}>Qeydi Redaktə Et</div>
-
             <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
               <div style={{ flex: 1 }}>
                 <label style={{ fontSize: 12.5, color: '#64748b' }}>Departament</label>
@@ -186,22 +197,18 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
                 <input type="text" value={editing.sube || ''} onChange={(e) => upd('sube', e.target.value)} style={{ width: '100%' }} />
               </div>
             </div>
-
             <div style={{ marginBottom: 10 }}>
               <label style={{ fontSize: 12.5, color: '#64748b' }}>Ad Soyad</label>
               <input type="text" value={editing.employee_name || ''} onChange={(e) => upd('employee_name', e.target.value)} style={{ width: '100%' }} />
             </div>
-
             <div style={{ marginBottom: 10 }}>
               <label style={{ fontSize: 12.5, color: '#64748b' }}>Vəzifə</label>
               <input type="text" value={editing.position || ''} onChange={(e) => upd('position', e.target.value)} style={{ width: '100%' }} />
             </div>
-
             <div style={{ marginBottom: 10 }}>
               <label style={{ fontSize: 12.5, color: '#64748b' }}>Təlim / İnkişaf istiqaməti</label>
               <input type="text" value={editing.skill || ''} onChange={(e) => upd('skill', e.target.value)} style={{ width: '100%' }} />
             </div>
-
             <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
               <div style={{ flex: 1 }}>
                 <label style={{ fontSize: 12.5, color: '#64748b' }}>Səriştə Kateqoriyası</label>
@@ -215,7 +222,6 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
                 <input type="text" value={editing.vendor || ''} onChange={(e) => upd('vendor', e.target.value)} style={{ width: '100%' }} />
               </div>
             </div>
-
             <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
               <div style={{ flex: 1 }}>
                 <label style={{ fontSize: 12.5, color: '#64748b' }}>Status</label>
@@ -230,7 +236,6 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
                 </select>
               </div>
             </div>
-
             <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
               <div style={{ flex: 1 }}>
                 <label style={{ fontSize: 12.5, color: '#64748b' }}>Başlama tarixi</label>
@@ -241,7 +246,6 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
                 <input type="date" value={editing.end_date || ''} onChange={(e) => upd('end_date', e.target.value)} style={{ width: '100%' }} />
               </div>
             </div>
-
             <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
               <div style={{ flex: 1 }}>
                 <label style={{ fontSize: 12.5, color: '#64748b' }}>Man Hours</label>
@@ -252,7 +256,6 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
                 <input type="number" value={editing.budget || 0} onChange={(e) => upd('budget', Number(e.target.value))} style={{ width: '100%' }} />
               </div>
             </div>
-
             <div style={{ marginBottom: 14 }}>
               <label style={{ fontSize: 12.5, color: '#64748b' }}>Büdcə Statusu</label>
               <select value={editing.budget_status || ''} onChange={(e) => upd('budget_status', e.target.value)} style={{ width: '100%' }}>
@@ -260,9 +263,7 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
                 {BUDGET_STATUS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
-
             {error && <div style={{ color: '#dc2626', fontSize: 13, marginBottom: 10 }}>{error}</div>}
-
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => setEditing(null)} style={{ flex: 1, padding: 10, borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}>Ləğv et</button>
               <button onClick={saveEdit} disabled={saving} style={{ flex: 1, padding: 10, borderRadius: 8, border: 'none', background: '#0b2545', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
