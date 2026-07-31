@@ -7,6 +7,7 @@ import HomeScreen from '../components/HomeScreen';
 import DashboardView from '../components/DashboardView';
 import TrackingView from '../components/TrackingView';
 import RequestsView from '../components/RequestsView';
+import AnalysisView from '../components/AnalysisView';
 
 export default function Home() {
   const [loading, setLoading] = useState(true);
@@ -78,6 +79,7 @@ export default function Home() {
       {view === 'requests' && (
         <RequestsView profile={profile} team={team} requests={requests} onDataChanged={handleDataChanged} />
       )}
+      {view === 'analysis' && <AnalysisView trainings={trainings} />}
     </>
   );
 }
