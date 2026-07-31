@@ -1,4 +1,5 @@
 import { fmtMoney, statusMeta } from '../lib/helpers';
+import AnalysisView from './AnalysisView';
 
 export default function DashboardView({ trainings }) {
   const total = trainings.length;
@@ -56,6 +57,7 @@ export default function DashboardView({ trainings }) {
             ))}
           </div>
         </div>
+        <AnalysisView trainings={trainings} />
       </div>
     </div>
   );
