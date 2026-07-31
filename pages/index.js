@@ -7,6 +7,7 @@ import HomeScreen from '../components/HomeScreen';
 import DashboardView from '../components/DashboardView';
 import TrackingView from '../components/TrackingView';
 import RequestsView from '../components/RequestsView';
+import AdminPanel from '../components/AdminPanel';
 
 export default function Home() {
   const [loading, setLoading] = useState(true);
@@ -77,6 +78,9 @@ export default function Home() {
       {view === 'tracking' && <TrackingView trainings={trainings} profile={profile} />}
       {view === 'requests' && (
         <RequestsView profile={profile} team={team} requests={requests} onDataChanged={handleDataChanged} />
+      )}
+      {view === 'admin' && profile.role === 'ld' && (
+        <AdminPanel trainings={trainings} onDataChanged={handleDataChanged} />
       )}
     </>
   );
