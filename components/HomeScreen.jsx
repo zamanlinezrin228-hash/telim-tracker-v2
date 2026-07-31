@@ -33,6 +33,16 @@ export default function HomeScreen({ profile, team, setView }) {
     },
   ];
 
+  cards.push({
+    key: 'analysis',
+    title: 'Analiz',
+    desc: 'Sahələri seçib canlı cədvəl analiz qurun — departament, status, büdcə üzrə.',
+    icon: '🔍',
+    accent: '#7c3aed',
+    iconBg: 'radial-gradient(circle at 30% 30%, #c4b5fd, #7c3aed)',
+    linkLabel: 'Analizə keç',
+  });
+
   return (
     <div>
       <div className="hero" style={{ padding: '56px 32px 72px' }}>
