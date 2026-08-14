@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Head from 'next/head';
 import { sb } from '../lib/supabase';
 import LoginScreen from '../components/LoginScreen';
+import SignupScreen from '../components/SignupScreen';
 import TopBar from '../components/TopBar';
 import HomeScreen from '../components/HomeScreen';
 import DashboardView from '../components/DashboardView';
@@ -11,6 +12,7 @@ import RequestsView from '../components/RequestsView';
 export default function Home() {
   const [loading, setLoading] = useState(true);
   const [loggedIn, setLoggedIn] = useState(false);
+  const [authView, setAuthView] = useState('login'); // 'login' | 'signup'
   const [profile, setProfile] = useState(null);
   const [team, setTeam] = useState([]);
   const [trainings, setTrainings] = useState([]);
@@ -53,7 +55,7 @@ export default function Home() {
   if (loading) {
     return (
       <>
-        <Head><title>Təlim Tracker — Mars Overseas</title></Head>
+        <Head><title>Təlim Tracker</title></Head>
         <div className="loading">Yüklənir...</div>
       </>
     );
@@ -62,15 +64,19 @@ export default function Home() {
   if (!loggedIn) {
     return (
       <>
-        <Head><title>Təlim Tracker — Mars Overseas</title></Head>
-        <LoginScreen onLoggedIn={afterLogin} />
+        <Head><title>Təlim Tracker</title></Head>
+        {authView === 'login' ? (
+          <LoginScreen onLoggedIn={afterLogin} onShowSignup={() => setAuthView('signup')} />
+        ) : (
+          <SignupScreen onSignedUp={afterLogin} onBackToLogin={() => setAuthView('login')} />
+        )}
       </>
     );
   }
 
   return (
     <>
-      <Head><title>Təlim Tracker — Mars Overseas</title></Head>
+      <Head><title>Təlim Tracker</title></Head>
       <TopBar view={view} setView={setView} />
       {view === 'home' && <HomeScreen profile={profile} team={team} setView={setView} />}
       {view === 'dashboard' && <DashboardView trainings={trainings} />}
