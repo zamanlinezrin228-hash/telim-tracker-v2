@@ -163,14 +163,8 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
           </div>
         </div>
 
-        <button
-          onClick={() => setShowAdvanced((s) => !s)}
-          style={{ border: 'none', background: 'none', color: '#2563eb', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '4px 0', marginBottom: showAdvanced ? 12 : 4 }}
-        >
-          {showAdvanced ? '▲ Ətraflı məlumatı gizlət' : '▼ Ətraflı məlumat əlavə et (istəyə bağlı)'}
-        </button>
-
-        {showAdvanced && (
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: '#64748b', margin: '4px 0 10px', textTransform: 'uppercase', letterSpacing: 0.4 }}>Ətraflı məlumat (istəyə bağlı)</div>
+        {true && (
           <div style={{ background: '#f8fafc', borderRadius: 10, padding: 14, marginBottom: 14 }}>
             <div style={{ marginBottom: 10 }}>
               <label style={{ fontSize: 12.5, color: '#64748b', display: 'block', marginBottom: 4 }}>Səriştə Kateqoriyası</label>
