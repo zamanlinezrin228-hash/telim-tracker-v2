@@ -37,6 +37,10 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
     setError('');
     if (!title.trim()) { setError('Təlimin adını yazın.'); return; }
     if (forWhom === 'team' && selectedIds.length === 0) { setError('Ən azı bir komanda üzvü seçin.'); return; }
+    if (!compCat) { setError('Səriştə Kateqoriyasını seçin.'); return; }
+    if (!importance) { setError('Əhəmiyyət dərəcəsini seçin.'); return; }
+    if (!currentLevel) { setError('Cari səviyyəni seçin.'); return; }
+    if (!requiredLevel) { setError('Tələb olunan səviyyəni seçin.'); return; }
 
     const base = {
       training_title: title.trim(),
