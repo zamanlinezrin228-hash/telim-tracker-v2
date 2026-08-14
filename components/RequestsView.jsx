@@ -139,26 +139,28 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
             </table>
           </div>
 
-          <details style={{ marginBottom: 24 }}>
-            <summary style={{ cursor: 'pointer', fontSize: 14, fontWeight: 700, padding: '8px 0' }}>Sahəmin Qərarları ({scopeHistory.length})</summary>
-            <div className="card" style={{ marginTop: 8 }}>
-              <table>
-                <thead><tr><th>Ad Soyad</th><th>Təlim</th><th>Status</th><th>Manager qeydi</th><th>L&D qeydi</th></tr></thead>
-                <tbody>
-                  {scopeHistory.length ? scopeHistory.map((r) => (
-                    <tr key={r.id}>
-                      <td>{r.employee_name}</td><td>{r.training_title}</td>
-                      <td><Badge meta={reqStatusMeta(r.status)} /></td>
-                      <td style={{ fontSize: 12.5 }}>{r.manager_note || '—'}</td>
-                      <td style={{ fontSize: 12.5 }}>{r.reviewer_note || '—'}</td>
-                    </tr>
-                  )) : (
-                    <tr><td colSpan={5} style={{ textAlign: 'center', color: '#94a3b8', padding: 16 }}>Hələ qərar yoxdur</td></tr>
-                  )}
-                </tbody>
-              </table>
+          <div style={{ fontSize: 15, fontWeight: 800, margin: '20px 0 12px' }}>Sahəmin Qərarları ({scopeHistory.length})</div>
+          {scopeHistory.length ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14, marginBottom: 24 }}>
+              {scopeHistory.map((r) => {
+                const sm = reqStatusMeta(r.status);
+                return (
+                  <div key={r.id} style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+                    <div style={{ height: 6, background: sm.color }} />
+                    <div style={{ padding: 14 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{r.employee_name}</div>
+                      <div style={{ fontSize: 13, color: '#334155', marginBottom: 10 }}>{r.training_title}</div>
+                      <Badge meta={sm} />
+                      {r.manager_note && <div style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}><b>Manager:</b> {r.manager_note}</div>}
+                      {r.reviewer_note && <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}><b>L&D:</b> {r.reviewer_note}</div>}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          </details>
+          ) : (
+            <div className="card" style={{ textAlign: 'center', color: '#94a3b8', padding: 24, marginBottom: 24 }}>Hələ qərar yoxdur</div>
+          )}
         </>
       )}
 
@@ -207,31 +209,36 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
           )}
 
           {reviewerDecided.length > 0 && (
-            <details style={{ marginBottom: 24 }}>
-              <summary style={{ cursor: 'pointer', fontSize: 13.5, color: '#64748b', fontWeight: 600, padding: '8px 0' }}>Qərarlar tarixçəsi ({reviewerDecided.length})</summary>
-              <div className="card" style={{ marginTop: 8 }}>
-                <table>
-                  <thead><tr><th>Ad Soyad</th><th>Departament</th><th>Təlim</th><th>Status</th><th>L&D qeydi</th><th>Əməliyyat</th></tr></thead>
-                  <tbody>
-                    {reviewerDecided.map((r) => (
-                      <tr key={r.id}>
-                        <td>{r.employee_name}</td><td>{r.dept}</td><td>{r.training_title}</td>
-                        <td><Badge meta={reqStatusMeta(r.status)} /></td>
-                        <td style={{ fontSize: 12.5 }}>{r.reviewer_note || '—'}</td>
-                        <td>
-                          {r.status === 'Approved' && !r.linked_training_id && (
-                            <button onClick={() => setAddToPlanRequest(r)} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#7c3aed', color: '#fff', fontSize: 12.5, cursor: 'pointer' }}>
-                              Plana Əlavə Et
-                            </button>
-                          )}
-                          {r.linked_training_id && <span style={{ fontSize: 12, color: '#94a3b8' }}>Planda var</span>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <>
+              <div style={{ fontSize: 15, fontWeight: 800, margin: '20px 0 12px' }}>Qərarlar tarixçəsi ({reviewerDecided.length})</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14, marginBottom: 24 }}>
+                {reviewerDecided.map((r) => {
+                  const sm = reqStatusMeta(r.status);
+                  return (
+                    <div key={r.id} style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+                      <div style={{ height: 6, background: sm.color }} />
+                      <div style={{ padding: 14 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: 14 }}>{r.employee_name}</div>
+                            <div style={{ fontSize: 12, color: '#94a3b8' }}>{r.dept}</div>
+                          </div>
+                          <Badge meta={sm} />
+                        </div>
+                        <div style={{ fontSize: 13, color: '#334155', marginBottom: 8 }}>{r.training_title}</div>
+                        {r.reviewer_note && <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}><b>L&D qeyd:</b> {r.reviewer_note}</div>}
+                        {r.status === 'Approved' && !r.linked_training_id && (
+                          <button onClick={() => setAddToPlanRequest(r)} style={{ width: '100%', padding: '8px 0', borderRadius: 8, border: 'none', background: '#7c3aed', color: '#fff', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
+                            Plana Əlavə Et
+                          </button>
+                        )}
+                        {r.linked_training_id && <div style={{ fontSize: 12, color: '#059669', fontWeight: 600 }}>✓ Planda var</div>}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            </details>
+            </>
           )}
         </>
       )}
