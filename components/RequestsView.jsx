@@ -1,84 +1,98 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { sb } from '../lib/supabase';
-import { priorityMeta, reqStatusMeta } from '../lib/helpers';
+import { reqStatusMeta, priorityMeta } from '../lib/helpers';
 import RequestFormModal from './RequestFormModal';
+import NoteModal from './NoteModal';
 import AddToPlanModal from './AddToPlanModal';
-
-function RequestListTable({ list, showNotes }) {
-  return (
-    <div className="card">
-      <table>
-        <thead>
-          <tr>
-            <th>Təlim</th><th>Prioritet</th><th>Status</th><th>Göndərilib</th>
-            {showNotes && <><th>Manager qeydi</th><th>L&amp;D qeydi</th></>}
-          </tr>
-        </thead>
-        <tbody>
-          {list.length ? list.map(r => {
-            const sm = reqStatusMeta(r.status), pm = priorityMeta(r.priority);
-            return (
-              <tr key={r.id}>
-                <td>{r.training_title}</td>
-                <td><span className="badge" style={{ background: pm.color }}>{pm.label}</span></td>
-                <td><span className="badge" style={{ background: sm.color }}>{sm.label}</span></td>
-                <td>{new Date(r.created_at).toLocaleDateString('az-AZ')}</td>
-                {showNotes && <><td style={{ fontSize: 12.5 }}>{r.manager_note || '—'}</td><td style={{ fontSize: 12.5 }}>{r.reviewer_note || '—'}</td></>}
-              </tr>
-            );
-          }) : (
-            <tr><td colSpan={showNotes ? 6 : 4} style={{ textAlign: 'center', color: '#94a3b8', padding: 20 }}>Hələ sorğu yoxdur</td></tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 export default function RequestsView({ profile, team, requests, onDataChanged }) {
   const [showForm, setShowForm] = useState(false);
-  const [planModalRequest, setPlanModalRequest] = useState(null);
+  const [noteAction, setNoteAction] = useState(null);
+  const [addToPlanRequest, setAddToPlanRequest] = useState(null);
 
   const role = profile.role;
   const hasTeam = team && team.length > 0;
   const isReviewer = role === 'hr' || role === 'ld';
-  const myRequests = requests.filter(r => r.requested_by === profile.id);
-  const toReview = requests.filter(r => r.reviewing_manager_id === profile.id && r.status === 'Pending Manager Review');
+  const myRequests = requests.filter((r) => r.requested_by === profile.id);
+  const toReview = requests.filter((r) => r.reviewing_manager_id === profile.id && r.status === 'Pending Manager Review');
 
-  const inScope = r => profile.scope_level === 'dept' ? r.dept === profile.dept : r.sube === profile.sube;
-  const scopeHistory = requests.filter(r => r.status !== 'Pending Manager Review' && inScope(r));
+  const scopeHistory = useMemo(() => {
+    if (!hasTeam) return [];
+    const inScope = (r) => profile.scope_level === 'dept' ? r.dept === profile.dept : r.sube === profile.sube;
+    return requests.filter((r) => r.status !== 'Pending Manager Review' && inScope(r));
+  }, [requests, hasTeam, profile]);
 
-  async function managerDecide(id, targetStatus) {
-    const note = prompt(targetStatus === 'Pending' ? 'Təsdiq qeydiniz (əsaslandırma):' : 'Rədd səbəbi:') || '';
+  const reviewerGrouped = useMemo(() => {
+    if (!isReviewer) return {};
+    const visible = requests.filter((r) => r.status !== 'Pending Manager Review');
+    const grouped = {};
+    visible.forEach((r) => { (grouped[r.dept] = grouped[r.dept] || []).push(r); });
+    return grouped;
+  }, [requests, isReviewer]);
+
+  const reviewerActive = isReviewer
+    ? Object.fromEntries(Object.entries(reviewerGrouped).map(([d, list]) => [d, list.filter((r) => r.status === 'Pending' || r.status === 'In Review')]).filter(([, list]) => list.length))
+    : {};
+  const reviewerDecided = isReviewer ? requests.filter((r) => r.status === 'Approved' || r.status === 'Rejected') : [];
+  const pendingCount = isReviewer ? requests.filter((r) => r.status === 'Pending').length : 0;
+
+  async function refresh() {
+    setShowForm(false);
+    setNoteAction(null);
+    setAddToPlanRequest(null);
+    await onDataChanged();
+  }
+
+  async function managerDecide(id, targetStatus, note) {
     const { error } = await sb.from('training_requests').update({
       status: targetStatus, manager_note: note, manager_reviewed_by: profile.id, updated_at: new Date().toISOString(),
     }).eq('id', id);
     if (error) { alert('Xəta: ' + error.message); return; }
-    onDataChanged();
+    await refresh();
   }
 
   async function takeIntoReview(id) {
     const { error } = await sb.from('training_requests').update({ status: 'In Review', updated_at: new Date().toISOString() }).eq('id', id);
     if (error) { alert('Xəta: ' + error.message); return; }
-    onDataChanged();
+    await onDataChanged();
   }
 
-  async function decideRequest(id, status) {
-    const note = prompt(status === 'Approved' ? 'Analiz qeydiniz (vəzifə uyğunluğu, büdcə və s.):' : 'Rədd səbəbi:') || '';
+  async function ldDecide(id, targetStatus, note) {
     const { error } = await sb.from('training_requests').update({
-      status, reviewer_note: note, reviewed_by: profile.id, updated_at: new Date().toISOString(),
+      status: targetStatus, reviewer_note: note, reviewed_by: profile.id, updated_at: new Date().toISOString(),
     }).eq('id', id);
     if (error) { alert('Xəta: ' + error.message); return; }
-    onDataChanged();
+    await refresh();
   }
 
-  let visible = [], active = [], decided = [], grouped = {}, pendingCount = 0;
-  if (isReviewer) {
-    visible = requests.filter(r => r.status !== 'Pending Manager Review');
-    active = visible.filter(r => r.status === 'Pending' || r.status === 'In Review');
-    decided = visible.filter(r => r.status === 'Approved' || r.status === 'Rejected');
-    active.forEach(r => { (grouped[r.dept] = grouped[r.dept] || []).push(r); });
-    pendingCount = active.filter(r => r.status === 'Pending').length;
+  function Badge({ meta }) {
+    return <span className="badge" style={{ background: meta.color }}>{meta.label}</span>;
+  }
+
+  function RequestTable({ list, showNotes }) {
+    return (
+      <table>
+        <thead>
+          <tr>
+            <th>Təlim</th><th>Prioritet</th><th>Status</th><th>Göndərilib</th>
+            {showNotes && <><th>Manager qeydi</th><th>L&D qeydi</th></>}
+          </tr>
+        </thead>
+        <tbody>
+          {list.length ? list.map((r) => (
+            <tr key={r.id}>
+              <td>{r.training_title}</td>
+              <td><Badge meta={priorityMeta(r.priority)} /></td>
+              <td><Badge meta={reqStatusMeta(r.status)} /></td>
+              <td>{new Date(r.created_at).toLocaleDateString('az-AZ')}</td>
+              {showNotes && (<><td style={{ fontSize: 12.5 }}>{r.manager_note || '—'}</td><td style={{ fontSize: 12.5 }}>{r.reviewer_note || '—'}</td></>)}
+            </tr>
+          )) : (
+            <tr><td colSpan={showNotes ? 6 : 4} style={{ textAlign: 'center', color: '#94a3b8', padding: 20 }}>Hələ sorğu yoxdur</td></tr>
+          )}
+        </tbody>
+      </table>
+    );
   }
 
   return (
@@ -93,25 +107,34 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
       {hasTeam && (
         <>
           <div style={{ fontSize: 16, fontWeight: 800, margin: '20px 0 8px' }}>Baxılmalı Komanda Sorğuları ({toReview.length})</div>
-          <div className="card" style={{ marginBottom: 24 }}>
+          <div className="card" style={{ marginBottom: 20 }}>
             <table>
               <thead><tr><th>Ad Soyad</th><th>Təlim</th><th>Səbəb</th><th>Prioritet</th><th>Əməliyyat</th></tr></thead>
               <tbody>
-                {toReview.length ? toReview.map(r => {
-                  const pm = priorityMeta(r.priority);
-                  return (
-                    <tr key={r.id}>
-                      <td>{r.employee_name}</td>
-                      <td>{r.training_title}</td>
-                      <td style={{ fontSize: 12.5, color: '#64748b' }}>{r.reason || '—'}</td>
-                      <td><span className="badge" style={{ background: pm.color }}>{pm.label}</span></td>
-                      <td>
-                        <button onClick={() => managerDecide(r.id, 'Pending')} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#059669', color: '#fff', fontSize: 12.5, cursor: 'pointer', marginRight: 6 }}>Təsdiqlə → göndər</button>
-                        <button onClick={() => managerDecide(r.id, 'Rejected')} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#dc2626', color: '#fff', fontSize: 12.5, cursor: 'pointer' }}>Rədd et</button>
-                      </td>
-                    </tr>
-                  );
-                }) : <tr><td colSpan={5} style={{ textAlign: 'center', color: '#94a3b8', padding: 16 }}>Baxılmalı sorğu yoxdur</td></tr>}
+                {toReview.length ? toReview.map((r) => (
+                  <tr key={r.id}>
+                    <td>{r.employee_name}</td>
+                    <td>{r.training_title}</td>
+                    <td style={{ fontSize: 12.5, color: '#64748b' }}>{r.reason || '—'}</td>
+                    <td><Badge meta={priorityMeta(r.priority)} /></td>
+                    <td>
+                      <button
+                        onClick={() => setNoteAction({ type: 'manager-approve', id: r.id })}
+                        style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#059669', color: '#fff', fontSize: 12.5, cursor: 'pointer', marginRight: 6 }}
+                      >
+                        Təsdiqlə → göndər
+                      </button>
+                      <button
+                        onClick={() => setNoteAction({ type: 'manager-reject', id: r.id })}
+                        style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#dc2626', color: '#fff', fontSize: 12.5, cursor: 'pointer' }}
+                      >
+                        Rədd et
+                      </button>
+                    </td>
+                  </tr>
+                )) : (
+                  <tr><td colSpan={5} style={{ textAlign: 'center', color: '#94a3b8', padding: 16 }}>Baxılmalı sorğu yoxdur</td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -120,19 +143,18 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
             <summary style={{ cursor: 'pointer', fontSize: 14, fontWeight: 700, padding: '8px 0' }}>Sahəmin Qərarları ({scopeHistory.length})</summary>
             <div className="card" style={{ marginTop: 8 }}>
               <table>
-                <thead><tr><th>Ad Soyad</th><th>Təlim</th><th>Status</th><th>Manager qeydi</th><th>L&amp;D qeydi</th></tr></thead>
+                <thead><tr><th>Ad Soyad</th><th>Təlim</th><th>Status</th><th>Manager qeydi</th><th>L&D qeydi</th></tr></thead>
                 <tbody>
-                  {scopeHistory.length ? scopeHistory.map(r => {
-                    const sm = reqStatusMeta(r.status);
-                    return (
-                      <tr key={r.id}>
-                        <td>{r.employee_name}</td><td>{r.training_title}</td>
-                        <td><span className="badge" style={{ background: sm.color }}>{sm.label}</span></td>
-                        <td style={{ fontSize: 12.5 }}>{r.manager_note || '—'}</td>
-                        <td style={{ fontSize: 12.5 }}>{r.reviewer_note || '—'}</td>
-                      </tr>
-                    );
-                  }) : <tr><td colSpan={5} style={{ textAlign: 'center', color: '#94a3b8', padding: 16 }}>Hələ qərar yoxdur</td></tr>}
+                  {scopeHistory.length ? scopeHistory.map((r) => (
+                    <tr key={r.id}>
+                      <td>{r.employee_name}</td><td>{r.training_title}</td>
+                      <td><Badge meta={reqStatusMeta(r.status)} /></td>
+                      <td style={{ fontSize: 12.5 }}>{r.manager_note || '—'}</td>
+                      <td style={{ fontSize: 12.5 }}>{r.reviewer_note || '—'}</td>
+                    </tr>
+                  )) : (
+                    <tr><td colSpan={5} style={{ textAlign: 'center', color: '#94a3b8', padding: 16 }}>Hələ qərar yoxdur</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -142,70 +164,70 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
 
       {isReviewer && (
         <>
-          <div style={{ fontSize: 16, fontWeight: 800, margin: '20px 0 4px' }}>Gələn Təlim Sorğuları (L&amp;D)</div>
+          <div style={{ fontSize: 16, fontWeight: 800, margin: '20px 0 4px' }}>Gələn Təlim Sorğuları (L&D)</div>
           <div style={{ fontSize: 13, color: '#64748b', marginBottom: 14 }}>{pendingCount} sorğu analiz gözləyir</div>
-
-          {Object.keys(grouped).length === 0 && (
-            <div className="card" style={{ textAlign: 'center', color: '#94a3b8', padding: 30 }}>Aktiv sorğu yoxdur</div>
-          )}
-          {Object.keys(grouped).sort().map(dept => (
-            <div className="card" style={{ marginBottom: 14 }} key={dept}>
-              <div style={{ fontWeight: 700, marginBottom: 12 }}>📁 {dept} ({grouped[dept].length})</div>
+          {Object.keys(reviewerActive).sort().map((dept) => (
+            <div key={dept} className="card" style={{ marginBottom: 14 }}>
+              <div style={{ fontWeight: 700, marginBottom: 12 }}>📁 {dept} ({reviewerActive[dept].length})</div>
               <table>
                 <thead><tr><th>Ad Soyad</th><th>Təlim</th><th>Manager qeydi</th><th>Prioritet</th><th>Status</th><th>Əməliyyat</th></tr></thead>
                 <tbody>
-                  {grouped[dept].map(r => {
-                    const sm = reqStatusMeta(r.status), pm = priorityMeta(r.priority);
-                    return (
-                      <tr key={r.id}>
-                        <td>{r.employee_name}</td>
-                        <td>{r.training_title}<div style={{ fontSize: 12, color: '#94a3b8' }}>{r.reason || ''}</div></td>
-                        <td style={{ fontSize: 12.5, color: '#64748b' }}>{r.manager_note || '—'}</td>
-                        <td><span className="badge" style={{ background: pm.color }}>{pm.label}</span></td>
-                        <td><span className="badge" style={{ background: sm.color }}>{sm.label}</span></td>
-                        <td>
-                          {r.status === 'Pending' ? (
-                            <button onClick={() => takeIntoReview(r.id)} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#2563eb', color: '#fff', fontSize: 12.5, cursor: 'pointer' }}>Analizə götür</button>
-                          ) : (
-                            <>
-                              <button onClick={() => decideRequest(r.id, 'Approved')} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#059669', color: '#fff', fontSize: 12.5, cursor: 'pointer', marginRight: 6 }}>Təsdiqlə</button>
-                              <button onClick={() => decideRequest(r.id, 'Rejected')} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#dc2626', color: '#fff', fontSize: 12.5, cursor: 'pointer' }}>Rədd et</button>
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {reviewerActive[dept].map((r) => (
+                    <tr key={r.id}>
+                      <td>{r.employee_name}</td>
+                      <td>{r.training_title}<div style={{ fontSize: 12, color: '#94a3b8' }}>{r.reason || ''}</div></td>
+                      <td style={{ fontSize: 12.5, color: '#64748b' }}>{r.manager_note || '—'}</td>
+                      <td><Badge meta={priorityMeta(r.priority)} /></td>
+                      <td><Badge meta={reqStatusMeta(r.status)} /></td>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        {r.status === 'Pending' && (
+                          <button onClick={() => takeIntoReview(r.id)} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#2563eb', color: '#fff', fontSize: 12.5, cursor: 'pointer' }}>
+                            Analizə götür
+                          </button>
+                        )}
+                        {r.status === 'In Review' && (
+                          <>
+                            <button onClick={() => setNoteAction({ type: 'ld-approve', id: r.id })} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#059669', color: '#fff', fontSize: 12.5, cursor: 'pointer', marginRight: 6 }}>
+                              Təsdiqlə
+                            </button>
+                            <button onClick={() => setNoteAction({ type: 'ld-reject', id: r.id })} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#dc2626', color: '#fff', fontSize: 12.5, cursor: 'pointer' }}>
+                              Rədd et
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
           ))}
+          {Object.keys(reviewerActive).length === 0 && (
+            <div className="card" style={{ textAlign: 'center', color: '#94a3b8', padding: 30, marginBottom: 20 }}>Aktiv sorğu yoxdur</div>
+          )}
 
-          {decided.length > 0 && (
+          {reviewerDecided.length > 0 && (
             <details style={{ marginBottom: 24 }}>
-              <summary style={{ cursor: 'pointer', fontSize: 13.5, color: '#64748b', fontWeight: 600, padding: '8px 0' }}>Qərarlar tarixçəsi ({decided.length})</summary>
+              <summary style={{ cursor: 'pointer', fontSize: 13.5, color: '#64748b', fontWeight: 600, padding: '8px 0' }}>Qərarlar tarixçəsi ({reviewerDecided.length})</summary>
               <div className="card" style={{ marginTop: 8 }}>
                 <table>
-                  <thead><tr><th>Ad Soyad</th><th>Departament</th><th>Təlim</th><th>Status</th><th>L&amp;D qeydi</th><th>Əməliyyat</th></tr></thead>
+                  <thead><tr><th>Ad Soyad</th><th>Departament</th><th>Təlim</th><th>Status</th><th>L&D qeydi</th><th>Əməliyyat</th></tr></thead>
                   <tbody>
-                    {decided.map(r => {
-                      const sm = reqStatusMeta(r.status);
-                      const canAddToPlan = r.status === 'Approved' && !r.linked_training_id;
-                      return (
-                        <tr key={r.id}>
-                          <td>{r.employee_name}</td><td>{r.dept}</td><td>{r.training_title}</td>
-                          <td><span className="badge" style={{ background: sm.color }}>{sm.label}</span></td>
-                          <td style={{ fontSize: 12.5 }}>{r.reviewer_note || '—'}</td>
-                          <td>
-                            {canAddToPlan ? (
-                              <button onClick={() => setPlanModalRequest(r)} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#7c3aed', color: '#fff', fontSize: 12.5, cursor: 'pointer' }}>Plana Əlavə Et</button>
-                            ) : r.linked_training_id ? (
-                              <span style={{ fontSize: 12, color: '#94a3b8' }}>Planda var</span>
-                            ) : null}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {reviewerDecided.map((r) => (
+                      <tr key={r.id}>
+                        <td>{r.employee_name}</td><td>{r.dept}</td><td>{r.training_title}</td>
+                        <td><Badge meta={reqStatusMeta(r.status)} /></td>
+                        <td style={{ fontSize: 12.5 }}>{r.reviewer_note || '—'}</td>
+                        <td>
+                          {r.status === 'Approved' && !r.linked_training_id && (
+                            <button onClick={() => setAddToPlanRequest(r)} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#7c3aed', color: '#fff', fontSize: 12.5, cursor: 'pointer' }}>
+                              Plana Əlavə Et
+                            </button>
+                          )}
+                          {r.linked_training_id && <span style={{ fontSize: 12, color: '#94a3b8' }}>Planda var</span>}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -215,23 +237,35 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
       )}
 
       <div style={{ fontSize: 16, fontWeight: 800, margin: '20px 0 8px' }}>Mənim Göndərdiklərim</div>
-      <RequestListTable list={myRequests} showNotes />
+      <div className="card"><RequestTable list={myRequests} showNotes /></div>
 
       {showForm && (
-        <RequestFormModal
-          profile={profile}
-          team={team}
-          onClose={() => setShowForm(false)}
-          onSubmitted={() => { setShowForm(false); onDataChanged(); }}
+        <RequestFormModal profile={profile} team={team} onClose={() => setShowForm(false)} onSubmitted={refresh} />
+      )}
+
+      {noteAction && (
+        <NoteModal
+          title={
+            noteAction.type === 'manager-approve' ? 'Təsdiq qeydiniz (əsaslandırma)' :
+            noteAction.type === 'manager-reject' ? 'Rədd səbəbi' :
+            noteAction.type === 'ld-approve' ? 'Analiz qeydiniz (vəzifə uyğunluğu, büdcə və s.)' :
+            'Rədd səbəbi'
+          }
+          placeholder="Qeydinizi yazın (istəyə bağlı)..."
+          confirmLabel={noteAction.type.includes('approve') ? 'Təsdiqlə' : 'Rədd et'}
+          confirmColor={noteAction.type.includes('approve') ? '#059669' : '#dc2626'}
+          onCancel={() => setNoteAction(null)}
+          onConfirm={async (note) => {
+            if (noteAction.type === 'manager-approve') await managerDecide(noteAction.id, 'Pending', note);
+            if (noteAction.type === 'manager-reject') await managerDecide(noteAction.id, 'Rejected', note);
+            if (noteAction.type === 'ld-approve') await ldDecide(noteAction.id, 'Approved', note);
+            if (noteAction.type === 'ld-reject') await ldDecide(noteAction.id, 'Rejected', note);
+          }}
         />
       )}
 
-      {planModalRequest && (
-        <AddToPlanModal
-          request={planModalRequest}
-          onClose={() => setPlanModalRequest(null)}
-          onDone={() => { setPlanModalRequest(null); onDataChanged(); }}
-        />
+      {addToPlanRequest && (
+        <AddToPlanModal request={addToPlanRequest} onClose={() => setAddToPlanRequest(null)} onSubmitted={refresh} />
       )}
     </div>
   );
