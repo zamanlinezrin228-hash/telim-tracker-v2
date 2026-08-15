@@ -19,7 +19,11 @@ function displayVal(v) {
 
 export default function TrackingView({ trainings, profile, onDataChanged }) {
   const [search, setSearch] = useState('');
-  const [filters, setFilters] = useState({});
+  const [filters, setFilters] = useState(() => {
+    const initial = {};
+    FILTER_FIELDS.forEach(f => { initial[f] = new Set(trainings.map(t => displayVal(t[f]))); });
+    return initial;
+  });
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -113,8 +117,6 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
     setDeleting(null);
     if (onDataChanged) await onDataChanged();
   }
-
-  if (!filters.dept) return null;
 
   return (
     <div className="page">
