@@ -148,13 +148,20 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
               </tbody>
             </table>
           </div>
+        </>
+      )}
 
+      <div style={{ fontSize: 16, fontWeight: 800, margin: '20px 0 8px' }}>Şəxsi Sorğularım</div>
+      <div className="card" style={{ marginBottom: 20 }}><RequestTable list={myRequests} showNotes /></div>
+
+      {hasTeam && (
+        <>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '20px 0 12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ width: 36, height: 36, borderRadius: 10, background: 'radial-gradient(circle at 30% 30%, #93c5fd, #2563eb)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
                 📋
               </div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: '#0b2545' }}>Sahəmin qərarları</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#0b2545' }}>Status</div>
             </div>
             <span style={{ background: '#eff6ff', color: '#1d4ed8', fontSize: 13, fontWeight: 700, padding: '5px 14px', borderRadius: 999 }}>
               {scopeHistory.length} nəticə
@@ -194,12 +201,15 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
                     <div key={r.id} style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
                       <div style={{ height: 6, background: sm.color }} />
                       <div style={{ padding: 14 }}>
-                        <div style={{ marginBottom: 6 }}>
-                          <div style={{ fontWeight: 700, fontSize: 14 }}>{r.employee_name}</div>
-                          <div style={{ fontSize: 12, color: '#94a3b8' }}>{r.training_title} · {new Date(r.created_at).toLocaleDateString('az-AZ')}</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: 14 }}>{r.employee_name}</div>
+                            <div style={{ fontSize: 12, color: '#94a3b8' }}>{r.training_title} · {new Date(r.created_at).toLocaleDateString('az-AZ')}</div>
+                          </div>
+                          <Badge meta={sm} />
                         </div>
                         {r.reason && <div style={{ fontSize: 12.5, color: '#64748b', marginBottom: 10 }}>{r.reason}</div>}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, borderTop: '1px solid #f1f5f9', paddingTop: 10, marginBottom: 10 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
                           <div>
                             <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 2 }}>Prioritet</div>
                             <Badge meta={pm} />
@@ -212,9 +222,6 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
                             <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 2 }}>L&D</div>
                             <div style={{ fontSize: 12.5 }}>{r.reviewer_note || '—'}</div>
                           </div>
-                        </div>
-                        <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
-                          <Badge meta={sm} />
                         </div>
                       </div>
                     </div>
@@ -308,9 +315,6 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
           )}
         </>
       )}
-
-      <div style={{ fontSize: 16, fontWeight: 800, margin: '20px 0 8px' }}>Şəxsi Sorğularım</div>
-      <div className="card"><RequestTable list={myRequests} showNotes /></div>
 
       {showForm && (
         <RequestFormModal profile={profile} team={team} onClose={() => setShowForm(false)} onSubmitted={refresh} />
