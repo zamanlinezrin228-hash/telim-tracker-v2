@@ -149,7 +149,17 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
             </table>
           </div>
 
-          <div style={{ fontSize: 15, fontWeight: 800, margin: '20px 0 12px' }}>Sahəmin Qərarları ({scopeHistory.length})</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '20px 0 12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'radial-gradient(circle at 30% 30%, #93c5fd, #2563eb)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
+                📋
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#0b2545' }}>Sahəmin qərarları</div>
+            </div>
+            <span style={{ background: '#eff6ff', color: '#1d4ed8', fontSize: 13, fontWeight: 700, padding: '5px 14px', borderRadius: 999 }}>
+              {scopeHistory.length} nəticə
+            </span>
+          </div>
           {scopeHistory.length ? (
             <div style={{ display: 'grid', gridTemplateColumns: '190px 1fr', gap: 16, marginBottom: 24 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
