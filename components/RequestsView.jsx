@@ -9,6 +9,7 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
   const [showForm, setShowForm] = useState(false);
   const [noteAction, setNoteAction] = useState(null);
   const [addToPlanRequest, setAddToPlanRequest] = useState(null);
+  const [scopeFilter, setScopeFilter] = useState('all');
 
   const role = profile.role;
   const hasTeam = team && team.length > 0;
@@ -21,6 +22,15 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
     const inScope = (r) => profile.scope_level === 'dept' ? r.dept === profile.dept : r.sube === profile.sube;
     return requests.filter((r) => r.status !== 'Pending Manager Review' && inScope(r));
   }, [requests, hasTeam, profile]);
+
+  const scopeFilterOptions = [
+    { key: 'all', label: 'Hamısı' },
+    { key: 'Pending', label: 'Gözləyir' },
+    { key: 'In Review', label: 'Baxılır (L&D)' },
+    { key: 'Approved', label: 'Təsdiqləndi' },
+    { key: 'Rejected', label: 'Rədd edildi' },
+  ];
+  const scopeFiltered = scopeFilter === 'all' ? scopeHistory : scopeHistory.filter((r) => r.status === scopeFilter);
 
   const reviewerGrouped = useMemo(() => {
     if (!isReviewer) return {};
@@ -141,22 +151,68 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
 
           <div style={{ fontSize: 15, fontWeight: 800, margin: '20px 0 12px' }}>Sahəmin Qərarları ({scopeHistory.length})</div>
           {scopeHistory.length ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14, marginBottom: 24 }}>
-              {scopeHistory.map((r) => {
-                const sm = reqStatusMeta(r.status);
-                return (
-                  <div key={r.id} style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
-                    <div style={{ height: 6, background: sm.color }} />
-                    <div style={{ padding: 14 }}>
-                      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{r.employee_name}</div>
-                      <div style={{ fontSize: 13, color: '#334155', marginBottom: 10 }}>{r.training_title}</div>
-                      <Badge meta={sm} />
-                      {r.manager_note && <div style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}><b>Manager:</b> {r.manager_note}</div>}
-                      {r.reviewer_note && <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}><b>L&D:</b> {r.reviewer_note}</div>}
+            <div style={{ display: 'grid', gridTemplateColumns: '190px 1fr', gap: 16, marginBottom: 24 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {scopeFilterOptions.map((f) => {
+                  const count = f.key === 'all' ? scopeHistory.length : scopeHistory.filter((r) => r.status === f.key).length;
+                  const active = scopeFilter === f.key;
+                  return (
+                    <button
+                      key={f.key}
+                      onClick={() => setScopeFilter(f.key)}
+                      style={{
+                        textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        padding: '9px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 13,
+                        border: active ? '1.5px solid #0b2545' : '1px solid #e2e8f0',
+                        background: active ? '#eff6ff' : '#fff',
+                        color: active ? '#0b2545' : '#334155',
+                        fontWeight: active ? 700 : 500,
+                      }}
+                    >
+                      {f.label}
+                      <span style={{ fontSize: 12, color: '#94a3b8' }}>{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {scopeFiltered.length ? scopeFiltered.map((r) => {
+                  const sm = reqStatusMeta(r.status);
+                  const pm = priorityMeta(r.priority);
+                  return (
+                    <div key={r.id} style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+                      <div style={{ height: 6, background: sm.color }} />
+                      <div style={{ padding: 14 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: 14 }}>{r.employee_name}</div>
+                            <div style={{ fontSize: 12, color: '#94a3b8' }}>{r.training_title} · {new Date(r.created_at).toLocaleDateString('az-AZ')}</div>
+                          </div>
+                          <Badge meta={sm} />
+                        </div>
+                        {r.reason && <div style={{ fontSize: 12.5, color: '#64748b', marginBottom: 10 }}>{r.reason}</div>}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
+                          <div>
+                            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 2 }}>Prioritet</div>
+                            <Badge meta={pm} />
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 2 }}>Manager</div>
+                            <div style={{ fontSize: 12.5 }}>{r.manager_note || '—'}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 2 }}>L&D</div>
+                            <div style={{ fontSize: 12.5 }}>{r.reviewer_note || '—'}</div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                }) : (
+                  <div className="card" style={{ textAlign: 'center', color: '#94a3b8', padding: 24 }}>Bu kateqoriyada sorğu yoxdur</div>
+                )}
+              </div>
             </div>
           ) : (
             <div className="card" style={{ textAlign: 'center', color: '#94a3b8', padding: 24, marginBottom: 24 }}>Hələ qərar yoxdur</div>
