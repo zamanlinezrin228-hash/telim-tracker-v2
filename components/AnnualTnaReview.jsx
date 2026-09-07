@@ -4,7 +4,7 @@ import { reqStatusMeta, priorityMeta } from '../lib/helpers';
 import NoteModal from './NoteModal';
 import AddToPlanModal from './AddToPlanModal';
 
-export default function AnnualTnaReview({ profile, requests, onDataChanged }) {
+export default function AnnualTnaReview({ profile, requests, planYear, onDataChanged }) {
   const [noteAction, setNoteAction] = useState(null);
   const [addToPlanRequest, setAddToPlanRequest] = useState(null);
 
@@ -156,7 +156,7 @@ export default function AnnualTnaReview({ profile, requests, onDataChanged }) {
       )}
 
       {addToPlanRequest && (
-        <AddToPlanModal request={addToPlanRequest} onClose={() => setAddToPlanRequest(null)} onSubmitted={refresh} />
+        <AddToPlanModal request={addToPlanRequest} planYear={planYear} onClose={() => setAddToPlanRequest(null)} onSubmitted={refresh} />
       )}
     </div>
   );
