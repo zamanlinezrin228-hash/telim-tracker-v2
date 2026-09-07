@@ -11,7 +11,11 @@ const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical'];
 const COMP_CAT_OPTIONS = ['Hard Skills', 'Soft Skills'];
 const BUDGET_STATUS_OPTIONS = ['Büdcələnmiş', 'Büdcədən kənar'];
 
-const FILTER_FIELDS = ['dept', 'position', 'skill', 'comp_cat', 'vendor', 'status', 'priority', 'budget_status'];
+const FILTER_FIELDS = ['plan_year', 'dept', 'position', 'skill', 'comp_cat', 'vendor', 'status', 'priority', 'budget_status'];
+const FIELD_LABELS = {
+  plan_year: 'İl', dept: 'Departament', position: 'Vəzifə', skill: 'İnkişaf istiqaməti',
+  comp_cat: 'Kateqoriya', vendor: 'Vendor', status: 'Status', priority: 'Prioritet', budget_status: 'Büdcə Statusu',
+};
 
 function displayVal(v) {
   return v === null || v === undefined || v === '' ? '—' : String(v);
@@ -19,11 +23,7 @@ function displayVal(v) {
 
 export default function TrackingView({ trainings, profile, onDataChanged }) {
   const [search, setSearch] = useState('');
-  const [filters, setFilters] = useState(() => {
-    const initial = {};
-    FILTER_FIELDS.forEach(f => { initial[f] = new Set(trainings.map(t => displayVal(t[f]))); });
-    return initial;
-  });
+  const [filters, setFilters] = useState({});
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -34,25 +34,25 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
 
   const uniqueValsByField = useMemo(() => {
     const map = {};
-    FILTER_FIELDS.forEach(f => {
-      map[f] = [...new Set(trainings.map(t => displayVal(t[f])))].sort();
+    FILTER_FIELDS.forEach((f) => {
+      map[f] = [...new Set(trainings.map((t) => displayVal(t[f])))].sort();
     });
     return map;
   }, [trainings]);
 
   useEffect(() => {
     const initial = {};
-    FILTER_FIELDS.forEach(f => { initial[f] = new Set(uniqueValsByField[f]); });
+    FILTER_FIELDS.forEach((f) => { initial[f] = new Set(uniqueValsByField[f]); });
     setFilters(initial);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trainings.length]);
 
   function setFieldFilter(field, selectedSet) {
-    setFilters(prev => ({ ...prev, [field]: selectedSet }));
+    setFilters((prev) => ({ ...prev, [field]: selectedSet }));
   }
 
   const filtered = useMemo(() => {
-    return trainings.filter(t => {
+    return trainings.filter((t) => {
       for (const f of FILTER_FIELDS) {
         const sel = filters[f];
         if (sel && !sel.has(displayVal(t[f]))) return false;
@@ -68,18 +68,18 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
     });
   }, [trainings, search, filters]);
 
-  const activeFilterCount = FILTER_FIELDS.filter(f => filters[f] && filters[f].size < uniqueValsByField[f].length).length;
+  const activeFilterCount = FILTER_FIELDS.filter((f) => filters[f] && filters[f].size < uniqueValsByField[f].length).length;
 
   function clearAllFilters() {
     const reset = {};
-    FILTER_FIELDS.forEach(f => { reset[f] = new Set(uniqueValsByField[f]); });
+    FILTER_FIELDS.forEach((f) => { reset[f] = new Set(uniqueValsByField[f]); });
     setFilters(reset);
     setSearch('');
   }
 
   function exportToExcel() {
-    const rows = filtered.map(t => ({
-      'Departament': t.dept, 'Ad Soyad': t.employee_name, 'Vəzifə': t.position,
+    const rows = filtered.map((t) => ({
+      'İl': t.plan_year, 'Departament': t.dept, 'Ad Soyad': t.employee_name, 'Vəzifə': t.position,
       'İnkişaf istiqaməti': t.skill, 'Kateqoriya': t.comp_cat, 'Vendor': t.vendor,
       'Status': statusMeta(t.status).label, 'Prioritet': priorityMeta(t.priority).label,
       'Başlama': t.start_date || t.start_raw, 'Bitmə': t.end_date || t.end_raw,
@@ -92,16 +92,11 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
     XLSX.writeFile(wb, `telim-izleme-${tarix}.xlsx`);
   }
 
-  function openEdit(row) {
-    setError('');
-    setEditing({ ...row });
-  }
-  function upd(field, value) {
-    setEditing((e) => ({ ...e, [field]: value }));
-  }
+  function openEdit(row) { setError(''); setEditing({ ...row }); }
+  function upd(field, value) { setEditing((e) => ({ ...e, [field]: value })); }
+
   async function saveEdit() {
-    setSaving(true);
-    setError('');
+    setSaving(true); setError('');
     const { id, ...rest } = editing;
     const { error: err } = await sb.from('trainings').update(rest).eq('id', id);
     setSaving(false);
@@ -109,6 +104,7 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
     setEditing(null);
     if (onDataChanged) await onDataChanged();
   }
+
   async function confirmDelete() {
     setSaving(true);
     const { error: err } = await sb.from('trainings').delete().eq('id', deleting.id);
@@ -118,13 +114,12 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
     if (onDataChanged) await onDataChanged();
   }
 
+  if (!filters.dept) return null;
+
   return (
     <div className="page">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
-        <input
-          type="text" placeholder="Ad, vəzifə, vendor axtar..." style={{ width: 260 }}
-          value={search} onChange={e => setSearch(e.target.value)}
-        />
+        <input type="text" placeholder="Ad, vəzifə, vendor axtar..." style={{ width: 260 }} value={search} onChange={(e) => setSearch(e.target.value)} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ fontSize: 13, color: '#64748b' }}>
             {filtered.length} / {trainings.length} nəticə
@@ -147,24 +142,26 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
         <table>
           <thead>
             <tr>
-              <ColumnFilterHeader label="Departament" values={uniqueValsByField.dept} selected={filters.dept} onChange={s => setFieldFilter('dept', s)} />
+              <ColumnFilterHeader label={FIELD_LABELS.plan_year} values={uniqueValsByField.plan_year} selected={filters.plan_year} onChange={(s) => setFieldFilter('plan_year', s)} />
+              <ColumnFilterHeader label={FIELD_LABELS.dept} values={uniqueValsByField.dept} selected={filters.dept} onChange={(s) => setFieldFilter('dept', s)} />
               <th>Ad Soyad</th>
-              <ColumnFilterHeader label="Vəzifə" values={uniqueValsByField.position} selected={filters.position} onChange={s => setFieldFilter('position', s)} />
-              <ColumnFilterHeader label="İnkişaf istiqaməti" values={uniqueValsByField.skill} selected={filters.skill} onChange={s => setFieldFilter('skill', s)} />
-              <ColumnFilterHeader label="Kateqoriya" values={uniqueValsByField.comp_cat} selected={filters.comp_cat} onChange={s => setFieldFilter('comp_cat', s)} />
-              <ColumnFilterHeader label="Vendor" values={uniqueValsByField.vendor} selected={filters.vendor} onChange={s => setFieldFilter('vendor', s)} />
-              <ColumnFilterHeader label="Status" values={uniqueValsByField.status} selected={filters.status} onChange={s => setFieldFilter('status', s)} />
-              <ColumnFilterHeader label="Prioritet" values={uniqueValsByField.priority} selected={filters.priority} onChange={s => setFieldFilter('priority', s)} />
+              <ColumnFilterHeader label={FIELD_LABELS.position} values={uniqueValsByField.position} selected={filters.position} onChange={(s) => setFieldFilter('position', s)} />
+              <ColumnFilterHeader label={FIELD_LABELS.skill} values={uniqueValsByField.skill} selected={filters.skill} onChange={(s) => setFieldFilter('skill', s)} />
+              <ColumnFilterHeader label={FIELD_LABELS.comp_cat} values={uniqueValsByField.comp_cat} selected={filters.comp_cat} onChange={(s) => setFieldFilter('comp_cat', s)} />
+              <ColumnFilterHeader label={FIELD_LABELS.vendor} values={uniqueValsByField.vendor} selected={filters.vendor} onChange={(s) => setFieldFilter('vendor', s)} />
+              <ColumnFilterHeader label={FIELD_LABELS.status} values={uniqueValsByField.status} selected={filters.status} onChange={(s) => setFieldFilter('status', s)} />
+              <ColumnFilterHeader label={FIELD_LABELS.priority} values={uniqueValsByField.priority} selected={filters.priority} onChange={(s) => setFieldFilter('priority', s)} />
               <th>Başlama</th><th>Bitmə</th><th>Büdcə</th>
-              <ColumnFilterHeader label="Büdcə Statusu" values={uniqueValsByField.budget_status} selected={filters.budget_status} onChange={s => setFieldFilter('budget_status', s)} />
+              <ColumnFilterHeader label={FIELD_LABELS.budget_status} values={uniqueValsByField.budget_status} selected={filters.budget_status} onChange={(s) => setFieldFilter('budget_status', s)} />
               {isAdmin && <th>Əməliyyat</th>}
             </tr>
           </thead>
           <tbody>
-            {filtered.map(t => {
+            {filtered.map((t) => {
               const sm = statusMeta(t.status), pm = priorityMeta(t.priority);
               return (
                 <tr key={t.id}>
+                  <td>{t.plan_year || '—'}</td>
                   <td>{t.dept}</td><td>{t.employee_name}</td><td>{t.position}</td><td>{t.skill}</td>
                   <td>{t.comp_cat}</td><td>{t.vendor}</td>
                   <td><span className="badge" style={{ background: sm.color }}>{sm.label}</span></td>
@@ -190,6 +187,10 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
           <div className="modal-card" style={{ width: 520 }}>
             <div style={{ fontWeight: 800, fontSize: 17, marginBottom: 16 }}>Qeydi Redaktə Et</div>
             <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 12.5, color: '#64748b' }}>İl</label>
+                <input type="number" value={editing.plan_year || ''} onChange={(e) => upd('plan_year', Number(e.target.value))} style={{ width: '100%' }} />
+              </div>
               <div style={{ flex: 1 }}>
                 <label style={{ fontSize: 12.5, color: '#64748b' }}>Departament</label>
                 <input type="text" value={editing.dept || ''} onChange={(e) => upd('dept', e.target.value)} style={{ width: '100%' }} />
