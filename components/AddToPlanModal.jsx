@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { sb } from '../lib/supabase';
 import { computeBudgetStatus } from '../lib/helpers';
 
-export default function AddToPlanModal({ request, onClose, onSubmitted }) {
+export default function AddToPlanModal({ request, planYear, onClose, onSubmitted }) {
   const [vendor, setVendor] = useState('');
   const [manHours, setManHours] = useState(0);
   const [budget, setBudget] = useState(0);
@@ -20,6 +20,7 @@ export default function AddToPlanModal({ request, onClose, onSubmitted }) {
       comp_cat: request.comp_cat || null, vendor: vendor.trim() || null,
       man_hours: Number(manHours) || 0, budget: Number(budget) || 0,
       status: 'Scheduled to Commence on Planned Date',
+      plan_year: planYear || new Date().getFullYear(),
       start_date: request.preferred_start || null, end_date: request.preferred_end || null,
       importance_level: request.importance_level || null,
       current_skill_level: request.current_skill_level || null,
