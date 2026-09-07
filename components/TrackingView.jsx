@@ -11,7 +11,7 @@ const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical'];
 const COMP_CAT_OPTIONS = ['Hard Skills', 'Soft Skills'];
 const BUDGET_STATUS_OPTIONS = ['Büdcələnmiş', 'Büdcədən kənar'];
 
-const FILTER_FIELDS = ['plan_year', 'dept', 'position', 'skill', 'comp_cat', 'vendor', 'status', 'priority', 'budget_status'];
+const FILTER_FIELDS = ['dept', 'position', 'skill', 'comp_cat', 'vendor', 'status', 'priority', 'budget_status'];
 const FIELD_LABELS = {
   plan_year: 'İl', dept: 'Departament', position: 'Vəzifə', skill: 'İnkişaf istiqaməti',
   comp_cat: 'Kateqoriya', vendor: 'Vendor', status: 'Status', priority: 'Prioritet', budget_status: 'Büdcə Statusu',
@@ -23,6 +23,7 @@ function displayVal(v) {
 
 export default function TrackingView({ trainings, profile, onDataChanged }) {
   const [search, setSearch] = useState('');
+  const [selectedYear, setSelectedYear] = useState('all');
   const [filters, setFilters] = useState({});
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
@@ -31,6 +32,11 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
 
   const canExport = profile && (profile.role === 'hr' || profile.role === 'ld');
   const isAdmin = profile && profile.role === 'ld';
+
+  const years = useMemo(() => {
+    const set = new Set(trainings.map((t) => t.plan_year).filter(Boolean));
+    return [...set].sort((a, b) => b - a);
+  }, [trainings]);
 
   const uniqueValsByField = useMemo(() => {
     const map = {};
@@ -53,6 +59,7 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
 
   const filtered = useMemo(() => {
     return trainings.filter((t) => {
+      if (selectedYear !== 'all' && t.plan_year !== Number(selectedYear)) return false;
       for (const f of FILTER_FIELDS) {
         const sel = filters[f];
         if (sel && !sel.has(displayVal(t[f]))) return false;
@@ -66,7 +73,7 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
       }
       return true;
     });
-  }, [trainings, search, filters]);
+  }, [trainings, search, filters, selectedYear]);
 
   const activeFilterCount = FILTER_FIELDS.filter((f) => filters[f] && filters[f].size < uniqueValsByField[f].length).length;
 
@@ -119,7 +126,13 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
   return (
     <div className="page">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
-        <input type="text" placeholder="Ad, vəzifə, vendor axtar..." style={{ width: 260 }} value={search} onChange={(e) => setSearch(e.target.value)} />
+        <div style={{ display: 'flex', gap: 10 }}>
+          <input type="text" placeholder="Ad, vəzifə, vendor axtar..." style={{ width: 260 }} value={search} onChange={(e) => setSearch(e.target.value)} />
+          <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} style={{ minWidth: 120 }}>
+            <option value="all">Bütün illər</option>
+            {years.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ fontSize: 13, color: '#64748b' }}>
             {filtered.length} / {trainings.length} nəticə
@@ -142,7 +155,7 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
         <table>
           <thead>
             <tr>
-              <ColumnFilterHeader label={FIELD_LABELS.plan_year} values={uniqueValsByField.plan_year} selected={filters.plan_year} onChange={(s) => setFieldFilter('plan_year', s)} />
+              <th>İl</th>
               <ColumnFilterHeader label={FIELD_LABELS.dept} values={uniqueValsByField.dept} selected={filters.dept} onChange={(s) => setFieldFilter('dept', s)} />
               <th>Ad Soyad</th>
               <ColumnFilterHeader label={FIELD_LABELS.position} values={uniqueValsByField.position} selected={filters.position} onChange={(s) => setFieldFilter('position', s)} />
