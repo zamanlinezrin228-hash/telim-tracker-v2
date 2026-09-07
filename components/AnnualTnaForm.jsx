@@ -10,8 +10,8 @@ const LEVEL_OPTIONS = ['1 – Fundamental', '2 – İnkişaf edən', '3 – Yet�
 
 function emptyRow() {
   return {
-    employeeId: '', manualName: '', position: '', skill: '', compCat: '', vendor: '',
-    manHours: '', budget: '', priority: 'Medium', importance: '', currentLevel: '', requiredLevel: '',
+    employeeId: '', manualName: '', position: '', skill: '', needReason: '',
+    priority: 'Medium', importance: '', currentLevel: '', requiredLevel: '',
     start: '', end: '',
   };
 }
@@ -39,13 +39,18 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
 
   async function handleSubmit() {
     setError('');
-    const validRows = rows.filter((r) => (r.employeeId || r.manualName.trim()) && r.skill.trim());
-    if (validRows.length === 0) {
+    const filled = rows.filter((r) => (r.employeeId || r.manualName.trim()) && r.skill.trim());
+    if (filled.length === 0) {
       setError('Ən azı bir sətirdə əməkdaş adı və inkişaf istiqaməti doldurun.');
       return;
     }
+    const missingReason = filled.some((r) => !r.needReason.trim());
+    if (missingReason) {
+      setError('Doldurulan hər sətirdə "Ehtiyacın yaranma səbəbi" mütləqdir.');
+      return;
+    }
 
-    const payloads = validRows.map((r) => {
+    const payloads = filled.map((r) => {
       const member = r.employeeId ? team.find((t) => t.id === r.employeeId) : null;
       return {
         requested_by: profile.id,
@@ -54,10 +59,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
         sube: member?.sube || profile.sube || null,
         position: r.position.trim() || null,
         training_title: r.skill.trim(),
-        comp_cat: r.compCat || null,
-        vendor: r.vendor.trim() || null,
-        man_hours: r.manHours ? Number(r.manHours) : null,
-        budget: r.budget ? Number(r.budget) : null,
+        reason: r.needReason.trim(),
         priority: r.priority,
         importance_level: r.importance || null,
         current_skill_level: r.currentLevel || null,
@@ -105,9 +107,10 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
         <table>
           <thead>
             <tr>
-              <th>Əməkdaş</th><th>Vəzifə</th><th>İnkişaf istiqaməti *</th><th>Kateqoriya</th>
-              <th>Vendor</th><th>Man Hours</th><th>Büdcə</th><th>Prioritet</th>
-              <th>Əhəmiyyət</th><th>Cari</th><th>Tələb olunan</th><th>Başlama</th><th>Bitmə</th><th></th>
+              <th>Əməkdaş</th><th>Vəzifə</th><th>İnkişaf istiqaməti *</th>
+              <th>Ehtiyacın yaranma səbəbi *</th>
+              <th>Prioritet</th><th>Əhəmiyyət</th><th>Cari</th><th>Tələb olunan</th>
+              <th>Başlama</th><th>Bitmə</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -124,14 +127,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                 </td>
                 <td style={{ minWidth: 120 }}><input type="text" value={r.position} onChange={(e) => updateRow(idx, 'position', e.target.value)} style={{ width: '100%', fontSize: 12.5 }} /></td>
                 <td style={{ minWidth: 160 }}><input type="text" value={r.skill} onChange={(e) => updateRow(idx, 'skill', e.target.value)} style={{ width: '100%', fontSize: 12.5 }} /></td>
-                <td style={{ minWidth: 110 }}>
-                  <select value={r.compCat} onChange={(e) => updateRow(idx, 'compCat', e.target.value)} style={{ width: '100%', fontSize: 12.5 }}>
-                    <option value="">—</option><option value="Hard Skills">Hard</option><option value="Soft Skills">Soft</option>
-                  </select>
-                </td>
-                <td style={{ minWidth: 110 }}><input type="text" value={r.vendor} onChange={(e) => updateRow(idx, 'vendor', e.target.value)} style={{ width: '100%', fontSize: 12.5 }} /></td>
-                <td style={{ minWidth: 80 }}><input type="number" value={r.manHours} onChange={(e) => updateRow(idx, 'manHours', e.target.value)} style={{ width: '100%', fontSize: 12.5 }} /></td>
-                <td style={{ minWidth: 90 }}><input type="number" value={r.budget} onChange={(e) => updateRow(idx, 'budget', e.target.value)} style={{ width: '100%', fontSize: 12.5 }} /></td>
+                <td style={{ minWidth: 200 }}><input type="text" value={r.needReason} onChange={(e) => updateRow(idx, 'needReason', e.target.value)} placeholder="Niyə bu təlimə ehtiyac var?" style={{ width: '100%', fontSize: 12.5 }} /></td>
                 <td style={{ minWidth: 100 }}>
                   <select value={r.priority} onChange={(e) => updateRow(idx, 'priority', e.target.value)} style={{ width: '100%', fontSize: 12.5 }}>
                     {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
