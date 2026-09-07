@@ -8,22 +8,26 @@ import HomeScreen from '../components/HomeScreen';
 import DashboardView from '../components/DashboardView';
 import TrackingView from '../components/TrackingView';
 import RequestsView from '../components/RequestsView';
+import AnnualTnaForm from '../components/AnnualTnaForm';
 
 export default function Home() {
   const [loading, setLoading] = useState(true);
   const [loggedIn, setLoggedIn] = useState(false);
-  const [authView, setAuthView] = useState('login'); // 'login' | 'signup'
+  const [authView, setAuthView] = useState('login');
   const [profile, setProfile] = useState(null);
   const [team, setTeam] = useState([]);
   const [trainings, setTrainings] = useState([]);
   const [requests, setRequests] = useState([]);
+  const [appSettings, setAppSettings] = useState({ tna_window_open: false, tna_plan_year: new Date().getFullYear() });
   const [view, setView] = useState('home');
 
-  const loadData = useCallback(async (currentProfile) => {
+  const loadData = useCallback(async () => {
     const { data: tData } = await sb.from('trainings').select('*').order('id');
     setTrainings(tData || []);
     const { data: rData } = await sb.from('training_requests').select('*').order('created_at', { ascending: false });
     setRequests(rData || []);
+    const { data: sData } = await sb.from('app_settings').select('*').eq('id', 1).single();
+    if (sData) setAppSettings(sData);
   }, []);
 
   const afterLogin = useCallback(async () => {
@@ -32,7 +36,7 @@ export default function Home() {
     setProfile(prof);
     const { data: teamData } = await sb.from('profiles').select('id, full_name_az, dept, sube, position').eq('manager_id', prof.id);
     setTeam(teamData || []);
-    await loadData(prof);
+    await loadData();
     setLoggedIn(true);
     setLoading(false);
   }, [loadData]);
@@ -49,7 +53,7 @@ export default function Home() {
   }, [afterLogin]);
 
   async function handleDataChanged() {
-    await loadData(profile);
+    await loadData();
   }
 
   if (loading) {
@@ -74,15 +78,22 @@ export default function Home() {
     );
   }
 
+  const hasTeam = team && team.length > 0;
+
   return (
     <>
       <Head><title>Təlim Tracker</title></Head>
       <TopBar view={view} setView={setView} />
-      {view === 'home' && <HomeScreen profile={profile} team={team} setView={setView} />}
+      {view === 'home' && (
+        <HomeScreen profile={profile} team={team} setView={setView} tnaWindowOpen={appSettings.tna_window_open} planYear={appSettings.tna_plan_year} />
+      )}
       {view === 'dashboard' && <DashboardView trainings={trainings} />}
       {view === 'tracking' && <TrackingView trainings={trainings} profile={profile} onDataChanged={handleDataChanged} />}
       {view === 'requests' && (
         <RequestsView profile={profile} team={team} requests={requests} onDataChanged={handleDataChanged} />
+      )}
+      {view === 'annual-tna' && hasTeam && (appSettings.tna_window_open || profile.role === 'ld') && (
+        <AnnualTnaForm profile={profile} team={team} planYear={appSettings.tna_plan_year} onSubmitted={() => { setView('home'); handleDataChanged(); }} />
       )}
     </>
   );
