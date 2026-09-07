@@ -1,4 +1,4 @@
-export default function HomeScreen({ profile, team, setView }) {
+export default function HomeScreen({ profile, team, setView, tnaWindowOpen, planYear }) {
   const hasTeam = team && team.length > 0;
 
   const cards = [
@@ -32,6 +32,20 @@ export default function HomeScreen({ profile, team, setView }) {
       linkLabel: 'Sorğu göndər',
     },
   ];
+
+  if (hasTeam && (tnaWindowOpen || profile.role === 'ld')) {
+    cards.push({
+      key: 'annual-tna',
+      title: `İllik TNA — ${planYear}`,
+      desc: tnaWindowOpen
+        ? 'Komandanızın illik təlim ehtiyaclarını cədvəl formasında doldurun.'
+        : 'Pəncərə hazırda bağlıdır (yalnız L&D test məqsədilə görür).',
+      icon: '🗓️',
+      accent: '#dc2626',
+      iconBg: 'radial-gradient(circle at 30% 30%, #fca5a5, #dc2626)',
+      linkLabel: 'Formu doldur',
+    });
+  }
 
   return (
     <div>
