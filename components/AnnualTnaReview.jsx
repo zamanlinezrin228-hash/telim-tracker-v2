@@ -68,8 +68,8 @@ export default function AnnualTnaReview({ profile, requests, onDataChanged }) {
             <table>
               <thead>
                 <tr>
-                  <th>Ad Soyad</th><th>Vəzifə</th><th>Təlim</th><th>Vendor</th><th>Man Hours</th>
-                  <th>Büdcə</th><th>Prioritet</th><th>Status</th><th>Əməliyyat</th>
+                  <th>Ad Soyad</th><th>Vəzifə</th><th>Təlim</th><th>Səbəb</th>
+                  <th>Prioritet</th><th>Status</th><th>Əməliyyat</th>
                 </tr>
               </thead>
               <tbody>
@@ -78,9 +78,7 @@ export default function AnnualTnaReview({ profile, requests, onDataChanged }) {
                     <td>{r.employee_name}</td>
                     <td style={{ fontSize: 12.5 }}>{r.position || '—'}</td>
                     <td>{r.training_title}</td>
-                    <td style={{ fontSize: 12.5 }}>{r.vendor || '—'}</td>
-                    <td style={{ fontSize: 12.5 }}>{r.man_hours ?? '—'}</td>
-                    <td style={{ fontSize: 12.5 }}>{r.budget ?? '—'}</td>
+                    <td style={{ fontSize: 12.5, maxWidth: 220 }}>{r.reason || '—'}</td>
                     <td><Badge meta={priorityMeta(r.priority)} /></td>
                     <td><Badge meta={reqStatusMeta(r.status)} /></td>
                     <td style={{ whiteSpace: 'nowrap' }}>
