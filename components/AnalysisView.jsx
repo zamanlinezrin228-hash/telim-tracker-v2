@@ -24,7 +24,7 @@ export default function AnalysisView({ trainings }) {
   const [slicers, setSlicers] = useState({});
 
   const sliced = useMemo(() => {
-    return trainings.filter(t => {
+    return trainings.filter((t) => {
       for (const f of SLICER_FIELDS) {
         const val = slicers[f];
         if (val && val !== 'all' && displayVal(t[f]) !== val) return false;
@@ -35,11 +35,10 @@ export default function AnalysisView({ trainings }) {
 
   const { rowKeys, colKeys, matrix, rowTotals, colTotals, grandTotal } = useMemo(() => {
     const rowSet = new Set(), colSet = new Set();
-    const cells = {};
-    const rTotals = {}, cTotals = {};
+    const cells = {}, rTotals = {}, cTotals = {};
     let gTotal = 0;
 
-    sliced.forEach(t => {
+    sliced.forEach((t) => {
       const r = displayVal(t[rowField]);
       const c = displayVal(t[colField]);
       rowSet.add(r); colSet.add(c);
@@ -64,7 +63,7 @@ export default function AnalysisView({ trainings }) {
   }
 
   function uniqueSlicerVals(field) {
-    return [...new Set(trainings.map(t => displayVal(t[field])))].sort();
+    return [...new Set(trainings.map((t) => displayVal(t[field])))].sort();
   }
 
   return (
@@ -76,19 +75,19 @@ export default function AnalysisView({ trainings }) {
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
           <div>
             <div className="filter-label">Sətir sahəsi</div>
-            <select value={rowField} onChange={e => setRowField(e.target.value)} style={{ minWidth: 180 }}>
-              {FIELD_OPTIONS.map(f => <option key={f} value={f}>{FIELD_LABELS[f]}</option>)}
+            <select value={rowField} onChange={(e) => setRowField(e.target.value)} style={{ minWidth: 180 }}>
+              {FIELD_OPTIONS.map((f) => <option key={f} value={f}>{FIELD_LABELS[f]}</option>)}
             </select>
           </div>
           <div>
             <div className="filter-label">Sütun sahəsi</div>
-            <select value={colField} onChange={e => setColField(e.target.value)} style={{ minWidth: 180 }}>
-              {FIELD_OPTIONS.map(f => <option key={f} value={f}>{FIELD_LABELS[f]}</option>)}
+            <select value={colField} onChange={(e) => setColField(e.target.value)} style={{ minWidth: 180 }}>
+              {FIELD_OPTIONS.map((f) => <option key={f} value={f}>{FIELD_LABELS[f]}</option>)}
             </select>
           </div>
           <div>
             <div className="filter-label">Dəyər</div>
-            <select value={metric} onChange={e => setMetric(e.target.value)} style={{ minWidth: 160 }}>
+            <select value={metric} onChange={(e) => setMetric(e.target.value)} style={{ minWidth: 160 }}>
               <option value="budget">Büdcənin cəmi</option>
               <option value="count">Təlim sayı</option>
               <option value="man_hours">Saatın cəmi</option>
@@ -98,20 +97,13 @@ export default function AnalysisView({ trainings }) {
 
         <div className="filter-label" style={{ marginBottom: 8 }}>Slicer-lər (əlavə filtrlər)</div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          {SLICER_FIELDS.map(f => (
-            <select
-              key={f}
-              value={slicers[f] || 'all'}
-              onChange={e => setSlicers(s => ({ ...s, [f]: e.target.value }))}
-              style={{ minWidth: 150, fontSize: 13 }}
-            >
+          {SLICER_FIELDS.map((f) => (
+            <select key={f} value={slicers[f] || 'all'} onChange={(e) => setSlicers((s) => ({ ...s, [f]: e.target.value }))} style={{ minWidth: 150, fontSize: 13 }}>
               <option value="all">{FIELD_LABELS[f]}: Hamısı</option>
-              {uniqueSlicerVals(f).map(v => (
-                <option key={v} value={v}>{FIELD_LABELS[f]}: {labelFor(f, v)}</option>
-              ))}
+              {uniqueSlicerVals(f).map((v) => <option key={v} value={v}>{FIELD_LABELS[f]}: {labelFor(f, v)}</option>)}
             </select>
           ))}
-          {Object.values(slicers).some(v => v && v !== 'all') && (
+          {Object.values(slicers).some((v) => v && v !== 'all') && (
             <button onClick={() => setSlicers({})} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', fontSize: 12.5 }}>
               Slicer-ləri təmizlə
             </button>
@@ -124,23 +116,21 @@ export default function AnalysisView({ trainings }) {
           <thead>
             <tr>
               <th>{FIELD_LABELS[rowField]}</th>
-              {colKeys.map(c => <th key={c}>{labelFor(colField, c)}</th>)}
+              {colKeys.map((c) => <th key={c}>{labelFor(colField, c)}</th>)}
               <th>Cəmi</th>
             </tr>
           </thead>
           <tbody>
-            {rowKeys.map(r => (
+            {rowKeys.map((r) => (
               <tr key={r}>
                 <td style={{ fontWeight: 600 }}>{labelFor(rowField, r)}</td>
-                {colKeys.map(c => (
-                  <td key={c}>{fmt(matrix[r + '|||' + c] || 0)}</td>
-                ))}
+                {colKeys.map((c) => <td key={c}>{fmt(matrix[r + '|||' + c] || 0)}</td>)}
                 <td style={{ fontWeight: 700 }}>{fmt(rowTotals[r] || 0)}</td>
               </tr>
             ))}
             <tr style={{ background: '#f8fafc' }}>
               <td style={{ fontWeight: 800 }}>Cəmi</td>
-              {colKeys.map(c => <td key={c} style={{ fontWeight: 700 }}>{fmt(colTotals[c] || 0)}</td>)}
+              {colKeys.map((c) => <td key={c} style={{ fontWeight: 700 }}>{fmt(colTotals[c] || 0)}</td>)}
               <td style={{ fontWeight: 800 }}>{fmt(grandTotal)}</td>
             </tr>
           </tbody>
