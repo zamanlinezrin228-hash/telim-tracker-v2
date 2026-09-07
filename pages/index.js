@@ -91,7 +91,7 @@ export default function Home() {
       {view === 'dashboard' && <DashboardView trainings={trainings} />}
       {view === 'tracking' && <TrackingView trainings={trainings} profile={profile} onDataChanged={handleDataChanged} />}
       {view === 'requests' && (
-        <RequestsView profile={profile} team={team} requests={requests} onDataChanged={handleDataChanged} />
+        <RequestsView profile={profile} team={team} requests={requests} planYear={appSettings.tna_plan_year} onDataChanged={handleDataChanged} />
       )}
       {view === 'annual-tna' && (
         <div>
@@ -100,7 +100,7 @@ export default function Home() {
           )}
           {(profile.role === 'ld' || profile.role === 'hr') && (
             <div className="page" style={{ paddingTop: 0 }}>
-              <AnnualTnaReview profile={profile} requests={requests} onDataChanged={handleDataChanged} />
+              <AnnualTnaReview profile={profile} requests={requests} planYear={appSettings.tna_plan_year} onDataChanged={handleDataChanged} />
             </div>
           )}
         </div>
