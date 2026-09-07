@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { sb } from '../lib/supabase';
+import { computeBudgetStatus } from '../lib/helpers';
 
 const IMPORTANCE_OPTIONS = [
   '1 – Aşağı (minimal təsir)', '2 – Orta (əsas işə təsir edir)',
@@ -14,20 +15,21 @@ const LEVEL_OPTIONS = [
 
 export default function RequestFormModal({ profile, team, onClose, onSubmitted }) {
   const hasTeam = team && team.length > 0;
-  const [forWhom, setForWhom] = useState('self'); // 'self' | 'team'
+  const [forWhom, setForWhom] = useState('self');
   const [selectedIds, setSelectedIds] = useState([]);
   const [title, setTitle] = useState('');
   const [reason, setReason] = useState('');
   const [priority, setPriority] = useState('Medium');
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [compCat, setCompCat] = useState('');
   const [importance, setImportance] = useState('');
   const [currentLevel, setCurrentLevel] = useState('');
   const [requiredLevel, setRequiredLevel] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const budgetStatus = computeBudgetStatus();
 
   function toggleMember(id) {
     setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
@@ -95,7 +97,17 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
     <div className="modal-overlay">
       <div className="modal-card" style={{ width: 480, maxHeight: '90vh', overflow: 'auto' }}>
         <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 4 }}>Yeni Təlim Sorğusu</div>
-        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 18 }}>Aşağıdakı sahələri doldurub göndərin.</div>
+        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 14 }}>Aşağıdakı sahələri doldurub göndərin.</div>
+
+        {budgetStatus === 'Büdcədən kənar' ? (
+          <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412', fontSize: 12.5, padding: '10px 12px', borderRadius: 8, marginBottom: 16 }}>
+            <b>Diqqət:</b> Hazırda illik büdcə planlaşdırma dövründən (Oktyabr–Yanvar) kənardayıq. Bu sorğu təsdiqlənsə belə, <b>&quot;Büdcədən kənar&quot;</b> kateqoriyasında qeyd olunacaq və əvvəlcədən planlaşdırılmış büdcəyə daxil olmadığı üçün <b>təsdiq ehtimalı aşağıdır</b>.
+          </div>
+        ) : (
+          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', fontSize: 12.5, padding: '10px 12px', borderRadius: 8, marginBottom: 16 }}>
+            Hazırda illik büdcə planlaşdırma dövründəyik — bu sorğu təsdiqlənsə, <b>&quot;Büdcələnmiş&quot;</b> kateqoriyasında qeyd olunacaq.
+          </div>
+        )}
 
         {hasTeam && (
           <div style={{ marginBottom: 16 }}>
@@ -167,42 +179,40 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
           </div>
         </div>
 
-        <div style={{ fontSize: 12.5, fontWeight: 700, color: '#64748b', margin: '4px 0 10px', textTransform: 'uppercase', letterSpacing: 0.4 }}>Ətraflı məlumat (istəyə bağlı)</div>
-        {true && (
-          <div style={{ background: '#f8fafc', borderRadius: 10, padding: 14, marginBottom: 14 }}>
-            <div style={{ marginBottom: 10 }}>
-              <label style={{ fontSize: 12.5, color: '#64748b', display: 'block', marginBottom: 4 }}>Səriştə Kateqoriyası</label>
-              <select value={compCat} onChange={(e) => setCompCat(e.target.value)} style={{ width: '100%' }}>
-                <option value="">— Seçilməyib —</option>
-                <option value="Hard Skills">Hard Skills</option>
-                <option value="Soft Skills">Soft Skills</option>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: '#64748b', margin: '4px 0 10px', textTransform: 'uppercase', letterSpacing: 0.4 }}>Ətraflı məlumat</div>
+        <div style={{ background: '#f8fafc', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ fontSize: 12.5, color: '#64748b', display: 'block', marginBottom: 4 }}>Səriştə Kateqoriyası *</label>
+            <select value={compCat} onChange={(e) => setCompCat(e.target.value)} style={{ width: '100%' }}>
+              <option value="">— Seçin —</option>
+              <option value="Hard Skills">Hard Skills</option>
+              <option value="Soft Skills">Soft Skills</option>
+            </select>
+          </div>
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ fontSize: 12.5, color: '#64748b', display: 'block', marginBottom: 4 }}>Əhəmiyyət dərəcəsi *</label>
+            <select value={importance} onChange={(e) => setImportance(e.target.value)} style={{ width: '100%' }}>
+              <option value="">— Seçin —</option>
+              {IMPORTANCE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 12.5, color: '#64748b', display: 'block', marginBottom: 4 }}>Cari səviyyə *</label>
+              <select value={currentLevel} onChange={(e) => setCurrentLevel(e.target.value)} style={{ width: '100%' }}>
+                <option value="">—</option>
+                {LEVEL_OPTIONS.map((o) => <option key={o} value={o}>{o.split(' – ')[0]} – {o.split(' – ')[1].split(' ')[0]}</option>)}
               </select>
             </div>
-            <div style={{ marginBottom: 10 }}>
-              <label style={{ fontSize: 12.5, color: '#64748b', display: 'block', marginBottom: 4 }}>Əhəmiyyət dərəcəsi</label>
-              <select value={importance} onChange={(e) => setImportance(e.target.value)} style={{ width: '100%' }}>
-                <option value="">— Seçilməyib —</option>
-                {IMPORTANCE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 12.5, color: '#64748b', display: 'block', marginBottom: 4 }}>Tələb olunan səviyyə *</label>
+              <select value={requiredLevel} onChange={(e) => setRequiredLevel(e.target.value)} style={{ width: '100%' }}>
+                <option value="">—</option>
+                {LEVEL_OPTIONS.map((o) => <option key={o} value={o}>{o.split(' – ')[0]} – {o.split(' – ')[1].split(' ')[0]}</option>)}
               </select>
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 12.5, color: '#64748b', display: 'block', marginBottom: 4 }}>Cari səviyyə</label>
-                <select value={currentLevel} onChange={(e) => setCurrentLevel(e.target.value)} style={{ width: '100%' }}>
-                  <option value="">—</option>
-                  {LEVEL_OPTIONS.map((o) => <option key={o} value={o}>{o.split(' – ')[0]} – {o.split(' – ')[1].split(' ')[0]}</option>)}
-                </select>
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 12.5, color: '#64748b', display: 'block', marginBottom: 4 }}>Tələb olunan səviyyə</label>
-                <select value={requiredLevel} onChange={(e) => setRequiredLevel(e.target.value)} style={{ width: '100%' }}>
-                  <option value="">—</option>
-                  {LEVEL_OPTIONS.map((o) => <option key={o} value={o}>{o.split(' – ')[0]} – {o.split(' – ')[1].split(' ')[0]}</option>)}
-                </select>
-              </div>
             </div>
           </div>
-        )}
+        </div>
 
         {error && <div style={{ color: '#dc2626', fontSize: 13, marginBottom: 10 }}>{error}</div>}
 
