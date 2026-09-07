@@ -5,7 +5,7 @@ import RequestFormModal from './RequestFormModal';
 import NoteModal from './NoteModal';
 import AddToPlanModal from './AddToPlanModal';
 
-export default function RequestsView({ profile, team, requests, onDataChanged }) {
+export default function RequestsView({ profile, team, requests, planYear, onDataChanged }) {
   const [showForm, setShowForm] = useState(false);
   const [noteAction, setNoteAction] = useState(null);
   const [addToPlanRequest, setAddToPlanRequest] = useState(null);
@@ -284,7 +284,7 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
       )}
 
       {addToPlanRequest && (
-        <AddToPlanModal request={addToPlanRequest} onClose={() => setAddToPlanRequest(null)} onSubmitted={refresh} />
+        <AddToPlanModal request={addToPlanRequest} planYear={planYear} onClose={() => setAddToPlanRequest(null)} onSubmitted={refresh} />
       )}
     </div>
   );
