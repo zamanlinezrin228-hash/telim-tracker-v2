@@ -24,7 +24,7 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
 
   const reviewerGrouped = useMemo(() => {
     if (!isReviewer) return {};
-    const visible = requests.filter((r) => r.status !== 'Pending Manager Review');
+    const visible = requests.filter((r) => r.status !== 'Pending Manager Review' && r.source !== 'Manager Survey');
     const grouped = {};
     visible.forEach((r) => { (grouped[r.dept] = grouped[r.dept] || []).push(r); });
     return grouped;
@@ -33,7 +33,7 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
   const reviewerActive = isReviewer
     ? Object.fromEntries(Object.entries(reviewerGrouped).map(([d, list]) => [d, list.filter((r) => r.status === 'Pending' || r.status === 'In Review')]).filter(([, list]) => list.length))
     : {};
-  const reviewerDecided = isReviewer ? requests.filter((r) => r.status === 'Approved' || r.status === 'Rejected') : [];
+  const reviewerDecided = isReviewer ? requests.filter((r) => (r.status === 'Approved' || r.status === 'Rejected') && r.source !== 'Manager Survey') : [];
   const pendingCount = isReviewer ? requests.filter((r) => r.status === 'Pending').length : 0;
 
   async function refresh() {
