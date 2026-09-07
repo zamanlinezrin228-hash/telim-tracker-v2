@@ -9,7 +9,6 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
   const [showForm, setShowForm] = useState(false);
   const [noteAction, setNoteAction] = useState(null);
   const [addToPlanRequest, setAddToPlanRequest] = useState(null);
-  const [scopeFilter, setScopeFilter] = useState('all');
 
   const role = profile.role;
   const hasTeam = team && team.length > 0;
@@ -22,15 +21,6 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
     const inScope = (r) => profile.scope_level === 'dept' ? r.dept === profile.dept : r.sube === profile.sube;
     return requests.filter((r) => r.status !== 'Pending Manager Review' && inScope(r));
   }, [requests, hasTeam, profile]);
-
-  const scopeFilterOptions = [
-    { key: 'all', label: 'Hamısı' },
-    { key: 'Pending', label: 'Gözləyir' },
-    { key: 'In Review', label: 'Baxılır (L&D)' },
-    { key: 'Approved', label: 'Təsdiqləndi' },
-    { key: 'Rejected', label: 'Rədd edildi' },
-  ];
-  const scopeFiltered = scopeFilter === 'all' ? scopeHistory : scopeHistory.filter((r) => r.status === scopeFilter);
 
   const reviewerGrouped = useMemo(() => {
     if (!isReviewer) return {};
@@ -116,7 +106,7 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
 
       {hasTeam && (
         <>
-          <div style={{ fontSize: 16, fontWeight: 800, margin: '20px 0 8px' }}>Təsdiqinizi Gözləyən Sorğular ({toReview.length})</div>
+          <div style={{ fontSize: 16, fontWeight: 800, margin: '20px 0 8px' }}>Baxılmalı Komanda Sorğuları ({toReview.length})</div>
           <div className="card" style={{ marginBottom: 20 }}>
             <table>
               <thead><tr><th>Ad Soyad</th><th>Təlim</th><th>Səbəb</th><th>Prioritet</th><th>Əməliyyat</th></tr></thead>
@@ -148,88 +138,25 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
               </tbody>
             </table>
           </div>
-        </>
-      )}
 
-      <div style={{ fontSize: 16, fontWeight: 800, margin: '20px 0 8px' }}>Şəxsi Sorğularım</div>
-      <div className="card" style={{ marginBottom: 20 }}><RequestTable list={myRequests} showNotes /></div>
-
-      {hasTeam && (
-        <>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '20px 0 12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'radial-gradient(circle at 30% 30%, #93c5fd, #2563eb)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
-                📋
-              </div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: '#0b2545' }}>Status</div>
-            </div>
-            <span style={{ background: '#eff6ff', color: '#1d4ed8', fontSize: 13, fontWeight: 700, padding: '5px 14px', borderRadius: 999 }}>
-              {scopeHistory.length} nəticə
-            </span>
-          </div>
+          <div style={{ fontSize: 15, fontWeight: 800, margin: '20px 0 12px' }}>Sahəmin Qərarları ({scopeHistory.length})</div>
           {scopeHistory.length ? (
-            <div style={{ display: 'grid', gridTemplateColumns: '190px 1fr', gap: 16, marginBottom: 24 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {scopeFilterOptions.map((f) => {
-                  const count = f.key === 'all' ? scopeHistory.length : scopeHistory.filter((r) => r.status === f.key).length;
-                  const active = scopeFilter === f.key;
-                  return (
-                    <button
-                      key={f.key}
-                      onClick={() => setScopeFilter(f.key)}
-                      style={{
-                        textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        padding: '9px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 13,
-                        border: active ? '1.5px solid #0b2545' : '1px solid #e2e8f0',
-                        background: active ? '#eff6ff' : '#fff',
-                        color: active ? '#0b2545' : '#334155',
-                        fontWeight: active ? 700 : 500,
-                      }}
-                    >
-                      {f.label}
-                      <span style={{ fontSize: 12, color: '#94a3b8' }}>{count}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {scopeFiltered.length ? scopeFiltered.map((r) => {
-                  const sm = reqStatusMeta(r.status);
-                  const pm = priorityMeta(r.priority);
-                  return (
-                    <div key={r.id} style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
-                      <div style={{ height: 6, background: sm.color }} />
-                      <div style={{ padding: 14 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                          <div>
-                            <div style={{ fontWeight: 700, fontSize: 14 }}>{r.employee_name}</div>
-                            <div style={{ fontSize: 12, color: '#94a3b8' }}>{r.training_title} · {new Date(r.created_at).toLocaleDateString('az-AZ')}</div>
-                          </div>
-                          <Badge meta={sm} />
-                        </div>
-                        {r.reason && <div style={{ fontSize: 12.5, color: '#64748b', marginBottom: 10 }}>{r.reason}</div>}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
-                          <div>
-                            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 2 }}>Prioritet</div>
-                            <Badge meta={pm} />
-                          </div>
-                          <div>
-                            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 2 }}>Manager</div>
-                            <div style={{ fontSize: 12.5 }}>{r.manager_note || '—'}</div>
-                          </div>
-                          <div>
-                            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 2 }}>L&D</div>
-                            <div style={{ fontSize: 12.5 }}>{r.reviewer_note || '—'}</div>
-                          </div>
-                        </div>
-                      </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14, marginBottom: 24 }}>
+              {scopeHistory.map((r) => {
+                const sm = reqStatusMeta(r.status);
+                return (
+                  <div key={r.id} style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+                    <div style={{ height: 6, background: sm.color }} />
+                    <div style={{ padding: 14 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{r.employee_name}</div>
+                      <div style={{ fontSize: 13, color: '#334155', marginBottom: 10 }}>{r.training_title}</div>
+                      <Badge meta={sm} />
+                      {r.manager_note && <div style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}><b>Manager:</b> {r.manager_note}</div>}
+                      {r.reviewer_note && <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}><b>L&D:</b> {r.reviewer_note}</div>}
                     </div>
-                  );
-                }) : (
-                  <div className="card" style={{ textAlign: 'center', color: '#94a3b8', padding: 24 }}>Bu kateqoriyada sorğu yoxdur</div>
-                )}
-              </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="card" style={{ textAlign: 'center', color: '#94a3b8', padding: 24, marginBottom: 24 }}>Hələ qərar yoxdur</div>
@@ -244,37 +171,49 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
           {Object.keys(reviewerActive).sort().map((dept) => (
             <div key={dept} className="card" style={{ marginBottom: 14 }}>
               <div style={{ fontWeight: 700, marginBottom: 12 }}>📁 {dept} ({reviewerActive[dept].length})</div>
-              <table>
-                <thead><tr><th>Ad Soyad</th><th>Təlim</th><th>Manager qeydi</th><th>Prioritet</th><th>Status</th><th>Əməliyyat</th></tr></thead>
-                <tbody>
-                  {reviewerActive[dept].map((r) => (
-                    <tr key={r.id}>
-                      <td>{r.employee_name}</td>
-                      <td>{r.training_title}<div style={{ fontSize: 12, color: '#94a3b8' }}>{r.reason || ''}</div></td>
-                      <td style={{ fontSize: 12.5, color: '#64748b' }}>{r.manager_note || '—'}</td>
-                      <td><Badge meta={priorityMeta(r.priority)} /></td>
-                      <td><Badge meta={reqStatusMeta(r.status)} /></td>
-                      <td style={{ whiteSpace: 'nowrap' }}>
-                        {r.status === 'Pending' && (
-                          <button onClick={() => takeIntoReview(r.id)} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#2563eb', color: '#fff', fontSize: 12.5, cursor: 'pointer' }}>
-                            Analizə götür
-                          </button>
-                        )}
-                        {r.status === 'In Review' && (
-                          <>
-                            <button onClick={() => setNoteAction({ type: 'ld-approve', id: r.id })} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#059669', color: '#fff', fontSize: 12.5, cursor: 'pointer', marginRight: 6 }}>
-                              Təsdiqlə
-                            </button>
-                            <button onClick={() => setNoteAction({ type: 'ld-reject', id: r.id })} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#dc2626', color: '#fff', fontSize: 12.5, cursor: 'pointer' }}>
-                              Rədd et
-                            </button>
-                          </>
-                        )}
-                      </td>
+              <div style={{ overflowX: 'auto' }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Ad Soyad</th><th>Təlim</th><th>Manager qeydi</th>
+                      <th>Kateqoriya</th><th>Əhəmiyyət</th><th>Cari səviyyə</th><th>Tələb olunan</th>
+                      <th>Prioritet</th><th>Status</th><th>Əməliyyat</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {reviewerActive[dept].map((r) => (
+                      <tr key={r.id}>
+                        <td>{r.employee_name}</td>
+                        <td>{r.training_title}<div style={{ fontSize: 12, color: '#94a3b8' }}>{r.reason || ''}</div></td>
+                        <td style={{ fontSize: 12.5, color: '#64748b' }}>{r.manager_note || '—'}</td>
+                        <td style={{ fontSize: 12.5 }}>{r.comp_cat || '—'}</td>
+                        <td style={{ fontSize: 12.5 }}>{r.importance_level || '—'}</td>
+                        <td style={{ fontSize: 12.5 }}>{r.current_skill_level || '—'}</td>
+                        <td style={{ fontSize: 12.5 }}>{r.required_skill_level || '—'}</td>
+                        <td><Badge meta={priorityMeta(r.priority)} /></td>
+                        <td><Badge meta={reqStatusMeta(r.status)} /></td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          {r.status === 'Pending' && (
+                            <button onClick={() => takeIntoReview(r.id)} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#2563eb', color: '#fff', fontSize: 12.5, cursor: 'pointer' }}>
+                              Analizə götür
+                            </button>
+                          )}
+                          {r.status === 'In Review' && (
+                            <>
+                              <button onClick={() => setNoteAction({ type: 'ld-approve', id: r.id })} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#059669', color: '#fff', fontSize: 12.5, cursor: 'pointer', marginRight: 6 }}>
+                                Təsdiqlə
+                              </button>
+                              <button onClick={() => setNoteAction({ type: 'ld-reject', id: r.id })} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#dc2626', color: '#fff', fontSize: 12.5, cursor: 'pointer' }}>
+                                Rədd et
+                              </button>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ))}
           {Object.keys(reviewerActive).length === 0 && (
@@ -315,6 +254,9 @@ export default function RequestsView({ profile, team, requests, onDataChanged })
           )}
         </>
       )}
+
+      <div style={{ fontSize: 16, fontWeight: 800, margin: '20px 0 8px' }}>Mənim Göndərdiklərim</div>
+      <div className="card"><RequestTable list={myRequests} showNotes /></div>
 
       {showForm && (
         <RequestFormModal profile={profile} team={team} onClose={() => setShowForm(false)} onSubmitted={refresh} />
