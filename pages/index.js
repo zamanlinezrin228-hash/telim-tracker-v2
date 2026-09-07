@@ -9,6 +9,7 @@ import DashboardView from '../components/DashboardView';
 import TrackingView from '../components/TrackingView';
 import RequestsView from '../components/RequestsView';
 import AnnualTnaForm from '../components/AnnualTnaForm';
+import AnnualTnaReview from '../components/AnnualTnaReview';
 
 export default function Home() {
   const [loading, setLoading] = useState(true);
@@ -92,8 +93,17 @@ export default function Home() {
       {view === 'requests' && (
         <RequestsView profile={profile} team={team} requests={requests} onDataChanged={handleDataChanged} />
       )}
-      {view === 'annual-tna' && hasTeam && (appSettings.tna_window_open || profile.role === 'ld') && (
-        <AnnualTnaForm profile={profile} team={team} planYear={appSettings.tna_plan_year} onSubmitted={() => { setView('home'); handleDataChanged(); }} />
+      {view === 'annual-tna' && (
+        <div>
+          {hasTeam && (appSettings.tna_window_open || profile.role === 'ld') && (
+            <AnnualTnaForm profile={profile} team={team} planYear={appSettings.tna_plan_year} onSubmitted={handleDataChanged} />
+          )}
+          {(profile.role === 'ld' || profile.role === 'hr') && (
+            <div className="page" style={{ paddingTop: 0 }}>
+              <AnnualTnaReview profile={profile} requests={requests} onDataChanged={handleDataChanged} />
+            </div>
+          )}
+        </div>
       )}
     </>
   );
