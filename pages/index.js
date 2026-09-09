@@ -88,7 +88,7 @@ export default function Home() {
       {view === 'home' && (
         <HomeScreen profile={profile} team={team} setView={setView} tnaWindowOpen={appSettings.tna_window_open} planYear={appSettings.tna_plan_year} />
       )}
-      {view === 'dashboard' && <DashboardView trainings={trainings} />}
+      {view === 'dashboard' && <DashboardView trainings={trainings} requests={requests} />}
       {view === 'tracking' && <TrackingView trainings={trainings} profile={profile} onDataChanged={handleDataChanged} />}
       {view === 'requests' && (
         <RequestsView profile={profile} team={team} requests={requests} planYear={appSettings.tna_plan_year} onDataChanged={handleDataChanged} />
