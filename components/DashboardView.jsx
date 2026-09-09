@@ -380,4 +380,45 @@ export default function DashboardView({ trainings }) {
               </strong>
 
               <div>
-      
+                {totalHours}
+              </div>
+            </div>
+
+            <div>
+              <strong>
+                Completion Rate
+              </strong>
+
+              <div>
+                {completionPct}%
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="charts-grid">
+          <div className="card">
+            <div
+              style={{
+                fontWeight: 700,
+                marginBottom: 14,
+              }}
+            >
+              Status üzrə bölgü
+            </div>
+
+            {statusRows.map(
+              ([st, count]) => {
+                const meta =
+                  statusMeta(st);
+
+                return (
+                  <div
+                    className="bar-row"
+                    key={st}
+                  >
+                    <div className="bar-label">
+                      {meta.label}
+                    </div>
+
+                    <div 
