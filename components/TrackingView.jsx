@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { sb } from '../lib/supabase';
 import { fmtMoney, statusMeta, priorityMeta } from '../lib/helpers';
 import ColumnFilterHeader from './ColumnFilterHeader';
+import { showToast } from '../lib/toast';
 
 const STATUS_OPTIONS = [
   'Scheduled to Commence on Planned Date', 'In Progress', 'Postponed', 'Completed', 'Canceled',
@@ -116,7 +117,7 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
     setSaving(true);
     const { error: err } = await sb.from('trainings').delete().eq('id', deleting.id);
     setSaving(false);
-    if (err) { alert('Xəta: ' + err.message); return; }
+    if (err) { showToast('Xəta: ' + err.message, 'error'); return; }
     setDeleting(null);
     if (onDataChanged) await onDataChanged();
   }

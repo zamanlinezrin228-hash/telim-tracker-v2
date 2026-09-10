@@ -1,13 +1,16 @@
 import { useState, useMemo } from "react";
 import { fmtMoney, statusMeta } from "../lib/helpers";
 import AnalysisView from "./AnalysisView";
+import CountUp from "./CountUp";
+
+const pct = (n) => `${n}%`;
 
 const STATS = [
   { key: 'total', label: 'Ümumi Təlim', icon: '📚', color: '#2563eb', bg: '#eff6ff' },
-  { key: 'totalBudget', label: 'Ümumi Büdcə', icon: '💰', color: '#0f766e', bg: '#f0fdfa' },
+  { key: 'totalBudget', label: 'Ümumi Büdcə', icon: '💰', color: '#0f766e', bg: '#f0fdfa', format: fmtMoney },
   { key: 'totalHours', label: 'Learning Hours', icon: '⏱️', color: '#7c3aed', bg: '#f5f3ff' },
-  { key: 'avgBudget', label: 'Ortalama Büdcə', icon: '📈', color: '#ea580c', bg: '#fff7ed' },
-  { key: 'completionPct', label: 'Tamamlanma', icon: '✅', color: '#059669', bg: '#f0fdf4' },
+  { key: 'avgBudget', label: 'Ortalama Büdcə', icon: '📈', color: '#ea580c', bg: '#fff7ed', format: fmtMoney },
+  { key: 'completionPct', label: 'Tamamlanma', icon: '✅', color: '#059669', bg: '#f0fdf4', format: pct },
   { key: 'inProgress', label: 'Davam Edən', icon: '🔄', color: '#2563eb', bg: '#eff6ff' },
   { key: 'budgetedCount', label: 'Büdcələnmiş', icon: '🟢', color: '#059669', bg: '#f0fdf4' },
   { key: 'outOfBudgetCount', label: 'Büdcədən Kənar', icon: '🔴', color: '#dc2626', bg: '#fef2f2' },
@@ -36,9 +39,9 @@ export default function DashboardView({ trainings }) {
   const budgetedCount = filtered.filter((t) => t.budget_status === "Büdcələnmiş").length;
   const outOfBudgetCount = filtered.filter((t) => t.budget_status === "Büdcədən kənar").length;
 
-  const statValues = {
-    total, totalBudget: fmtMoney(totalBudget), totalHours, avgBudget: fmtMoney(avgBudget),
-    completionPct: `${completionPct}%`, inProgress, budgetedCount, outOfBudgetCount,
+  const statRaw = {
+    total, totalBudget, totalHours, avgBudget,
+    completionPct, inProgress, budgetedCount, outOfBudgetCount,
   };
 
   const statusCounts = {};
@@ -80,11 +83,13 @@ export default function DashboardView({ trainings }) {
 
       <div className="page">
         <div className="kpi-grid">
-          {STATS.map((s) => (
-            <div className="stat-card" key={s.key}>
+          {STATS.map((s, i) => (
+            <div className="stat-card stagger-item" key={s.key} style={{ '--i': i }}>
               <div className="stat-icon" style={{ background: s.bg, color: s.color }}>{s.icon}</div>
               <div className="stat-label">{s.label}</div>
-              <div className="stat-value" style={{ color: s.color }}>{statValues[s.key]}</div>
+              <div className="stat-value" style={{ color: s.color }}>
+                <CountUp value={statRaw[s.key]} format={s.format} />
+              </div>
             </div>
           ))}
         </div>

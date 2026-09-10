@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { sb } from '../lib/supabase';
 import { reqStatusMeta, priorityMeta } from '../lib/helpers';
+import { showToast } from '../lib/toast';
 import NoteModal from './NoteModal';
 import AddToPlanModal from './AddToPlanModal';
 
@@ -35,7 +36,7 @@ export default function AnnualTnaReview({ profile, requests, planYear, onDataCha
 
   async function takeIntoReview(id) {
     const { error } = await sb.from('training_requests').update({ status: 'In Review', updated_at: new Date().toISOString() }).eq('id', id);
-    if (error) { alert('Xəta: ' + error.message); return; }
+    if (error) { showToast('Xəta: ' + error.message, 'error'); return; }
     await onDataChanged();
   }
 
@@ -43,7 +44,7 @@ export default function AnnualTnaReview({ profile, requests, planYear, onDataCha
     const { error } = await sb.from('training_requests').update({
       status: targetStatus, reviewer_note: note, reviewed_by: profile.id, updated_at: new Date().toISOString(),
     }).eq('id', id);
-    if (error) { alert('Xəta: ' + error.message); return; }
+    if (error) { showToast('Xəta: ' + error.message, 'error'); return; }
     await refresh();
   }
 
@@ -57,8 +58,8 @@ export default function AnnualTnaReview({ profile, requests, planYear, onDataCha
       <div className="section-title">İllik TNA — Departament üzrə Baxış</div>
       <div className="section-sub">Rəhbərlərin doldurduğu illik cədvəllərdən daxil olan qeydlər</div>
 
-      {Object.keys(grouped).sort().map((dept) => (
-        <div key={dept} className="card" style={{ marginBottom: 14 }}>
+      {Object.keys(grouped).sort().map((dept, i) => (
+        <div key={dept} className="card stagger-item" style={{ marginBottom: 14, '--i': i }}>
           <div style={{ fontWeight: 700, marginBottom: 12 }}>📁 {dept} ({grouped[dept].length})</div>
           <div style={{ overflowX: 'auto' }}>
             <table>
@@ -103,10 +104,10 @@ export default function AnnualTnaReview({ profile, requests, planYear, onDataCha
         <>
           <div className="section-head"><div className="section-title">Qərarlar tarixçəsi ({decided.length})</div></div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
-            {decided.map((r) => {
+            {decided.map((r, i) => {
               const sm = reqStatusMeta(r.status);
               return (
-                <div key={r.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                <div key={r.id} className="card card-hover stagger-item" style={{ padding: 0, overflow: 'hidden', '--i': i }}>
                   <div style={{ height: 6, background: sm.color }} />
                   <div style={{ padding: 14 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>

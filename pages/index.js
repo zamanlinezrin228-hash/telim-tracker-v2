@@ -10,6 +10,7 @@ import TrackingView from '../components/TrackingView';
 import RequestsView from '../components/RequestsView';
 import AnnualTnaForm from '../components/AnnualTnaForm';
 import AnnualTnaReview from '../components/AnnualTnaReview';
+import ToastHost from '../components/ToastHost';
 
 export default function Home() {
   const [loading, setLoading] = useState(true);
@@ -88,28 +89,31 @@ export default function Home() {
       <div className="app-shell">
         <Sidebar view={view} setView={setView} profile={profile} showAnnualTna={showAnnualTna} />
         <div className="app-main">
-          {view === 'home' && (
-            <HomeScreen profile={profile} team={team} setView={setView} tnaWindowOpen={appSettings.tna_window_open} planYear={appSettings.tna_plan_year} />
-          )}
-          {view === 'dashboard' && <DashboardView trainings={trainings} requests={requests} />}
-          {view === 'tracking' && <TrackingView trainings={trainings} profile={profile} onDataChanged={handleDataChanged} />}
-          {view === 'requests' && (
-            <RequestsView profile={profile} team={team} requests={requests} planYear={appSettings.tna_plan_year} onDataChanged={handleDataChanged} />
-          )}
-          {view === 'annual-tna' && (
-            <div>
-              {hasTeam && (appSettings.tna_window_open || profile.role === 'ld') && (
-                <AnnualTnaForm profile={profile} team={team} planYear={appSettings.tna_plan_year} onSubmitted={handleDataChanged} />
-              )}
-              {(profile.role === 'ld' || profile.role === 'hr') && (
-                <div className="page" style={{ paddingTop: 0 }}>
-                  <AnnualTnaReview profile={profile} requests={requests} planYear={appSettings.tna_plan_year} onDataChanged={handleDataChanged} />
-                </div>
-              )}
-            </div>
-          )}
+          <div key={view} className="view-enter">
+            {view === 'home' && (
+              <HomeScreen profile={profile} team={team} setView={setView} tnaWindowOpen={appSettings.tna_window_open} planYear={appSettings.tna_plan_year} />
+            )}
+            {view === 'dashboard' && <DashboardView trainings={trainings} requests={requests} />}
+            {view === 'tracking' && <TrackingView trainings={trainings} profile={profile} onDataChanged={handleDataChanged} />}
+            {view === 'requests' && (
+              <RequestsView profile={profile} team={team} requests={requests} planYear={appSettings.tna_plan_year} onDataChanged={handleDataChanged} />
+            )}
+            {view === 'annual-tna' && (
+              <div>
+                {hasTeam && (appSettings.tna_window_open || profile.role === 'ld') && (
+                  <AnnualTnaForm profile={profile} team={team} planYear={appSettings.tna_plan_year} onSubmitted={handleDataChanged} />
+                )}
+                {(profile.role === 'ld' || profile.role === 'hr') && (
+                  <div className="page" style={{ paddingTop: 0 }}>
+                    <AnnualTnaReview profile={profile} requests={requests} planYear={appSettings.tna_plan_year} onDataChanged={handleDataChanged} />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
+      <ToastHost />
     </>
   );
 }
