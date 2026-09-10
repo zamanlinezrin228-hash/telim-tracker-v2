@@ -1,7 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
+import { Search, Download, FilterX, Pencil, Trash2, Save } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import { fmtMoney, statusMeta, priorityMeta } from '../lib/helpers';
+import { TrainingStatusBadge, PriorityBadge, BudgetStatusBadge } from './Badges';
 import ColumnFilterHeader from './ColumnFilterHeader';
 import { showToast } from '../lib/toast';
 
@@ -138,7 +140,10 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
       <div className="page">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', gap: 10 }}>
-            <input type="text" placeholder="Ad, vəzifə, vendor axtar..." style={{ width: 260 }} value={search} onChange={(e) => setSearch(e.target.value)} />
+            <div className="input-icon-wrap">
+              <Search size={15} strokeWidth={2} className="input-icon" />
+              <input type="text" placeholder="Ad, vəzifə, vendor axtar..." style={{ width: 260 }} value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
             <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} style={{ minWidth: 120 }}>
               <option value="all">Bütün illər</option>
               {years.map((y) => <option key={y} value={y}>{y}</option>)}
@@ -150,10 +155,10 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
               {activeFilterCount > 0 && <span style={{ color: 'var(--blue)', fontWeight: 600 }}> ({activeFilterCount} sütun filtrlənib)</span>}
             </div>
             {activeFilterCount > 0 && (
-              <button onClick={clearAllFilters} className="btn btn-outline btn-sm">Filtrləri təmizlə</button>
+              <button onClick={clearAllFilters} className="btn btn-outline btn-sm"><FilterX size={13} strokeWidth={2.2} /> Filtrləri təmizlə</button>
             )}
             {canExport && (
-              <button onClick={exportToExcel} className="btn btn-success btn-sm">Excel-ə ixrac et</button>
+              <button onClick={exportToExcel} className="btn btn-success btn-sm"><Download size={13} strokeWidth={2.2} /> Excel-ə ixrac et</button>
             )}
           </div>
         </div>
@@ -177,27 +182,24 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((t) => {
-                const sm = statusMeta(t.status), pm = priorityMeta(t.priority);
-                return (
-                  <tr key={t.id}>
-                    <td>{t.plan_year || '—'}</td>
-                    <td>{t.dept}</td><td>{t.employee_name}</td><td>{t.position}</td><td>{t.skill}</td>
-                    <td>{t.comp_cat}</td><td>{t.vendor}</td>
-                    <td><span className="badge" style={{ background: sm.color }}>{sm.label}</span></td>
-                    <td><span className="badge" style={{ background: pm.color }}>{pm.label}</span></td>
-                    <td>{t.start_date || t.start_raw}</td><td>{t.end_date || t.end_raw}</td>
-                    <td>{fmtMoney(t.budget)}</td>
-                    <td>{t.budget_status ? <span className="badge" style={{ background: t.budget_status === 'Büdcələnmiş' ? 'var(--green)' : 'var(--red)' }}>{t.budget_status}</span> : '—'}</td>
-                    {isAdmin && (
-                      <td style={{ whiteSpace: 'nowrap' }}>
-                        <button onClick={() => openEdit(t)} className="btn btn-accent btn-sm" style={{ marginRight: 6 }}>Redaktə</button>
-                        <button onClick={() => setDeleting(t)} className="btn btn-danger btn-sm">Sil</button>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
+              {filtered.map((t) => (
+                <tr key={t.id}>
+                  <td>{t.plan_year || '—'}</td>
+                  <td>{t.dept}</td><td>{t.employee_name}</td><td>{t.position}</td><td>{t.skill}</td>
+                  <td>{t.comp_cat}</td><td>{t.vendor}</td>
+                  <td><TrainingStatusBadge status={t.status} /></td>
+                  <td><PriorityBadge priority={t.priority} /></td>
+                  <td>{t.start_date || t.start_raw}</td><td>{t.end_date || t.end_raw}</td>
+                  <td>{fmtMoney(t.budget)}</td>
+                  <td>{t.budget_status ? <BudgetStatusBadge status={t.budget_status} /> : '—'}</td>
+                  {isAdmin && (
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <button onClick={() => openEdit(t)} className="btn btn-accent btn-sm" style={{ marginRight: 6 }}><Pencil size={12} strokeWidth={2.2} /> Redaktə</button>
+                      <button onClick={() => setDeleting(t)} className="btn btn-danger btn-sm"><Trash2 size={12} strokeWidth={2.2} /> Sil</button>
+                    </td>
+                  )}
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -290,7 +292,7 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
               <div style={{ display: 'flex', gap: 10 }}>
                 <button onClick={() => setEditing(null)} className="btn btn-outline" style={{ flex: 1 }}>Ləğv et</button>
                 <button onClick={saveEdit} disabled={saving} className="btn btn-primary" style={{ flex: 1 }}>
-                  {saving ? 'Saxlanılır...' : 'Saxla'}
+                  <Save size={14} strokeWidth={2.2} /> {saving ? 'Saxlanılır...' : 'Saxla'}
                 </button>
               </div>
             </div>
@@ -307,7 +309,7 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
               <div style={{ display: 'flex', gap: 10 }}>
                 <button onClick={() => setDeleting(null)} className="btn btn-outline" style={{ flex: 1 }}>Ləğv et</button>
                 <button onClick={confirmDelete} disabled={saving} className="btn btn-danger" style={{ flex: 1 }}>
-                  {saving ? 'Silinir...' : 'Bəli, sil'}
+                  <Trash2 size={14} strokeWidth={2.2} /> {saving ? 'Silinir...' : 'Bəli, sil'}
                 </button>
               </div>
             </div>

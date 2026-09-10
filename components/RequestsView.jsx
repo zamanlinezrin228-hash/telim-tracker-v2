@@ -1,7 +1,10 @@
 import { useState, useMemo } from 'react';
+import { Plus, Folder, Clock, Search, CheckCircle2, XCircle, FileText, CheckCheck, ListPlus } from 'lucide-react';
 import { sb } from '../lib/supabase';
-import { reqStatusMeta, priorityMeta } from '../lib/helpers';
+import { reqStatusMeta } from '../lib/helpers';
 import { showToast } from '../lib/toast';
+import { ReqStatusBadge, PriorityBadge } from './Badges';
+import EmptyState from './EmptyState';
 import RequestFormModal from './RequestFormModal';
 import NoteModal from './NoteModal';
 import AddToPlanModal from './AddToPlanModal';
@@ -48,16 +51,16 @@ export default function RequestsView({ profile, team, requests, planYear, onData
 
   const statCards = isReviewer
     ? [
-        { label: 'Analiz gözləyir', value: pendingCount, icon: '⏳', color: '#d97706', bg: '#fffbeb' },
-        { label: 'Baxılır', value: reviewInReviewCount, icon: '🔍', color: '#2563eb', bg: '#eff6ff' },
-        { label: 'Təsdiqlənib', value: reviewApprovedCount, icon: '✅', color: '#059669', bg: '#f0fdf4' },
-        { label: 'Rədd edilib', value: reviewRejectedCount, icon: '⛔', color: '#dc2626', bg: '#fef2f2' },
+        { label: 'Analiz gözləyir', value: pendingCount, Icon: Clock, color: '#d97706', bg: '#fffbeb' },
+        { label: 'Baxılır', value: reviewInReviewCount, Icon: Search, color: '#2563eb', bg: '#eff6ff' },
+        { label: 'Təsdiqlənib', value: reviewApprovedCount, Icon: CheckCircle2, color: '#059669', bg: '#f0fdf4' },
+        { label: 'Rədd edilib', value: reviewRejectedCount, Icon: XCircle, color: '#dc2626', bg: '#fef2f2' },
       ]
     : [
-        { label: 'Mənim sorğularım', value: myRequests.length, icon: '📝', color: '#2563eb', bg: '#eff6ff' },
-        { label: 'Gözləyir', value: myPendingCount, icon: '⏳', color: '#d97706', bg: '#fffbeb' },
-        { label: 'Təsdiqlənib', value: myApprovedCount, icon: '✅', color: '#059669', bg: '#f0fdf4' },
-        { label: 'Rədd edilib', value: myRejectedCount, icon: '⛔', color: '#dc2626', bg: '#fef2f2' },
+        { label: 'Mənim sorğularım', value: myRequests.length, Icon: FileText, color: '#2563eb', bg: '#eff6ff' },
+        { label: 'Gözləyir', value: myPendingCount, Icon: Clock, color: '#d97706', bg: '#fffbeb' },
+        { label: 'Təsdiqlənib', value: myApprovedCount, Icon: CheckCircle2, color: '#059669', bg: '#f0fdf4' },
+        { label: 'Rədd edilib', value: myRejectedCount, Icon: XCircle, color: '#dc2626', bg: '#fef2f2' },
       ];
 
   async function refresh() {
@@ -89,10 +92,6 @@ export default function RequestsView({ profile, team, requests, planYear, onData
     await refresh();
   }
 
-  function Badge({ meta }) {
-    return <span className="badge" style={{ background: meta.color }}>{meta.label}</span>;
-  }
-
   function RequestTable({ list, showNotes }) {
     return (
       <table>
@@ -106,13 +105,13 @@ export default function RequestsView({ profile, team, requests, planYear, onData
           {list.length ? list.map((r) => (
             <tr key={r.id}>
               <td>{r.training_title}</td>
-              <td><Badge meta={priorityMeta(r.priority)} /></td>
-              <td><Badge meta={reqStatusMeta(r.status)} /></td>
+              <td><PriorityBadge priority={r.priority} /></td>
+              <td><ReqStatusBadge status={r.status} /></td>
               <td>{new Date(r.created_at).toLocaleDateString('az-AZ')}</td>
               {showNotes && (<><td style={{ fontSize: 12.5 }}>{r.manager_note || '—'}</td><td style={{ fontSize: 12.5 }}>{r.reviewer_note || '—'}</td></>)}
             </tr>
           )) : (
-            <tr><td colSpan={showNotes ? 6 : 4} className="empty-state">Hələ sorğu yoxdur</td></tr>
+            <tr><td colSpan={showNotes ? 6 : 4}><EmptyState icon={FileText}>Hələ sorğu yoxdur</EmptyState></td></tr>
           )}
         </tbody>
       </table>
@@ -127,7 +126,7 @@ export default function RequestsView({ profile, team, requests, planYear, onData
             <h1>Təlim Sorğuları</h1>
             <p>Yeni sorğu göndər, komandanın sorğularına bax və qərar ver.</p>
           </div>
-          <button onClick={() => setShowForm(true)} className="btn btn-primary">+ Yeni Sorğu</button>
+          <button onClick={() => setShowForm(true)} className="btn btn-primary"><Plus size={15} strokeWidth={2.4} /> Yeni Sorğu</button>
         </div>
       </div>
 
@@ -135,7 +134,7 @@ export default function RequestsView({ profile, team, requests, planYear, onData
         <div className="kpi-grid">
           {statCards.map((s, i) => (
             <div className="stat-card stagger-item" key={s.label} style={{ '--i': i }}>
-              <div className="stat-icon" style={{ background: s.bg, color: s.color }}>{s.icon}</div>
+              <div className="stat-icon" style={{ background: s.bg, color: s.color }}><s.Icon size={16} strokeWidth={2.2} /></div>
               <div className="stat-label">{s.label}</div>
               <div className="stat-value" style={{ color: s.color }}><CountUp value={s.value} /></div>
             </div>
@@ -145,31 +144,55 @@ export default function RequestsView({ profile, team, requests, planYear, onData
         {hasTeam && (
           <>
             <div className="section-head"><div className="section-title">Baxılmalı Komanda Sorğuları ({toReview.length})</div></div>
-            <div className="card" style={{ marginBottom: 20 }}>
-              <table>
-                <thead><tr><th>Ad Soyad</th><th>Təlim</th><th>Səbəb</th><th>Prioritet</th><th>Əməliyyat</th></tr></thead>
-                <tbody>
-                  {toReview.length ? toReview.map((r) => (
-                    <tr key={r.id}>
-                      <td>{r.employee_name}</td>
-                      <td>{r.training_title}</td>
-                      <td style={{ fontSize: 12.5, color: 'var(--ink-500)' }}>{r.reason || '—'}</td>
-                      <td><Badge meta={priorityMeta(r.priority)} /></td>
-                      <td>
-                        <button onClick={() => setNoteAction({ type: 'manager-approve', id: r.id })} className="btn btn-success btn-sm" style={{ marginRight: 6 }}>
-                          Təsdiqlə → göndər
+            {toReview.length ? (
+              <div className="card" style={{ marginBottom: 20 }}>
+                <div className="req-list">
+                  {toReview.map((r) => (
+                    <div className="req-card" key={r.id}>
+                      <div className="req-card-top">
+                        <div>
+                          <div className="req-card-name">{r.employee_name}</div>
+                          <div className="req-card-training">{r.training_title}</div>
+                        </div>
+                        <div className="req-card-badges"><PriorityBadge priority={r.priority} /></div>
+                      </div>
+                      {r.reason && (
+                        <div className="req-field-highlight">
+                          <div className="req-field-label">Səbəb</div>
+                          <div className="req-field-value">{r.reason}</div>
+                        </div>
+                      )}
+                      {(r.comp_cat || r.importance_level || r.current_skill_level || r.required_skill_level) && (
+                        <div className="req-field-grid">
+                          {r.comp_cat && (
+                            <div><div className="req-field-label">Kateqoriya</div><div className="req-field-value">{r.comp_cat}</div></div>
+                          )}
+                          {r.importance_level && (
+                            <div><div className="req-field-label">Əhəmiyyət dərəcəsi</div><div className="req-field-value">{r.importance_level}</div></div>
+                          )}
+                          {r.current_skill_level && (
+                            <div><div className="req-field-label">Cari səviyyə</div><div className="req-field-value">{r.current_skill_level}</div></div>
+                          )}
+                          {r.required_skill_level && (
+                            <div><div className="req-field-label">Tələb olunan səviyyə</div><div className="req-field-value">{r.required_skill_level}</div></div>
+                          )}
+                        </div>
+                      )}
+                      <div className="req-card-footer">
+                        <button onClick={() => setNoteAction({ type: 'manager-approve', id: r.id })} className="btn btn-success btn-sm">
+                          <CheckCheck size={13} strokeWidth={2.2} /> Təsdiqlə → göndər
                         </button>
                         <button onClick={() => setNoteAction({ type: 'manager-reject', id: r.id })} className="btn btn-danger btn-sm">
-                          Rədd et
+                          <XCircle size={13} strokeWidth={2.2} /> Rədd et
                         </button>
-                      </td>
-                    </tr>
-                  )) : (
-                    <tr><td colSpan={5} className="empty-state">Baxılmalı sorğu yoxdur</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="card" style={{ marginBottom: 20 }}><EmptyState icon={CheckCircle2}>Baxılmalı sorğu yoxdur</EmptyState></div>
+            )}
 
             <div className="section-head"><div className="section-title">Sahəmin Qərarları ({scopeHistory.length})</div></div>
             {scopeHistory.length ? (
@@ -182,7 +205,7 @@ export default function RequestsView({ profile, team, requests, planYear, onData
                       <div style={{ padding: 14 }}>
                         <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{r.employee_name}</div>
                         <div style={{ fontSize: 13, color: 'var(--ink-700)', marginBottom: 10 }}>{r.training_title}</div>
-                        <Badge meta={sm} />
+                        <ReqStatusBadge status={r.status} />
                         {r.manager_note && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginTop: 8 }}><b>Manager:</b> {r.manager_note}</div>}
                         {r.reviewer_note && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginTop: 4 }}><b>L&D:</b> {r.reviewer_note}</div>}
                       </div>
@@ -191,7 +214,7 @@ export default function RequestsView({ profile, team, requests, planYear, onData
                 })}
               </div>
             ) : (
-              <div className="card empty-state" style={{ marginBottom: 24 }}>Hələ qərar yoxdur</div>
+              <div className="card" style={{ marginBottom: 24 }}><EmptyState>Hələ qərar yoxdur</EmptyState></div>
             )}
           </>
         )}
@@ -202,7 +225,7 @@ export default function RequestsView({ profile, team, requests, planYear, onData
             <div className="section-sub">{pendingCount} sorğu analiz gözləyir</div>
             {Object.keys(reviewerActive).sort().map((dept, i) => (
               <div key={dept} className="card stagger-item" style={{ marginBottom: 14, '--i': i }}>
-                <div className="req-dept-head">📁 {dept} <span className="req-dept-count">{reviewerActive[dept].length}</span></div>
+                <div className="req-dept-head"><Folder size={15} strokeWidth={2} /> {dept} <span className="req-dept-count">{reviewerActive[dept].length}</span></div>
                 <div className="req-list">
                   {reviewerActive[dept].map((r) => (
                     <div className="req-card" key={r.id}>
@@ -215,8 +238,8 @@ export default function RequestsView({ profile, team, requests, planYear, onData
                           <div className="req-card-training">{r.training_title}</div>
                         </div>
                         <div className="req-card-badges">
-                          <Badge meta={priorityMeta(r.priority)} />
-                          <Badge meta={reqStatusMeta(r.status)} />
+                          <PriorityBadge priority={r.priority} />
+                          <ReqStatusBadge status={r.status} />
                         </div>
                       </div>
 
@@ -254,12 +277,12 @@ export default function RequestsView({ profile, team, requests, planYear, onData
 
                       <div className="req-card-footer">
                         {r.status === 'Pending' && (
-                          <button onClick={() => takeIntoReview(r.id)} className="btn btn-accent btn-sm">Analizə götür</button>
+                          <button onClick={() => takeIntoReview(r.id)} className="btn btn-accent btn-sm"><Search size={13} strokeWidth={2.2} /> Analizə götür</button>
                         )}
                         {r.status === 'In Review' && (
                           <>
-                            <button onClick={() => setNoteAction({ type: 'ld-approve', id: r.id })} className="btn btn-success btn-sm">Təsdiqlə</button>
-                            <button onClick={() => setNoteAction({ type: 'ld-reject', id: r.id })} className="btn btn-danger btn-sm">Rədd et</button>
+                            <button onClick={() => setNoteAction({ type: 'ld-approve', id: r.id })} className="btn btn-success btn-sm"><CheckCircle2 size={13} strokeWidth={2.2} /> Təsdiqlə</button>
+                            <button onClick={() => setNoteAction({ type: 'ld-reject', id: r.id })} className="btn btn-danger btn-sm"><XCircle size={13} strokeWidth={2.2} /> Rədd et</button>
                           </>
                         )}
                       </div>
@@ -269,7 +292,7 @@ export default function RequestsView({ profile, team, requests, planYear, onData
               </div>
             ))}
             {Object.keys(reviewerActive).length === 0 && (
-              <div className="card empty-state" style={{ marginBottom: 20 }}>Aktiv sorğu yoxdur</div>
+              <div className="card" style={{ marginBottom: 20 }}><EmptyState icon={CheckCircle2}>Aktiv sorğu yoxdur</EmptyState></div>
             )}
 
             {reviewerDecided.length > 0 && (
@@ -287,14 +310,18 @@ export default function RequestsView({ profile, team, requests, planYear, onData
                               <div style={{ fontWeight: 700, fontSize: 14 }}>{r.employee_name}</div>
                               <div style={{ fontSize: 12, color: 'var(--ink-400)' }}>{r.dept}</div>
                             </div>
-                            <Badge meta={sm} />
+                            <ReqStatusBadge status={r.status} />
                           </div>
                           <div style={{ fontSize: 13, color: 'var(--ink-700)', marginBottom: 8 }}>{r.training_title}</div>
                           {r.reviewer_note && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginBottom: 10 }}><b>L&D qeyd:</b> {r.reviewer_note}</div>}
                           {r.status === 'Approved' && !r.linked_training_id && (
-                            <button onClick={() => setAddToPlanRequest(r)} className="btn btn-purple btn-sm btn-block">Plana Əlavə Et</button>
+                            <button onClick={() => setAddToPlanRequest(r)} className="btn btn-purple btn-sm btn-block"><ListPlus size={13} strokeWidth={2.2} /> Plana Əlavə Et</button>
                           )}
-                          {r.linked_training_id && <div style={{ fontSize: 12, color: 'var(--green)', fontWeight: 600 }}>✓ Planda var</div>}
+                          {r.linked_training_id && (
+                            <div style={{ fontSize: 12, color: 'var(--green)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <CheckCircle2 size={13} strokeWidth={2.4} /> Planda var
+                            </div>
+                          )}
                         </div>
                       </div>
                     );

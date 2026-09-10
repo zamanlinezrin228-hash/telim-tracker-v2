@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
+import { ArrowLeftRight, Download, X } from 'lucide-react';
 import { statusMeta } from '../lib/helpers';
 
 const FIELD_LABELS = {
@@ -120,9 +121,10 @@ export default function AnalysisView({ trainings }) {
           <button
             onClick={swapFields}
             title="Sətir/Sütunu dəyiş"
-            style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', fontSize: 14, height: 40 }}
+            className="btn btn-outline btn-sm"
+            style={{ height: 40, padding: '0 12px' }}
           >
-            ⇄
+            <ArrowLeftRight size={15} strokeWidth={2.2} />
           </button>
           <div>
             <div className="filter-label">Sütun sahəsi</div>
@@ -144,9 +146,10 @@ export default function AnalysisView({ trainings }) {
           </label>
           <button
             onClick={exportPivot}
-            style={{ padding: '9px 16px', borderRadius: 8, border: 'none', background: '#059669', color: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: 13, height: 40, marginLeft: 'auto' }}
+            className="btn btn-success"
+            style={{ height: 40, marginLeft: 'auto' }}
           >
-            Excel-ə ixrac et
+            <Download size={14} strokeWidth={2.2} /> Excel-ə ixrac et
           </button>
         </div>
 
@@ -173,8 +176,8 @@ export default function AnalysisView({ trainings }) {
             );
           })}
           {activeSlicerCount > 0 && (
-            <button onClick={() => setSlicers({})} style={{ padding: '7px 14px', borderRadius: 999, border: '1px solid #fca5a5', background: '#fff5f5', color: '#dc2626', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>
-              ✕ Təmizlə
+            <button onClick={() => setSlicers({})} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 999, border: '1px solid var(--red-border)', background: 'var(--red-light)', color: 'var(--red)', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>
+              <X size={12} strokeWidth={2.4} /> Təmizlə
             </button>
           )}
         </div>

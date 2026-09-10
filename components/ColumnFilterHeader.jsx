@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { Filter } from 'lucide-react';
 
 export default function ColumnFilterHeader({ label, values, selected, onChange }) {
   const [open, setOpen] = useState(false);
@@ -39,10 +40,10 @@ export default function ColumnFilterHeader({ label, values, selected, onChange }
         <span>{label}</span>
         <button
           onClick={() => setOpen((o) => !o)}
-          style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px 4px', color: isFiltered ? 'var(--blue)' : 'var(--ink-400)', fontSize: 11, lineHeight: 1 }}
+          style={{ display: 'flex', border: 'none', background: 'none', cursor: 'pointer', padding: '2px', color: isFiltered ? 'var(--blue)' : 'var(--ink-400)', lineHeight: 1 }}
           title="Filtrlə"
         >
-          ▼
+          <Filter size={12} strokeWidth={2.3} fill={isFiltered ? 'currentColor' : 'none'} />
         </button>
       </div>
       {open && (

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { CheckCircle2, Plus, X, Send } from 'lucide-react';
 import { sb } from '../lib/supabase';
 
 const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical'];
@@ -91,7 +92,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
     return (
       <div className="page">
         <div className="card" style={{ textAlign: 'center', padding: 40 }}>
-          <div style={{ fontSize: 32, marginBottom: 10 }}>✅</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10, color: 'var(--green)' }}><CheckCircle2 size={38} strokeWidth={1.7} /></div>
           <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Göndərildi</div>
           <div style={{ fontSize: 13.5, color: 'var(--ink-500)', marginBottom: 20 }}>
             {planYear}-ci il üçün komandanızın təlim ehtiyacları L&D-yə göndərildi.
@@ -172,8 +173,9 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                   </td>
                   <td style={{ borderTop: '1px solid var(--ink-100)', textAlign: 'center' }}>
                     {rows.length > 1 && (
-                      <button onClick={() => removeRow(idx)} style={{ border: 'none', background: 'none', color: 'var(--ink-300)', cursor: 'pointer', fontSize: 16 }}
-                        onMouseEnter={(e) => e.target.style.color = 'var(--red)'} onMouseLeave={(e) => e.target.style.color = 'var(--ink-300)'} title="Sətri sil">✕</button>
+                      <button onClick={() => removeRow(idx)} className="row-remove-btn" title="Sətri sil">
+                        <X size={15} strokeWidth={2.2} />
+                      </button>
                     )}
                   </td>
                 </tr>
@@ -183,9 +185,9 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
         </div>
         <button
           onClick={addRow}
-          style={{ width: '100%', padding: '12px', border: 'none', borderTop: '1px solid var(--border)', background: 'var(--ink-50)', color: 'var(--blue)', cursor: 'pointer', fontSize: 13, fontWeight: 600, textAlign: 'left', paddingLeft: 20 }}
+          style={{ width: '100%', padding: '12px', border: 'none', borderTop: '1px solid var(--border)', background: 'var(--ink-50)', color: 'var(--blue)', cursor: 'pointer', fontSize: 13, fontWeight: 600, textAlign: 'left', paddingLeft: 20, display: 'flex', alignItems: 'center', gap: 6 }}
         >
-          + Sətir əlavə et
+          <Plus size={14} strokeWidth={2.4} /> Sətir əlavə et
         </button>
       </div>
 
@@ -193,7 +195,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
 
       <div>
         <button onClick={handleSubmit} disabled={submitting} className="btn btn-primary">
-          {submitting ? 'Göndərilir...' : 'Hamısını Göndər'}
+          <Send size={14} strokeWidth={2.2} /> {submitting ? 'Göndərilir...' : 'Hamısını Göndər'}
         </button>
       </div>
     </div>

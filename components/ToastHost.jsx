@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { CheckCircle2, AlertTriangle, Info, X } from 'lucide-react';
 import { subscribeToast } from '../lib/toast';
 
-const ICONS = { success: '✓', error: '⚠', info: 'ℹ' };
+const ICONS = { success: CheckCircle2, error: AlertTriangle, info: Info };
 const DURATION = 5000;
 
 export default function ToastHost() {
@@ -32,13 +33,16 @@ export default function ToastHost() {
 
   return (
     <div className="toast-host">
-      {toasts.map((t) => (
-        <div key={t.id} className={'toast toast-' + t.type + (t.leaving ? ' leaving' : '')}>
-          <span className="toast-icon">{ICONS[t.type] || ICONS.info}</span>
-          <span className="toast-body">{t.message}</span>
-          <button className="toast-close" onClick={() => dismiss(t.id)} aria-label="Bağla">✕</button>
-        </div>
-      ))}
+      {toasts.map((t) => {
+        const Icon = ICONS[t.type] || ICONS.info;
+        return (
+          <div key={t.id} className={'toast toast-' + t.type + (t.leaving ? ' leaving' : '')}>
+            <Icon size={16} strokeWidth={2.2} className="toast-icon" />
+            <span className="toast-body">{t.message}</span>
+            <button className="toast-close" onClick={() => dismiss(t.id)} aria-label="Bağla"><X size={13} strokeWidth={2.2} /></button>
+          </div>
+        );
+      })}
     </div>
   );
 }

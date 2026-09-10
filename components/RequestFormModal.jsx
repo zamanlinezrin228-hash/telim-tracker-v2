@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Send } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import { computeBudgetStatus } from '../lib/helpers';
 
@@ -217,7 +218,7 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
         <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={onClose} className="btn btn-outline" style={{ flex: 1 }}>Ləğv et</button>
           <button onClick={handleSubmit} disabled={submitting} className="btn btn-primary" style={{ flex: 1 }}>
-            {submitting ? 'Göndərilir...' : 'Göndər'}
+            <Send size={14} strokeWidth={2.2} /> {submitting ? 'Göndərilir...' : 'Göndər'}
           </button>
         </div>
       </div>
