@@ -336,25 +336,35 @@ tbody tr:hover td { background: var(--ink-50); }
 .req-dept-count { font-size: 11.5px; font-weight: 700; color: var(--ink-500); background: var(--ink-50); border: 1px solid var(--border); border-radius: 999px; padding: 1px 9px; }
 
 .req-list { display: flex; flex-direction: column; }
-.req-row {
-  display: flex; justify-content: space-between; align-items: flex-start; gap: 18px;
-  padding: 14px 2px; border-top: 1px solid var(--ink-100);
+
+.req-card {
+  padding: 18px 4px; border-top: 1px solid var(--ink-100);
   transition: background .15s ease;
 }
-.req-row:first-child { border-top: none; }
-.req-row:hover { background: var(--ink-50); margin: 0 -12px; padding-left: 14px; padding-right: 14px; border-radius: 10px; }
-.req-row-main { min-width: 0; flex: 1; }
-.req-row-title { font-weight: 700; font-size: 13.5px; color: var(--ink-900); margin-bottom: 5px; }
-.req-row-sep { color: var(--ink-300); margin: 0 6px; font-weight: 400; }
-.req-row-reason { font-size: 12px; color: var(--ink-500); margin-bottom: 6px; }
-.req-row-meta { display: flex; flex-wrap: wrap; gap: 6px; }
-.req-tag {
-  background: var(--ink-50); border: 1px solid var(--border); color: var(--ink-700);
-  padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap;
+.req-card:first-child { border-top: none; }
+.req-card:hover { background: var(--ink-50); margin: 0 -14px; padding-left: 18px; padding-right: 18px; border-radius: 12px; }
+
+.req-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 12px; }
+.req-card-name { font-weight: 800; font-size: 14.5px; color: var(--ink-900); }
+.req-card-position { font-weight: 500; color: var(--ink-500); font-size: 12.5px; }
+.req-card-training { font-size: 13px; color: var(--blue-dark); font-weight: 700; margin-top: 3px; }
+.req-card-badges { display: flex; gap: 6px; flex-shrink: 0; }
+
+.req-field-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--ink-500); margin-bottom: 3px; }
+.req-field-value { font-size: 13px; color: var(--ink-900); line-height: 1.5; }
+
+.req-field-highlight {
+  background: var(--blue-light); border: 1px solid #dbeafe; border-radius: 10px;
+  padding: 10px 12px; margin-bottom: 12px;
 }
-.req-row-side { display: flex; flex-direction: column; align-items: flex-end; gap: 9px; flex-shrink: 0; }
-.req-row-badges { display: flex; gap: 6px; }
-.req-row-actions { display: flex; gap: 6px; }
+.req-field-note {
+  background: var(--ink-50); border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 12px; margin-bottom: 12px;
+}
+
+.req-field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 18px; margin-bottom: 14px; }
+
+.req-card-footer { display: flex; justify-content: flex-end; gap: 8px; }
 
 /* ---------- modals ---------- */
 
