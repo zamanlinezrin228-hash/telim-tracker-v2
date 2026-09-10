@@ -116,7 +116,8 @@ select:disabled, input:disabled { background: var(--ink-50); color: var(--ink-40
   transition: filter .15s ease, background .15s ease, border-color .15s ease, transform .05s ease;
   white-space: nowrap;
 }
-.btn:active { transform: translateY(1px); }
+.btn:hover:not(:disabled) { transform: translateY(-1px); }
+.btn:active:not(:disabled) { transform: translateY(0); }
 .btn:disabled { opacity: .55; cursor: not-allowed; transform: none; }
 
 .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 7px; }
@@ -189,16 +190,23 @@ select:disabled, input:disabled { background: var(--ink-50); color: var(--ink-40
 
 .sidebar-link {
   display: flex; align-items: center; gap: 11px;
-  padding: 10px 13px; border-radius: 10px;
+  padding: 10px 13px 10px 10px; border-radius: 10px;
+  border-left: 3px solid transparent;
   color: rgba(255,255,255,0.68);
   font-weight: 600; font-size: 13.5px;
-  cursor: pointer; border: none; background: transparent;
+  cursor: pointer; background: transparent;
   width: 100%; text-align: left;
-  transition: background .15s ease, color .15s ease;
+  transition: background .15s ease, color .15s ease, border-color .2s ease, transform .1s ease;
 }
 .sidebar-link .icon { width: 18px; text-align: center; font-size: 15px; flex-shrink: 0; }
 .sidebar-link:hover { background: rgba(255,255,255,0.06); color: #fff; }
-.sidebar-link.active { background: rgba(255,255,255,0.13); color: #fff; }
+.sidebar-link:active { transform: scale(.98); }
+.sidebar-link.active { background: rgba(255,255,255,0.13); color: #fff; border-left-color: #60a5fa; }
+
+@media (max-width: 860px) {
+  .sidebar-link { border-left: none; border-bottom: 3px solid transparent; padding: 10px 13px; }
+  .sidebar-link.active { border-bottom-color: #60a5fa; }
+}
 
 .sidebar-footer { padding: 14px 12px; border-top: 1px solid rgba(255,255,255,0.08); }
 
@@ -228,9 +236,16 @@ select:disabled, input:disabled { background: var(--ink-50); color: var(--ink-40
 /* ---------- page header (replaces old gradient hero inside app views) ---------- */
 
 .page-header {
+  position: relative;
   padding: 26px 32px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+.page-header::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--blue) 0%, #60a5fa 45%, var(--purple) 100%);
 }
 .page-header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .page-header h1 { font-size: 21px; font-weight: 800; color: var(--ink-900); margin: 0 0 4px; }
@@ -256,14 +271,21 @@ select:disabled, input:disabled { background: var(--ink-50); color: var(--ink-40
 /* ---------- KPI / stat cards ---------- */
 
 .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 24px; }
-.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px 20px; box-shadow: var(--shadow-xs); }
+.stat-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 18px 20px; box-shadow: var(--shadow-xs);
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.stat-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); border-color: var(--ink-200); }
 .stat-icon {
   width: 34px; height: 34px; border-radius: 9px;
   display: flex; align-items: center; justify-content: center;
   font-size: 15px; margin-bottom: 12px;
+  transition: transform .18s ease;
 }
+.stat-card:hover .stat-icon { transform: scale(1.08); }
 .kpi-label, .stat-label { font-size: 12px; font-weight: 600; color: var(--ink-500); margin-bottom: 6px; letter-spacing: .1px; }
-.kpi-value, .stat-value { font-size: 26px; font-weight: 800; color: var(--ink-900); line-height: 1.1; }
+.kpi-value, .stat-value { font-size: 26px; font-weight: 800; color: var(--ink-900); line-height: 1.1; font-variant-numeric: tabular-nums; }
 
 /* ---------- tables ---------- */
 
@@ -293,7 +315,7 @@ tbody tr:hover td { background: var(--ink-50); }
 .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 13px; }
 .bar-label { width: 170px; flex-shrink: 0; color: var(--ink-700); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar-track { flex: 1; height: 9px; background: var(--ink-100); border-radius: 5px; overflow: hidden; }
-.bar-fill { height: 100%; border-radius: 5px; }
+.bar-fill { height: 100%; border-radius: 5px; transition: width .5s cubic-bezier(.2,.7,.3,1); }
 .bar-val { width: 42px; text-align: right; color: var(--ink-500); font-variant-numeric: tabular-nums; }
 
 /* ---------- notices ---------- */
@@ -313,13 +335,21 @@ tbody tr:hover td { background: var(--ink-50); }
   position: fixed; inset: 0; background: rgba(11, 22, 40, 0.55);
   display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;
   backdrop-filter: blur(2px);
+  animation: overlayIn .18s ease both;
 }
 .modal-card {
   width: 480px; max-height: 90vh; overflow: auto; padding: 26px;
   background: var(--surface); border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
+  animation: modalPop .22s cubic-bezier(.2,.9,.3,1.1) both;
 }
 .modal-title { font-weight: 800; font-size: 17px; margin-bottom: 14px; color: var(--ink-900); }
+
+@keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modalPop {
+  from { opacity: 0; transform: translateY(12px) scale(.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 
 /* ---------- auth screens ---------- */
 
@@ -384,7 +414,8 @@ tbody tr:hover td { background: var(--ink-50); }
   transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
   display: flex; flex-direction: column; width: 100%; font-family: inherit;
 }
-.home-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); border-color: var(--ink-200); }
+.home-card:hover { transform: translateY(-5px); box-shadow: var(--shadow-md); border-color: var(--ink-200); }
+.home-card:active { transform: translateY(-2px); }
 .home-card-icon {
   width: 46px; height: 46px; border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
@@ -393,6 +424,57 @@ tbody tr:hover td { background: var(--ink-50); }
 .home-card-title { font-size: 16.5px; font-weight: 800; color: var(--ink-900); margin-bottom: 6px; }
 .home-card-desc { font-size: 13px; color: var(--ink-500); line-height: 1.6; margin-bottom: 16px; flex: 1; }
 .home-card-link { font-size: 13.5px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+
+/* ---------- motion ---------- */
+
+.view-enter { animation: viewFade .32s cubic-bezier(.2,.7,.3,1) both; }
+@keyframes viewFade {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.stagger-item { animation: fadeInUp .4s cubic-bezier(.2,.7,.3,1) both; animation-delay: calc(var(--i, 0) * 55ms); }
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.card-hover { transition: transform .18s ease, box-shadow .18s ease; }
+.card-hover:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); }
+
+@media (prefers-reduced-motion: reduce) {
+  .view-enter, .stagger-item, .modal-overlay, .modal-card, .home-card, .stat-card, .card-hover {
+    animation: none !important; transition: none !important;
+  }
+}
+
+/* ---------- toast ---------- */
+
+.toast-host {
+  position: fixed; bottom: 22px; right: 22px; z-index: 2000;
+  display: flex; flex-direction: column; gap: 10px; width: 340px; max-width: calc(100vw - 32px);
+}
+.toast {
+  background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--ink-300);
+  border-radius: 10px; padding: 12px 12px 12px 14px; box-shadow: var(--shadow-lg);
+  font-size: 13px; color: var(--ink-900); line-height: 1.5;
+  display: flex; gap: 10px; align-items: flex-start;
+  animation: toastIn .28s cubic-bezier(.2,.8,.3,1) both;
+}
+.toast.leaving { animation: toastOut .18s ease both; }
+.toast-success { border-left-color: var(--green); }
+.toast-error { border-left-color: var(--red); }
+.toast-info { border-left-color: var(--blue); }
+.toast-icon { font-size: 15px; flex-shrink: 0; }
+.toast-body { flex: 1; word-break: break-word; }
+.toast-close { background: none; border: none; color: var(--ink-400); cursor: pointer; font-size: 13px; padding: 0 2px; flex-shrink: 0; line-height: 1.5; }
+.toast-close:hover { color: var(--ink-700); }
+@keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes toastOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(20px); } }
+
+@media (max-width: 500px) {
+  .toast-host { left: 16px; right: 16px; width: auto; bottom: 16px; }
+}
 
 /* ---------- loading ---------- */
 

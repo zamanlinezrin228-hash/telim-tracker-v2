@@ -56,8 +56,8 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
 
       <div className="page" style={{ maxWidth: 1040 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 18, marginTop: 12 }}>
-          {cards.map((c) => (
-            <button key={c.key} className="home-card" onClick={() => setView(c.key)}>
+          {cards.map((c, i) => (
+            <button key={c.key} className="home-card stagger-item" style={{ '--i': i }} onClick={() => setView(c.key)}>
               <div className="home-card-icon" style={{ background: c.bg, color: c.accent }}>
                 {c.icon}
               </div>
