@@ -2,6 +2,17 @@ import { useState, useMemo } from "react";
 import { fmtMoney, statusMeta } from "../lib/helpers";
 import AnalysisView from "./AnalysisView";
 
+const STATS = [
+  { key: 'total', label: 'Ümumi Təlim', icon: '📚', color: '#2563eb', bg: '#eff6ff' },
+  { key: 'totalBudget', label: 'Ümumi Büdcə', icon: '💰', color: '#0f766e', bg: '#f0fdfa' },
+  { key: 'totalHours', label: 'Learning Hours', icon: '⏱️', color: '#7c3aed', bg: '#f5f3ff' },
+  { key: 'avgBudget', label: 'Ortalama Büdcə', icon: '📈', color: '#ea580c', bg: '#fff7ed' },
+  { key: 'completionPct', label: 'Tamamlanma', icon: '✅', color: '#059669', bg: '#f0fdf4' },
+  { key: 'inProgress', label: 'Davam Edən', icon: '🔄', color: '#2563eb', bg: '#eff6ff' },
+  { key: 'budgetedCount', label: 'Büdcələnmiş', icon: '🟢', color: '#059669', bg: '#f0fdf4' },
+  { key: 'outOfBudgetCount', label: 'Büdcədən Kənar', icon: '🔴', color: '#dc2626', bg: '#fef2f2' },
+];
+
 export default function DashboardView({ trainings }) {
   const years = useMemo(() => {
     const set = new Set(trainings.map((t) => t.plan_year).filter(Boolean));
@@ -25,6 +36,11 @@ export default function DashboardView({ trainings }) {
   const budgetedCount = filtered.filter((t) => t.budget_status === "Büdcələnmiş").length;
   const outOfBudgetCount = filtered.filter((t) => t.budget_status === "Büdcədən kənar").length;
 
+  const statValues = {
+    total, totalBudget: fmtMoney(totalBudget), totalHours, avgBudget: fmtMoney(avgBudget),
+    completionPct: `${completionPct}%`, inProgress, budgetedCount, outOfBudgetCount,
+  };
+
   const statusCounts = {};
   filtered.forEach((t) => { statusCounts[t.status] = (statusCounts[t.status] || 0) + 1; });
   const statusRows = Object.entries(statusCounts).sort((a, b) => b[1] - a[1]);
@@ -46,14 +62,12 @@ export default function DashboardView({ trainings }) {
 
   return (
     <div>
-      <div className="hero">
-        <h1>Təlim Tracker Platforması</h1>
-        <p>Şirkətinizin təlim ehtiyacları üzrə executive dashboard və analitika.</p>
-      </div>
-
-      <div className="page">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#0b2545" }}>Executive Dashboard</div>
+      <div className="page-header">
+        <div className="page-header-row">
+          <div>
+            <h1>Executive Dashboard</h1>
+            <p>Şirkətinizin təlim ehtiyacları üzrə icmal və analitika.</p>
+          </div>
           <div>
             <div className="filter-label">İl</div>
             <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} style={{ minWidth: 140 }}>
@@ -62,25 +76,26 @@ export default function DashboardView({ trainings }) {
             </select>
           </div>
         </div>
+      </div>
 
+      <div className="page">
         <div className="kpi-grid">
-          <div className="card"><div className="kpi-label">Ümumi Təlim</div><div className="kpi-value">{total}</div></div>
-          <div className="card"><div className="kpi-label">Ümumi Büdcə</div><div className="kpi-value">{fmtMoney(totalBudget)}</div></div>
-          <div className="card"><div className="kpi-label">Learning Hours</div><div className="kpi-value" style={{ color: "#7c3aed" }}>{totalHours}</div></div>
-          <div className="card"><div className="kpi-label">Ortalama Büdcə</div><div className="kpi-value" style={{ color: "#ea580c" }}>{fmtMoney(avgBudget)}</div></div>
-          <div className="card"><div className="kpi-label">Tamamlanma</div><div className="kpi-value" style={{ color: "#059669" }}>{completionPct}%</div></div>
-          <div className="card"><div className="kpi-label">Davam Edən</div><div className="kpi-value" style={{ color: "#2563eb" }}>{inProgress}</div></div>
-          <div className="card"><div className="kpi-label">Büdcələnmiş</div><div className="kpi-value" style={{ color: "#059669" }}>{budgetedCount}</div></div>
-          <div className="card"><div className="kpi-label">Büdcədən Kənar</div><div className="kpi-value" style={{ color: "#dc2626" }}>{outOfBudgetCount}</div></div>
+          {STATS.map((s) => (
+            <div className="stat-card" key={s.key}>
+              <div className="stat-icon" style={{ background: s.bg, color: s.color }}>{s.icon}</div>
+              <div className="stat-label">{s.label}</div>
+              <div className="stat-value" style={{ color: s.color }}>{statValues[s.key]}</div>
+            </div>
+          ))}
         </div>
 
-        <div className="card" style={{ marginTop: 20, marginBottom: 20 }}>
-          <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 15 }}>Executive Summary</div>
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div className="section-title" style={{ marginBottom: 15 }}>Executive Summary</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 16 }}>
-            <div><strong>Top Vendor</strong><div>{topVendor}</div></div>
-            <div><strong>Top Skill</strong><div>{topSkill}</div></div>
-            <div><strong>Learning Hours</strong><div>{totalHours}</div></div>
-            <div><strong>Completion Rate</strong><div>{completionPct}%</div></div>
+            <div><strong>Top Vendor</strong><div style={{ color: 'var(--ink-700)', marginTop: 2 }}>{topVendor}</div></div>
+            <div><strong>Top Skill</strong><div style={{ color: 'var(--ink-700)', marginTop: 2 }}>{topSkill}</div></div>
+            <div><strong>Learning Hours</strong><div style={{ color: 'var(--ink-700)', marginTop: 2 }}>{totalHours}</div></div>
+            <div><strong>Completion Rate</strong><div style={{ color: 'var(--ink-700)', marginTop: 2 }}>{completionPct}%</div></div>
           </div>
         </div>
 

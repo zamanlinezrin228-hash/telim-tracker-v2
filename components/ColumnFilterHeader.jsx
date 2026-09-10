@@ -39,7 +39,7 @@ export default function ColumnFilterHeader({ label, values, selected, onChange }
         <span>{label}</span>
         <button
           onClick={() => setOpen((o) => !o)}
-          style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px 4px', color: isFiltered ? '#2563eb' : '#94a3b8', fontSize: 11, lineHeight: 1 }}
+          style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px 4px', color: isFiltered ? 'var(--blue)' : 'var(--ink-400)', fontSize: 11, lineHeight: 1 }}
           title="Filtrlə"
         >
           ▼
@@ -48,27 +48,27 @@ export default function ColumnFilterHeader({ label, values, selected, onChange }
       {open && (
         <div ref={ref} style={{
           position: 'absolute', top: '100%', left: 0, zIndex: 30,
-          background: '#fff', border: '1px solid #cbd5e1', borderRadius: 8,
-          boxShadow: '0 8px 20px rgba(0,0,0,0.15)', padding: 10, width: 230,
+          background: 'var(--surface)', border: '1px solid var(--ink-300)', borderRadius: 10,
+          boxShadow: 'var(--shadow-lg)', padding: 10, width: 230,
           fontWeight: 400, textTransform: 'none',
         }}>
-          <input type="text" placeholder="Axtar..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: '100%', marginBottom: 8, fontSize: 12.5 }} />
+          <input type="text" placeholder="Axtar..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ marginBottom: 8, fontSize: 12.5 }} />
           <div style={{ display: 'flex', gap: 10, marginBottom: 8, fontSize: 11.5 }}>
-            <button onClick={selectAll} style={{ border: 'none', background: 'none', color: '#2563eb', cursor: 'pointer', padding: 0 }}>Hamısını seç</button>
-            <button onClick={selectNone} style={{ border: 'none', background: 'none', color: '#dc2626', cursor: 'pointer', padding: 0 }}>Heç birini seçmə</button>
+            <button onClick={selectAll} className="btn-ghost" style={{ padding: 0 }}>Hamısını seç</button>
+            <button onClick={selectNone} style={{ border: 'none', background: 'none', color: 'var(--red)', cursor: 'pointer', padding: 0, fontSize: 11.5 }}>Heç birini seçmə</button>
           </div>
-          <div style={{ maxHeight: 200, overflow: 'auto', marginBottom: 10, borderTop: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9', padding: '4px 0' }}>
+          <div style={{ maxHeight: 200, overflow: 'auto', marginBottom: 10, borderTop: '1px solid var(--ink-100)', borderBottom: '1px solid var(--ink-100)', padding: '4px 0' }}>
             {filteredValues.map((v) => (
               <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, padding: '3px 0', cursor: 'pointer' }}>
-                <input type="checkbox" checked={draft.has(v)} onChange={() => toggleValue(v)} />
+                <input type="checkbox" checked={draft.has(v)} onChange={() => toggleValue(v)} style={{ width: 'auto' }} />
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v}</span>
               </label>
             ))}
-            {filteredValues.length === 0 && <div style={{ fontSize: 12, color: '#94a3b8', padding: '6px 0' }}>Tapılmadı</div>}
+            {filteredValues.length === 0 && <div style={{ fontSize: 12, color: 'var(--ink-400)', padding: '6px 0' }}>Tapılmadı</div>}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={cancel} style={{ flex: 1, padding: '6px 0', borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', fontSize: 12 }}>Ləğv et</button>
-            <button onClick={apply} style={{ flex: 1, padding: '6px 0', borderRadius: 6, border: 'none', background: '#0b2545', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Tətbiq et</button>
+            <button onClick={cancel} className="btn btn-outline btn-sm" style={{ flex: 1 }}>Ləğv et</button>
+            <button onClick={apply} className="btn btn-primary btn-sm" style={{ flex: 1 }}>Tətbiq et</button>
           </div>
         </div>
       )}

@@ -37,38 +37,36 @@ export default function AddToPlanModal({ request, planYear, onClose, onSubmitted
   return (
     <div className="modal-overlay">
       <div className="modal-card" style={{ width: 460 }}>
-        <div style={{ fontWeight: 800, fontSize: 17, marginBottom: 6 }}>İllik Plana (TNA) Əlavə Et</div>
-        <div style={{ fontSize: 12.5, color: '#64748b', marginBottom: 16 }}>
+        <div className="modal-title" style={{ marginBottom: 6 }}>İllik Plana (TNA) Əlavə Et</div>
+        <div className="section-sub" style={{ marginBottom: 16 }}>
           {request.employee_name} — {request.dept}{request.sube ? ' / ' + request.sube : ''} — <b>{request.training_title}</b>
         </div>
 
-        {budgetStatus === 'Büdcədən kənar' ? (
-          <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412', fontSize: 12.5, padding: '10px 12px', borderRadius: 8, marginBottom: 14 }}>
-            Bu təlim illik büdcə planlaşdırma dövründən (Oktyabr–Yanvar) kənarda təsdiqlənir, ona görə <b>&quot;Büdcədən kənar&quot;</b> kateqoriyasında qeyd olunacaq. Əvvəlcədən planlaşdırılmış büdcəyə daxil olmadığı üçün <b>təsdiq ehtimalı aşağıdır</b> və əlavə təsdiq tələb oluna bilər.
-          </div>
-        ) : (
-          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', fontSize: 12.5, padding: '10px 12px', borderRadius: 8, marginBottom: 14 }}>
-            İllik büdcə planlaşdırma dövründə əlavə olunur — <b>&quot;Büdcələnmiş&quot;</b> kateqoriyasında qeyd olunacaq.
-          </div>
-        )}
+        <div className={'notice ' + (budgetStatus === 'Büdcədən kənar' ? 'notice-warning' : 'notice-success')} style={{ marginBottom: 14 }}>
+          {budgetStatus === 'Büdcədən kənar' ? (
+            <>Bu təlim illik büdcə planlaşdırma dövründən (Oktyabr–Yanvar) kənarda təsdiqlənir, ona görə <b>&quot;Büdcədən kənar&quot;</b> kateqoriyasında qeyd olunacaq. Əvvəlcədən planlaşdırılmış büdcəyə daxil olmadığı üçün <b>təsdiq ehtimalı aşağıdır</b> və əlavə təsdiq tələb oluna bilər.</>
+          ) : (
+            <>İllik büdcə planlaşdırma dövründə əlavə olunur — <b>&quot;Büdcələnmiş&quot;</b> kateqoriyasında qeyd olunacaq.</>
+          )}
+        </div>
 
         <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize: 12.5, color: '#64748b' }}>Vendor</label>
-          <input type="text" value={vendor} onChange={(e) => setVendor(e.target.value)} style={{ width: '100%' }} />
+          <label>Vendor</label>
+          <input type="text" value={vendor} onChange={(e) => setVendor(e.target.value)} />
         </div>
         <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
           <div style={{ flex: 1 }}>
-            <label style={{ fontSize: 12.5, color: '#64748b' }}>Man Hours</label>
-            <input type="number" value={manHours} onChange={(e) => setManHours(e.target.value)} style={{ width: '100%' }} />
+            <label>Man Hours</label>
+            <input type="number" value={manHours} onChange={(e) => setManHours(e.target.value)} />
           </div>
           <div style={{ flex: 1 }}>
-            <label style={{ fontSize: 12.5, color: '#64748b' }}>Büdcə (₼)</label>
-            <input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} style={{ width: '100%' }} />
+            <label>Büdcə (₼)</label>
+            <input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} />
           </div>
         </div>
         <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 12.5, color: '#64748b' }}>Vəzifə Kateqoriyası</label>
-          <select value={category} onChange={(e) => setCategory(e.target.value)} style={{ width: '100%' }}>
+          <label>Vəzifə Kateqoriyası</label>
+          <select value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="">— Seçilməyib —</option>
             <option value="Support Staff">Support Staff</option>
             <option value="Junior Specialist">Junior Specialist</option>
@@ -80,10 +78,10 @@ export default function AddToPlanModal({ request, planYear, onClose, onSubmitted
             <option value="Senior Manager">Senior Manager</option>
           </select>
         </div>
-        {error && <div style={{ color: '#dc2626', fontSize: 13, marginBottom: 10 }}>{error}</div>}
+        {error && <div className="notice notice-error" style={{ marginBottom: 10 }}>{error}</div>}
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: 10, borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}>Ləğv et</button>
-          <button onClick={handleSubmit} disabled={saving} style={{ flex: 1, padding: 10, borderRadius: 8, border: 'none', background: '#0b2545', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={onClose} className="btn btn-outline" style={{ flex: 1 }}>Ləğv et</button>
+          <button onClick={handleSubmit} disabled={saving} className="btn btn-primary" style={{ flex: 1 }}>
             {saving ? 'Əlavə olunur...' : 'Plana Əlavə Et'}
           </button>
         </div>

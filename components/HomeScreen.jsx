@@ -8,7 +8,7 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
       desc: 'Ümumi mənzərə — təlim sayı, büdcə, status və departament üzrə analiz.',
       icon: '📊',
       accent: '#2563eb',
-      iconBg: 'radial-gradient(circle at 30% 30%, #93c5fd, #2563eb)',
+      bg: '#eff6ff',
       linkLabel: 'Analizə bax',
     },
     {
@@ -17,7 +17,7 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
       desc: 'Bütün təlimlərin təfərrüatlı siyahısı — filtrlə, axtar, Excel-ə ixrac et.',
       icon: '📋',
       accent: '#059669',
-      iconBg: 'radial-gradient(circle at 30% 30%, #6ee7b7, #059669)',
+      bg: '#f0fdf4',
       linkLabel: 'Cədvələ keç',
     },
     {
@@ -28,7 +28,7 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
         : 'Öz təlim ehtiyacın üçün sorğu göndər və statusunu izlə.',
       icon: '📝',
       accent: '#d97706',
-      iconBg: 'radial-gradient(circle at 30% 30%, #fcd34d, #d97706)',
+      bg: '#fffbeb',
       linkLabel: 'Sorğu göndər',
     },
   ];
@@ -42,58 +42,32 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
         : 'Pəncərə hazırda bağlıdır (yalnız L&D test məqsədilə görür).',
       icon: '🗓️',
       accent: '#dc2626',
-      iconBg: 'radial-gradient(circle at 30% 30%, #fca5a5, #dc2626)',
+      bg: '#fef2f2',
       linkLabel: 'Formu doldur',
     });
   }
 
   return (
     <div>
-      <div className="hero" style={{ padding: '56px 32px 72px' }}>
-        <h1 style={{ marginBottom: 8 }}>Xoş gəldiniz, {profile.full_name_az || ''}</h1>
+      <div className="home-hero">
+        <h1>Xoş gəldiniz, {profile.full_name_az || ''}</h1>
         <p>Nə etmək istəyirsiniz? Aşağıdan seçin.</p>
       </div>
 
-      <div className="page" style={{ maxWidth: 1000, margin: '-40px auto 0' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 22 }}>
+      <div className="page" style={{ maxWidth: 1040 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 18, marginTop: 12 }}>
           {cards.map((c) => (
-            <button
-              key={c.key}
-              onClick={() => setView(c.key)}
-              style={{
-                textAlign: 'left', cursor: 'pointer', border: 'none',
-                background: '#fff', borderRadius: 18, padding: 20,
-                boxShadow: '0 4px 14px rgba(11,37,69,0.10)',
-                transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-                display: 'flex', flexDirection: 'column',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-5px)'; e.currentTarget.style.boxShadow = '0 16px 30px rgba(11,37,69,0.18)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(11,37,69,0.10)'; }}
-            >
-              <div style={{
-                background: '#f1f5f9', borderRadius: 14, height: 190,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                marginBottom: 18,
-              }}>
-                <div style={{
-                  width: 108, height: 108, borderRadius: '50%', background: c.iconBg,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 48, boxShadow: `0 8px 18px ${c.accent}40`,
-                }}>
-                  {c.icon}
-                </div>
+            <button key={c.key} className="home-card" onClick={() => setView(c.key)}>
+              <div className="home-card-icon" style={{ background: c.bg, color: c.accent }}>
+                {c.icon}
               </div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: '#0b2545', marginBottom: 8 }}>{c.title}</div>
-              <div style={{ fontSize: 13.5, color: '#64748b', lineHeight: 1.6, marginBottom: 18, flex: 1 }}>{c.desc}</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: c.accent, display: 'flex', alignItems: 'center', gap: 6 }}>
-                {c.linkLabel} <span style={{ fontSize: 16 }}>→</span>
+              <div className="home-card-title">{c.title}</div>
+              <div className="home-card-desc">{c.desc}</div>
+              <div className="home-card-link" style={{ color: c.accent }}>
+                {c.linkLabel} <span>→</span>
               </div>
             </button>
           ))}
-        </div>
-
-        <div style={{ marginTop: 36, marginBottom: 40, textAlign: 'center', fontSize: 12.5, color: '#94a3b8' }}>
-          İstənilən vaxt yuxarıdakı 🏠 işarəsinə basaraq bura qayıda bilərsiniz.
         </div>
       </div>
     </div>

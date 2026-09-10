@@ -13,7 +13,7 @@ const inputStyle = {
   width: '100%', fontSize: 13, border: '1px solid transparent', background: 'transparent',
   padding: '6px 8px', borderRadius: 6, transition: 'border-color 0.15s, background 0.15s',
 };
-function focusIn(e) { e.target.style.border = '1px solid #2563eb'; e.target.style.background = '#fff'; }
+function focusIn(e) { e.target.style.border = '1px solid var(--blue)'; e.target.style.background = '#fff'; }
 function focusOut(e) { e.target.style.border = '1px solid transparent'; e.target.style.background = 'transparent'; }
 
 function emptyRow() {
@@ -93,10 +93,10 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
         <div className="card" style={{ textAlign: 'center', padding: 40 }}>
           <div style={{ fontSize: 32, marginBottom: 10 }}>✅</div>
           <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Göndərildi</div>
-          <div style={{ fontSize: 13.5, color: '#64748b', marginBottom: 20 }}>
+          <div style={{ fontSize: 13.5, color: 'var(--ink-500)', marginBottom: 20 }}>
             {planYear}-ci il üçün komandanızın təlim ehtiyacları L&D-yə göndərildi.
           </div>
-          <button onClick={() => { setDone(false); setRows([emptyRow()]); onSubmitted && onSubmitted(); }} style={{ padding: '10px 20px', borderRadius: 8, border: 'none', background: '#0b2545', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={() => { setDone(false); setRows([emptyRow()]); onSubmitted && onSubmitted(); }} className="btn btn-primary">
             Bağla
           </button>
         </div>
@@ -107,28 +107,26 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
   return (
     <div className="page">
       <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>İllik TNA — {planYear}</div>
-      <div style={{ fontSize: 13, color: '#64748b', marginBottom: 18 }}>
+      <div className="section-sub" style={{ marginBottom: 18 }}>
         Komandanızın {planYear}-ci il üçün təlim ehtiyaclarını cədvəldə doldurun. Əməkdaşı siyahıdan seçə, ya da əl ilə yaza bilərsiniz.
       </div>
 
-      <div style={{ border: '1px solid #e5e7eb', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', marginBottom: 16 }}>
+      <div style={{ border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-xs)', marginBottom: 16 }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ borderCollapse: 'separate', borderSpacing: 0, minWidth: 1200 }}>
             <thead>
               <tr>
-                <th style={{ width: 36, background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}></th>
+                <th style={{ width: 36 }}></th>
                 {['Əməkdaş', 'Vəzifə', 'İnkişaf istiqaməti *', 'Ehtiyacın yaranma səbəbi *', 'Prioritet', 'Əhəmiyyət', 'Cari', 'Tələb olunan', 'Başlama', 'Bitmə', ''].map((h, i) => (
-                  <th key={i} style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb', fontSize: 11.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.3, padding: '10px 12px', whiteSpace: 'nowrap' }}>
-                    {h}
-                  </th>
+                  <th key={i}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {rows.map((r, idx) => (
-                <tr key={idx} style={{ background: idx % 2 === 0 ? '#fff' : '#fafbfc' }}>
-                  <td style={{ textAlign: 'center', color: '#cbd5e1', fontSize: 12, fontWeight: 600, borderBottom: '1px solid #f1f5f9' }}>{idx + 1}</td>
-                  <td style={{ minWidth: 170, borderBottom: '1px solid #f1f5f9', padding: '4px 8px' }}>
+                <tr key={idx} style={{ background: idx % 2 === 0 ? '#fff' : 'var(--ink-50)' }}>
+                  <td style={{ textAlign: 'center', color: 'var(--ink-300)', fontSize: 12, fontWeight: 600, borderTop: '1px solid var(--ink-100)' }}>{idx + 1}</td>
+                  <td style={{ minWidth: 170, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
                     <select value={r.employeeId} onChange={(e) => updateRow(idx, 'employeeId', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
                       <option value="">— Siyahıdan seç —</option>
                       {team.map((m) => <option key={m.id} value={m.id}>{m.full_name_az}</option>)}
@@ -137,45 +135,45 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                       <input type="text" placeholder="və ya əl ilə yaz" value={r.manualName} onChange={(e) => updateRow(idx, 'manualName', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={{ ...inputStyle, marginTop: 2 }} />
                     )}
                   </td>
-                  <td style={{ minWidth: 130, borderBottom: '1px solid #f1f5f9', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 130, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
                     <input type="text" value={r.position} onChange={(e) => updateRow(idx, 'position', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
                   </td>
-                  <td style={{ minWidth: 170, borderBottom: '1px solid #f1f5f9', padding: '4px 8px', background: 'rgba(37,99,235,0.03)' }}>
+                  <td style={{ minWidth: 170, borderTop: '1px solid var(--ink-100)', padding: '4px 8px', background: 'rgba(37,99,235,0.03)' }}>
                     <input type="text" value={r.skill} onChange={(e) => updateRow(idx, 'skill', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
                   </td>
-                  <td style={{ minWidth: 220, borderBottom: '1px solid #f1f5f9', padding: '4px 8px', background: 'rgba(37,99,235,0.03)' }}>
+                  <td style={{ minWidth: 220, borderTop: '1px solid var(--ink-100)', padding: '4px 8px', background: 'rgba(37,99,235,0.03)' }}>
                     <input type="text" value={r.needReason} onChange={(e) => updateRow(idx, 'needReason', e.target.value)} onFocus={focusIn} onBlur={focusOut} placeholder="Niyə bu təlimə ehtiyac var?" style={inputStyle} />
                   </td>
-                  <td style={{ minWidth: 110, borderBottom: '1px solid #f1f5f9', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 110, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
                     <select value={r.priority} onChange={(e) => updateRow(idx, 'priority', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={{ ...inputStyle, color: PRIORITY_COLORS[r.priority], fontWeight: 600 }}>
                       {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
                     </select>
                   </td>
-                  <td style={{ minWidth: 120, borderBottom: '1px solid #f1f5f9', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 120, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
                     <select value={r.importance} onChange={(e) => updateRow(idx, 'importance', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
                       <option value="">—</option>{IMPORTANCE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                   </td>
-                  <td style={{ minWidth: 110, borderBottom: '1px solid #f1f5f9', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 110, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
                     <select value={r.currentLevel} onChange={(e) => updateRow(idx, 'currentLevel', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
                       <option value="">—</option>{LEVEL_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                   </td>
-                  <td style={{ minWidth: 110, borderBottom: '1px solid #f1f5f9', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 110, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
                     <select value={r.requiredLevel} onChange={(e) => updateRow(idx, 'requiredLevel', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
                       <option value="">—</option>{LEVEL_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                   </td>
-                  <td style={{ minWidth: 140, borderBottom: '1px solid #f1f5f9', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 140, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
                     <input type="date" value={r.start} onChange={(e) => updateRow(idx, 'start', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
                   </td>
-                  <td style={{ minWidth: 140, borderBottom: '1px solid #f1f5f9', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 140, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
                     <input type="date" value={r.end} onChange={(e) => updateRow(idx, 'end', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
                   </td>
-                  <td style={{ borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                  <td style={{ borderTop: '1px solid var(--ink-100)', textAlign: 'center' }}>
                     {rows.length > 1 && (
-                      <button onClick={() => removeRow(idx)} style={{ border: 'none', background: 'none', color: '#cbd5e1', cursor: 'pointer', fontSize: 16 }}
-                        onMouseEnter={(e) => e.target.style.color = '#dc2626'} onMouseLeave={(e) => e.target.style.color = '#cbd5e1'} title="Sətri sil">✕</button>
+                      <button onClick={() => removeRow(idx)} style={{ border: 'none', background: 'none', color: 'var(--ink-300)', cursor: 'pointer', fontSize: 16 }}
+                        onMouseEnter={(e) => e.target.style.color = 'var(--red)'} onMouseLeave={(e) => e.target.style.color = 'var(--ink-300)'} title="Sətri sil">✕</button>
                     )}
                   </td>
                 </tr>
@@ -185,16 +183,16 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
         </div>
         <button
           onClick={addRow}
-          style={{ width: '100%', padding: '12px', border: 'none', borderTop: '1px solid #e5e7eb', background: '#fafbfc', color: '#2563eb', cursor: 'pointer', fontSize: 13, fontWeight: 600, textAlign: 'left', paddingLeft: 20 }}
+          style={{ width: '100%', padding: '12px', border: 'none', borderTop: '1px solid var(--border)', background: 'var(--ink-50)', color: 'var(--blue)', cursor: 'pointer', fontSize: 13, fontWeight: 600, textAlign: 'left', paddingLeft: 20 }}
         >
           + Sətir əlavə et
         </button>
       </div>
 
-      {error && <div style={{ color: '#dc2626', fontSize: 13, marginBottom: 14 }}>{error}</div>}
+      {error && <div className="notice notice-error" style={{ marginBottom: 14 }}>{error}</div>}
 
       <div>
-        <button onClick={handleSubmit} disabled={submitting} style={{ padding: '12px 28px', borderRadius: 8, border: 'none', background: '#0b2545', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>
+        <button onClick={handleSubmit} disabled={submitting} className="btn btn-primary">
           {submitting ? 'Göndərilir...' : 'Hamısını Göndər'}
         </button>
       </div>
