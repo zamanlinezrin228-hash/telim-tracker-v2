@@ -205,41 +205,63 @@ export default function RequestsView({ profile, team, requests, planYear, onData
                 <div className="req-dept-head">📁 {dept} <span className="req-dept-count">{reviewerActive[dept].length}</span></div>
                 <div className="req-list">
                   {reviewerActive[dept].map((r) => (
-                    <div className="req-row" key={r.id}>
-                      <div className="req-row-main">
-                        <div className="req-row-title">
-                          {r.employee_name}<span className="req-row-sep">·</span>{r.training_title}
-                        </div>
-                        {(r.reason || r.manager_note) && (
-                          <div className="req-row-reason">
-                            {r.reason && <span>{r.reason}</span>}
-                            {r.reason && r.manager_note && <span className="req-row-sep">·</span>}
-                            {r.manager_note && <span><b>Manager:</b> {r.manager_note}</span>}
+                    <div className="req-card" key={r.id}>
+                      <div className="req-card-top">
+                        <div>
+                          <div className="req-card-name">
+                            {r.employee_name}
+                            {r.position && <span className="req-card-position"> · {r.position}</span>}
                           </div>
-                        )}
-                        <div className="req-row-meta">
-                          {r.comp_cat && <span className="req-tag">{r.comp_cat}</span>}
-                          {r.importance_level && <span className="req-tag">Əhəmiyyət: {r.importance_level}</span>}
-                          {r.current_skill_level && <span className="req-tag">Cari: {r.current_skill_level}</span>}
-                          {r.required_skill_level && <span className="req-tag">Tələb: {r.required_skill_level}</span>}
+                          <div className="req-card-training">{r.training_title}</div>
                         </div>
-                      </div>
-                      <div className="req-row-side">
-                        <div className="req-row-badges">
+                        <div className="req-card-badges">
                           <Badge meta={priorityMeta(r.priority)} />
                           <Badge meta={reqStatusMeta(r.status)} />
                         </div>
-                        <div className="req-row-actions">
-                          {r.status === 'Pending' && (
-                            <button onClick={() => takeIntoReview(r.id)} className="btn btn-accent btn-sm">Analizə götür</button>
-                          )}
-                          {r.status === 'In Review' && (
-                            <>
-                              <button onClick={() => setNoteAction({ type: 'ld-approve', id: r.id })} className="btn btn-success btn-sm">Təsdiqlə</button>
-                              <button onClick={() => setNoteAction({ type: 'ld-reject', id: r.id })} className="btn btn-danger btn-sm">Rədd et</button>
-                            </>
-                          )}
+                      </div>
+
+                      {r.reason && (
+                        <div className="req-field-highlight">
+                          <div className="req-field-label">Ehtiyacın yaranma səbəbi</div>
+                          <div className="req-field-value">{r.reason}</div>
                         </div>
+                      )}
+
+                      <div className="req-field-grid">
+                        {r.comp_cat && (
+                          <div><div className="req-field-label">Kateqoriya</div><div className="req-field-value">{r.comp_cat}</div></div>
+                        )}
+                        {r.importance_level && (
+                          <div><div className="req-field-label">Əhəmiyyət dərəcəsi</div><div className="req-field-value">{r.importance_level}</div></div>
+                        )}
+                        {r.current_skill_level && (
+                          <div><div className="req-field-label">Cari səviyyə</div><div className="req-field-value">{r.current_skill_level}</div></div>
+                        )}
+                        {r.required_skill_level && (
+                          <div><div className="req-field-label">Tələb olunan səviyyə</div><div className="req-field-value">{r.required_skill_level}</div></div>
+                        )}
+                        {(r.preferred_start || r.preferred_end) && (
+                          <div><div className="req-field-label">İstənilən müddət</div><div className="req-field-value">{r.preferred_start || '—'} → {r.preferred_end || '—'}</div></div>
+                        )}
+                      </div>
+
+                      {r.manager_note && (
+                        <div className="req-field-note">
+                          <div className="req-field-label">Manager qeydi</div>
+                          <div className="req-field-value">{r.manager_note}</div>
+                        </div>
+                      )}
+
+                      <div className="req-card-footer">
+                        {r.status === 'Pending' && (
+                          <button onClick={() => takeIntoReview(r.id)} className="btn btn-accent btn-sm">Analizə götür</button>
+                        )}
+                        {r.status === 'In Review' && (
+                          <>
+                            <button onClick={() => setNoteAction({ type: 'ld-approve', id: r.id })} className="btn btn-success btn-sm">Təsdiqlə</button>
+                            <button onClick={() => setNoteAction({ type: 'ld-reject', id: r.id })} className="btn btn-danger btn-sm">Rədd et</button>
+                          </>
+                        )}
                       </div>
                     </div>
                   ))}
