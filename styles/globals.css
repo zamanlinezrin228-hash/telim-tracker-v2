@@ -203,6 +203,14 @@ select:disabled, input:disabled { background: var(--ink-50); color: var(--ink-40
 .sidebar-link:active { transform: scale(.98); }
 .sidebar-link.active { background: rgba(255,255,255,0.13); color: #fff; border-left-color: #60a5fa; }
 
+.sidebar-link-badge {
+  margin-left: auto; background: #ef4444; color: #fff; font-size: 10.5px; font-weight: 800;
+  border-radius: 999px; min-width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;
+  padding: 0 5px; line-height: 1; flex-shrink: 0;
+  animation: badgePop .3s cubic-bezier(.3,1.4,.4,1) both;
+}
+@keyframes badgePop { from { transform: scale(0); } to { transform: scale(1); } }
+
 @media (max-width: 860px) {
   .sidebar-link { border-left: none; border-bottom: 3px solid transparent; padding: 10px 13px; }
   .sidebar-link.active { border-bottom-color: #60a5fa; }
@@ -332,8 +340,25 @@ tbody tr:hover td { background: var(--ink-50); }
 
 /* ---------- request / review row list (replaces dense wide tables for sparse data) ---------- */
 
-.req-dept-head { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 4px; }
+.req-dept-head { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 4px; scroll-margin-top: 16px; }
 .req-dept-count { font-size: 11.5px; font-weight: 700; color: var(--ink-500); background: var(--ink-50); border: 1px solid var(--border); border-radius: 999px; padding: 1px 9px; }
+
+/* ---------- department jump nav (quick-scroll pills for pages with many dept windows) ---------- */
+
+.dept-jump-nav { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 8px; margin-bottom: 16px; }
+.dept-jump-pill {
+  flex-shrink: 0; display: flex; align-items: center; gap: 7px;
+  padding: 7px 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface);
+  font-size: 12.5px; font-weight: 600; color: var(--ink-700); cursor: pointer; white-space: nowrap;
+  transition: border-color .15s ease, background .15s ease, color .15s ease, transform .1s ease;
+}
+.dept-jump-pill:hover { border-color: var(--blue); color: var(--blue-dark); background: var(--blue-light); }
+.dept-jump-pill:active { transform: scale(.97); }
+.dept-jump-pill .count {
+  font-size: 10.5px; font-weight: 800; background: var(--ink-100); color: var(--ink-700);
+  border-radius: 999px; padding: 1px 7px;
+}
+.dept-jump-pill:hover .count { background: #dbeafe; color: var(--blue-dark); }
 
 .req-list { display: flex; flex-direction: column; }
 

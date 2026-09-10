@@ -1,6 +1,7 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import Head from 'next/head';
 import { sb } from '../lib/supabase';
+import { showToast } from '../lib/toast';
 import LoginScreen from '../components/LoginScreen';
 import SignupScreen from '../components/SignupScreen';
 import Sidebar from '../components/Sidebar';
@@ -11,6 +12,8 @@ import RequestsView from '../components/RequestsView';
 import AnnualTnaForm from '../components/AnnualTnaForm';
 import AnnualTnaReview from '../components/AnnualTnaReview';
 import ToastHost from '../components/ToastHost';
+
+const NOTIFY_POLL_MS = 60000;
 
 export default function Home() {
   const [loading, setLoading] = useState(true);
@@ -58,6 +61,40 @@ export default function Home() {
     await loadData();
   }
 
+  const isReviewer = profile && (profile.role === 'ld' || profile.role === 'hr');
+
+  // Polls for newly-arrived requests (ad-hoc + annual TNA) while an L&D/HR
+  // reviewer has the app open, and surfaces a toast when the count grows —
+  // there's no realtime subscription set up on this Supabase project, so
+  // polling is the reliable way to notice new submissions.
+  const prevPendingRef = useRef(null);
+  useEffect(() => {
+    if (!loggedIn || !isReviewer) { prevPendingRef.current = null; return; }
+    let cancelled = false;
+
+    async function poll() {
+      const { count, error } = await sb.from('training_requests').select('id', { count: 'exact', head: true }).eq('status', 'Pending');
+      if (cancelled || error || count === null) return;
+      if (prevPendingRef.current !== null && count > prevPendingRef.current) {
+        const diff = count - prevPendingRef.current;
+        showToast(diff === 1 ? 'Yeni təlim sorğusu daxil oldu.' : `${diff} yeni təlim sorğusu daxil oldu.`, 'info');
+        await loadData();
+      }
+      prevPendingRef.current = count;
+    }
+
+    poll();
+    const id = setInterval(poll, NOTIFY_POLL_MS);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [loggedIn, isReviewer, loadData]);
+
+  const sidebarBadges = isReviewer
+    ? {
+        requests: requests.filter((r) => r.status === 'Pending').length,
+        'annual-tna': requests.filter((r) => r.status === 'Pending' && r.source === 'Manager Survey').length,
+      }
+    : {};
+
   if (loading) {
     return (
       <>
@@ -87,7 +124,7 @@ export default function Home() {
     <>
       <Head><title>Təlim Tracker</title></Head>
       <div className="app-shell">
-        <Sidebar view={view} setView={setView} profile={profile} showAnnualTna={showAnnualTna} />
+        <Sidebar view={view} setView={setView} profile={profile} showAnnualTna={showAnnualTna} badges={sidebarBadges} />
         <div className="app-main">
           <div key={view} className="view-enter">
             {view === 'home' && (

@@ -4,6 +4,20 @@ import { reqStatusMeta, priorityMeta } from '../lib/helpers';
 import { showToast } from '../lib/toast';
 import NoteModal from './NoteModal';
 import AddToPlanModal from './AddToPlanModal';
+import CountUp from './CountUp';
+
+function Badge({ meta }) {
+  return <span className="badge" style={{ background: meta.color }}>{meta.label}</span>;
+}
+
+function deptAnchorId(dept) {
+  return 'tna-dept-' + dept.replace(/[^a-zA-Z0-9əöüğıçşƏÖÜĞIÇŞ]+/g, '-');
+}
+
+function scrollToDept(dept) {
+  const el = document.getElementById(deptAnchorId(dept));
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 
 export default function AnnualTnaReview({ profile, requests, planYear, onDataChanged }) {
   const [noteAction, setNoteAction] = useState(null);
@@ -24,9 +38,25 @@ export default function AnnualTnaReview({ profile, requests, planYear, onDataCha
 
   const decided = surveyRequests.filter((r) => r.status === 'Approved' || r.status === 'Rejected');
 
-  function Badge({ meta }) {
-    return <span className="badge" style={{ background: meta.color }}>{meta.label}</span>;
-  }
+  const decidedGrouped = useMemo(() => {
+    const g = {};
+    decided.forEach((r) => { (g[r.dept] = g[r.dept] || []).push(r); });
+    return g;
+  }, [decided]);
+
+  const pendingCount = surveyRequests.filter((r) => r.status === 'Pending').length;
+  const inReviewCount = surveyRequests.filter((r) => r.status === 'In Review').length;
+  const approvedCount = decided.filter((r) => r.status === 'Approved').length;
+  const rejectedCount = decided.filter((r) => r.status === 'Rejected').length;
+
+  const statCards = [
+    { label: 'Analiz gözləyir', value: pendingCount, icon: '⏳', color: '#d97706', bg: '#fffbeb' },
+    { label: 'Baxılır', value: inReviewCount, icon: '🔍', color: '#2563eb', bg: '#eff6ff' },
+    { label: 'Təsdiqlənib', value: approvedCount, icon: '✅', color: '#059669', bg: '#f0fdf4' },
+    { label: 'Rədd edilib', value: rejectedCount, icon: '⛔', color: '#dc2626', bg: '#fef2f2' },
+  ];
+
+  const activeDepts = Object.keys(grouped).sort();
 
   async function refresh() {
     setNoteAction(null);
@@ -58,76 +88,119 @@ export default function AnnualTnaReview({ profile, requests, planYear, onDataCha
       <div className="section-title">İllik TNA — Departament üzrə Baxış</div>
       <div className="section-sub">Rəhbərlərin doldurduğu illik cədvəllərdən daxil olan qeydlər</div>
 
-      {Object.keys(grouped).sort().map((dept, i) => (
-        <div key={dept} className="card stagger-item" style={{ marginBottom: 14, '--i': i }}>
-          <div style={{ fontWeight: 700, marginBottom: 12 }}>📁 {dept} ({grouped[dept].length})</div>
-          <div style={{ overflowX: 'auto' }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Ad Soyad</th><th>Vəzifə</th><th>Təlim</th><th>Səbəb</th>
-                  <th>Prioritet</th><th>Status</th><th>Əməliyyat</th>
-                </tr>
-              </thead>
-              <tbody>
-                {grouped[dept].map((r) => (
-                  <tr key={r.id}>
-                    <td>{r.employee_name}</td>
-                    <td style={{ fontSize: 12.5 }}>{r.position || '—'}</td>
-                    <td>{r.training_title}</td>
-                    <td style={{ fontSize: 12.5, maxWidth: 220 }}>{r.reason || '—'}</td>
-                    <td><Badge meta={priorityMeta(r.priority)} /></td>
-                    <td><Badge meta={reqStatusMeta(r.status)} /></td>
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      {r.status === 'Pending' && (
-                        <button onClick={() => takeIntoReview(r.id)} className="btn btn-accent btn-sm">Analizə götür</button>
-                      )}
-                      {r.status === 'In Review' && (
-                        <>
-                          <button onClick={() => setNoteAction({ type: 'approve', id: r.id })} className="btn btn-success btn-sm" style={{ marginRight: 6 }}>Təsdiqlə</button>
-                          <button onClick={() => setNoteAction({ type: 'reject', id: r.id })} className="btn btn-danger btn-sm">Rədd et</button>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <div className="kpi-grid">
+        {statCards.map((s, i) => (
+          <div className="stat-card stagger-item" key={s.label} style={{ '--i': i }}>
+            <div className="stat-icon" style={{ background: s.bg, color: s.color }}>{s.icon}</div>
+            <div className="stat-label">{s.label}</div>
+            <div className="stat-value" style={{ color: s.color }}><CountUp value={s.value} /></div>
+          </div>
+        ))}
+      </div>
+
+      {activeDepts.length > 1 && (
+        <div className="dept-jump-nav">
+          {activeDepts.map((dept) => (
+            <button key={dept} className="dept-jump-pill" onClick={() => scrollToDept(dept)}>
+              📁 {dept} <span className="count">{grouped[dept].length}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {activeDepts.map((dept, i) => (
+        <div key={dept} id={deptAnchorId(dept)} className="card stagger-item" style={{ marginBottom: 14, '--i': i }}>
+          <div className="req-dept-head">📁 {dept} <span className="req-dept-count">{grouped[dept].length}</span></div>
+          <div className="req-list">
+            {grouped[dept].map((r) => (
+              <div className="req-card" key={r.id}>
+                <div className="req-card-top">
+                  <div>
+                    <div className="req-card-name">
+                      {r.employee_name}
+                      {r.position && <span className="req-card-position"> · {r.position}</span>}
+                    </div>
+                    <div className="req-card-training">{r.training_title}</div>
+                  </div>
+                  <div className="req-card-badges">
+                    <Badge meta={priorityMeta(r.priority)} />
+                    <Badge meta={reqStatusMeta(r.status)} />
+                  </div>
+                </div>
+
+                {r.reason && (
+                  <div className="req-field-highlight">
+                    <div className="req-field-label">Ehtiyacın yaranma səbəbi</div>
+                    <div className="req-field-value">{r.reason}</div>
+                  </div>
+                )}
+
+                <div className="req-field-grid">
+                  {r.importance_level && (
+                    <div><div className="req-field-label">Əhəmiyyət dərəcəsi</div><div className="req-field-value">{r.importance_level}</div></div>
+                  )}
+                  {r.current_skill_level && (
+                    <div><div className="req-field-label">Cari səviyyə</div><div className="req-field-value">{r.current_skill_level}</div></div>
+                  )}
+                  {r.required_skill_level && (
+                    <div><div className="req-field-label">Tələb olunan səviyyə</div><div className="req-field-value">{r.required_skill_level}</div></div>
+                  )}
+                  {(r.preferred_start || r.preferred_end) && (
+                    <div><div className="req-field-label">İstənilən müddət</div><div className="req-field-value">{r.preferred_start || '—'} → {r.preferred_end || '—'}</div></div>
+                  )}
+                </div>
+
+                <div className="req-card-footer">
+                  {r.status === 'Pending' && (
+                    <button onClick={() => takeIntoReview(r.id)} className="btn btn-accent btn-sm">Analizə götür</button>
+                  )}
+                  {r.status === 'In Review' && (
+                    <>
+                      <button onClick={() => setNoteAction({ type: 'approve', id: r.id })} className="btn btn-success btn-sm">Təsdiqlə</button>
+                      <button onClick={() => setNoteAction({ type: 'reject', id: r.id })} className="btn btn-danger btn-sm">Rədd et</button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       ))}
-      {Object.keys(grouped).length === 0 && (
+      {activeDepts.length === 0 && (
         <div className="card empty-state" style={{ marginBottom: 20 }}>Aktiv sorğu yoxdur</div>
       )}
 
       {decided.length > 0 && (
         <>
           <div className="section-head"><div className="section-title">Qərarlar tarixçəsi ({decided.length})</div></div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
-            {decided.map((r, i) => {
-              const sm = reqStatusMeta(r.status);
-              return (
-                <div key={r.id} className="card card-hover stagger-item" style={{ padding: 0, overflow: 'hidden', '--i': i }}>
-                  <div style={{ height: 6, background: sm.color }} />
-                  <div style={{ padding: 14 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: 14 }}>{r.employee_name}</div>
-                        <div style={{ fontSize: 12, color: 'var(--ink-400)' }}>{r.dept}</div>
+          {Object.keys(decidedGrouped).sort().map((dept, i) => (
+            <div key={dept} className="card stagger-item" style={{ marginBottom: 14, '--i': i }}>
+              <div className="req-dept-head">📁 {dept} <span className="req-dept-count">{decidedGrouped[dept].length}</span></div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14, marginTop: 12 }}>
+                {decidedGrouped[dept].map((r) => {
+                  const sm = reqStatusMeta(r.status);
+                  return (
+                    <div key={r.id} className="card card-hover" style={{ padding: 0, overflow: 'hidden' }}>
+                      <div style={{ height: 6, background: sm.color }} />
+                      <div style={{ padding: 14 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                          <div style={{ fontWeight: 700, fontSize: 14 }}>{r.employee_name}</div>
+                          <Badge meta={sm} />
+                        </div>
+                        <div style={{ fontSize: 13, color: 'var(--ink-700)', marginBottom: 8 }}>{r.training_title}</div>
+                        {r.reason && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginBottom: 8, lineHeight: 1.5 }}>{r.reason}</div>}
+                        {r.reviewer_note && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginBottom: 10 }}><b>Qeyd:</b> {r.reviewer_note}</div>}
+                        {r.status === 'Approved' && !r.linked_training_id && (
+                          <button onClick={() => setAddToPlanRequest(r)} className="btn btn-purple btn-sm btn-block">Plana Əlavə Et</button>
+                        )}
+                        {r.linked_training_id && <div style={{ fontSize: 12, color: 'var(--green)', fontWeight: 600 }}>✓ Planda var</div>}
                       </div>
-                      <Badge meta={sm} />
                     </div>
-                    <div style={{ fontSize: 13, color: 'var(--ink-700)', marginBottom: 8 }}>{r.training_title}</div>
-                    {r.reviewer_note && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginBottom: 10 }}><b>Qeyd:</b> {r.reviewer_note}</div>}
-                    {r.status === 'Approved' && !r.linked_training_id && (
-                      <button onClick={() => setAddToPlanRequest(r)} className="btn btn-purple btn-sm btn-block">Plana Əlavə Et</button>
-                    )}
-                    {r.linked_training_id && <div style={{ fontSize: 12, color: 'var(--green)', fontWeight: 600 }}>✓ Planda var</div>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </>
       )}
 
