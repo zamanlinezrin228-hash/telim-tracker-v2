@@ -17,16 +17,20 @@ const inputStyle = {
 function focusIn(e) { e.target.style.border = '1px solid var(--blue)'; e.target.style.background = '#fff'; }
 function focusOut(e) { e.target.style.border = '1px solid transparent'; e.target.style.background = 'transparent'; }
 
-function emptyRow() {
+function emptyRow(defaultEmployeeId = '') {
   return {
-    employeeId: '', manualName: '', position: '', skill: '', needReason: '',
+    employeeId: defaultEmployeeId, manualName: '', position: '', skill: '', needReason: '',
     priority: 'Medium', importance: '', currentLevel: '', requiredLevel: '',
     start: '', end: '',
   };
 }
 
 export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) {
-  const [rows, setRows] = useState([emptyRow()]);
+  const hasTeam = team && team.length > 0;
+  const self = { id: profile.id, full_name_az: profile.full_name_az || '', dept: profile.dept, sube: profile.sube, position: profile.position };
+  const selectableEmployees = [self, ...team];
+
+  const [rows, setRows] = useState([{ ...emptyRow(profile.id), position: profile.position || '' }]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
@@ -36,7 +40,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
       const next = [...prev];
       next[idx] = { ...next[idx], [field]: value };
       if (field === 'employeeId' && value) {
-        const m = team.find((t) => t.id === value);
+        const m = selectableEmployees.find((t) => t.id === value);
         if (m) next[idx].position = m.position || '';
       }
       return next;
@@ -60,7 +64,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
     }
 
     const payloads = filled.map((r) => {
-      const member = r.employeeId ? team.find((t) => t.id === r.employeeId) : null;
+      const member = r.employeeId ? selectableEmployees.find((t) => t.id === r.employeeId) : null;
       return {
         requested_by: profile.id,
         employee_name: member ? (member.full_name_az || member.id) : r.manualName.trim(),
@@ -95,9 +99,9 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10, color: 'var(--green)' }}><CheckCircle2 size={38} strokeWidth={1.7} /></div>
           <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Göndərildi</div>
           <div style={{ fontSize: 13.5, color: 'var(--ink-500)', marginBottom: 20 }}>
-            {planYear}-ci il üçün komandanızın təlim ehtiyacları L&D-yə göndərildi.
+            {planYear}-ci il üçün təlim ehtiyaclarınız L&D-yə göndərildi.
           </div>
-          <button onClick={() => { setDone(false); setRows([emptyRow()]); onSubmitted && onSubmitted(); }} className="btn btn-primary">
+          <button onClick={() => { setDone(false); setRows([{ ...emptyRow(profile.id), position: profile.position || '' }]); onSubmitted && onSubmitted(); }} className="btn btn-primary">
             Bağla
           </button>
         </div>
@@ -109,7 +113,9 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
     <div className="page">
       <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>İllik TNA — {planYear}</div>
       <div className="section-sub" style={{ marginBottom: 18 }}>
-        Komandanızın {planYear}-ci il üçün təlim ehtiyaclarını cədvəldə doldurun. Əməkdaşı siyahıdan seçə, ya da əl ilə yaza bilərsiniz.
+        {hasTeam
+          ? `${planYear}-ci il üçün öz təlim ehtiyacınızı və ya komandanızın ehtiyaclarını cədvəldə doldurun. Əməkdaşı siyahıdan seçə, ya da əl ilə yaza bilərsiniz.`
+          : `${planYear}-ci il üçün öz təlim ehtiyacınızı cədvəldə doldurun.`}
       </div>
 
       <div style={{ border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-xs)', marginBottom: 16 }}>
@@ -130,6 +136,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                   <td style={{ minWidth: 170, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
                     <select value={r.employeeId} onChange={(e) => updateRow(idx, 'employeeId', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
                       <option value="">— Siyahıdan seç —</option>
+                      <option value={self.id}>{self.full_name_az} (Mən)</option>
                       {team.map((m) => <option key={m.id} value={m.id}>{m.full_name_az}</option>)}
                     </select>
                     {!r.employeeId && (
