@@ -117,8 +117,7 @@ export default function Home() {
     );
   }
 
-  const hasTeam = team && team.length > 0;
-  const showAnnualTna = hasTeam && (appSettings.tna_window_open || profile.role === 'ld');
+  const showAnnualTna = appSettings.tna_window_open || profile.role === 'ld';
 
   return (
     <>
@@ -137,7 +136,7 @@ export default function Home() {
             )}
             {view === 'annual-tna' && (
               <div>
-                {hasTeam && (appSettings.tna_window_open || profile.role === 'ld') && (
+                {(appSettings.tna_window_open || profile.role === 'ld') && (
                   <AnnualTnaForm profile={profile} team={team} planYear={appSettings.tna_plan_year} onSubmitted={handleDataChanged} />
                 )}
                 {(profile.role === 'ld' || profile.role === 'hr') && (

@@ -35,12 +35,14 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
     },
   ];
 
-  if (hasTeam && (tnaWindowOpen || profile.role === 'ld')) {
+  if (tnaWindowOpen || profile.role === 'ld') {
     cards.push({
       key: 'annual-tna',
       title: `İllik TNA — ${planYear}`,
       desc: tnaWindowOpen
-        ? 'Komandanızın illik təlim ehtiyaclarını cədvəl formasında doldurun.'
+        ? (hasTeam
+            ? 'Öz təlim ehtiyacınızı və komandanızın ehtiyaclarını cədvəl formasında doldurun.'
+            : 'Öz illik təlim ehtiyacınızı cədvəl formasında doldurun.')
         : 'Pəncərə hazırda bağlıdır (yalnız L&D test məqsədilə görür).',
       Icon: CalendarDays,
       accent: '#dc2626',
