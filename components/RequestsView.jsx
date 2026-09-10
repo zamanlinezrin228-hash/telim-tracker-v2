@@ -5,6 +5,7 @@ import { showToast } from '../lib/toast';
 import RequestFormModal from './RequestFormModal';
 import NoteModal from './NoteModal';
 import AddToPlanModal from './AddToPlanModal';
+import CountUp from './CountUp';
 
 export default function RequestsView({ profile, team, requests, planYear, onDataChanged }) {
   const [showForm, setShowForm] = useState(false);
@@ -36,6 +37,28 @@ export default function RequestsView({ profile, team, requests, planYear, onData
     : {};
   const reviewerDecided = isReviewer ? requests.filter((r) => (r.status === 'Approved' || r.status === 'Rejected') && r.source !== 'Manager Survey') : [];
   const pendingCount = isReviewer ? requests.filter((r) => r.status === 'Pending').length : 0;
+
+  const reviewInReviewCount = isReviewer ? Object.values(reviewerActive).flat().filter((r) => r.status === 'In Review').length : 0;
+  const reviewApprovedCount = reviewerDecided.filter((r) => r.status === 'Approved').length;
+  const reviewRejectedCount = reviewerDecided.filter((r) => r.status === 'Rejected').length;
+
+  const myPendingCount = myRequests.filter((r) => r.status === 'Pending' || r.status === 'Pending Manager Review' || r.status === 'In Review').length;
+  const myApprovedCount = myRequests.filter((r) => r.status === 'Approved').length;
+  const myRejectedCount = myRequests.filter((r) => r.status === 'Rejected').length;
+
+  const statCards = isReviewer
+    ? [
+        { label: 'Analiz gözləyir', value: pendingCount, icon: '⏳', color: '#d97706', bg: '#fffbeb' },
+        { label: 'Baxılır', value: reviewInReviewCount, icon: '🔍', color: '#2563eb', bg: '#eff6ff' },
+        { label: 'Təsdiqlənib', value: reviewApprovedCount, icon: '✅', color: '#059669', bg: '#f0fdf4' },
+        { label: 'Rədd edilib', value: reviewRejectedCount, icon: '⛔', color: '#dc2626', bg: '#fef2f2' },
+      ]
+    : [
+        { label: 'Mənim sorğularım', value: myRequests.length, icon: '📝', color: '#2563eb', bg: '#eff6ff' },
+        { label: 'Gözləyir', value: myPendingCount, icon: '⏳', color: '#d97706', bg: '#fffbeb' },
+        { label: 'Təsdiqlənib', value: myApprovedCount, icon: '✅', color: '#059669', bg: '#f0fdf4' },
+        { label: 'Rədd edilib', value: myRejectedCount, icon: '⛔', color: '#dc2626', bg: '#fef2f2' },
+      ];
 
   async function refresh() {
     setShowForm(false);
@@ -109,6 +132,16 @@ export default function RequestsView({ profile, team, requests, planYear, onData
       </div>
 
       <div className="page">
+        <div className="kpi-grid">
+          {statCards.map((s, i) => (
+            <div className="stat-card stagger-item" key={s.label} style={{ '--i': i }}>
+              <div className="stat-icon" style={{ background: s.bg, color: s.color }}>{s.icon}</div>
+              <div className="stat-label">{s.label}</div>
+              <div className="stat-value" style={{ color: s.color }}><CountUp value={s.value} /></div>
+            </div>
+          ))}
+        </div>
+
         {hasTeam && (
           <>
             <div className="section-head"><div className="section-title">Baxılmalı Komanda Sorğuları ({toReview.length})</div></div>
@@ -169,43 +202,47 @@ export default function RequestsView({ profile, team, requests, planYear, onData
             <div className="section-sub">{pendingCount} sorğu analiz gözləyir</div>
             {Object.keys(reviewerActive).sort().map((dept, i) => (
               <div key={dept} className="card stagger-item" style={{ marginBottom: 14, '--i': i }}>
-                <div style={{ fontWeight: 700, marginBottom: 12 }}>📁 {dept} ({reviewerActive[dept].length})</div>
-                <div style={{ overflowX: 'auto' }}>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Ad Soyad</th><th>Təlim</th><th>Manager qeydi</th>
-                        <th>Kateqoriya</th><th>Əhəmiyyət</th><th>Cari səviyyə</th><th>Tələb olunan</th>
-                        <th>Prioritet</th><th>Status</th><th>Əməliyyat</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {reviewerActive[dept].map((r) => (
-                        <tr key={r.id}>
-                          <td>{r.employee_name}</td>
-                          <td>{r.training_title}<div style={{ fontSize: 12, color: 'var(--ink-400)' }}>{r.reason || ''}</div></td>
-                          <td style={{ fontSize: 12.5, color: 'var(--ink-500)' }}>{r.manager_note || '—'}</td>
-                          <td style={{ fontSize: 12.5 }}>{r.comp_cat || '—'}</td>
-                          <td style={{ fontSize: 12.5 }}>{r.importance_level || '—'}</td>
-                          <td style={{ fontSize: 12.5 }}>{r.current_skill_level || '—'}</td>
-                          <td style={{ fontSize: 12.5 }}>{r.required_skill_level || '—'}</td>
-                          <td><Badge meta={priorityMeta(r.priority)} /></td>
-                          <td><Badge meta={reqStatusMeta(r.status)} /></td>
-                          <td style={{ whiteSpace: 'nowrap' }}>
-                            {r.status === 'Pending' && (
-                              <button onClick={() => takeIntoReview(r.id)} className="btn btn-accent btn-sm">Analizə götür</button>
-                            )}
-                            {r.status === 'In Review' && (
-                              <>
-                                <button onClick={() => setNoteAction({ type: 'ld-approve', id: r.id })} className="btn btn-success btn-sm" style={{ marginRight: 6 }}>Təsdiqlə</button>
-                                <button onClick={() => setNoteAction({ type: 'ld-reject', id: r.id })} className="btn btn-danger btn-sm">Rədd et</button>
-                              </>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="req-dept-head">📁 {dept} <span className="req-dept-count">{reviewerActive[dept].length}</span></div>
+                <div className="req-list">
+                  {reviewerActive[dept].map((r) => (
+                    <div className="req-row" key={r.id}>
+                      <div className="req-row-main">
+                        <div className="req-row-title">
+                          {r.employee_name}<span className="req-row-sep">·</span>{r.training_title}
+                        </div>
+                        {(r.reason || r.manager_note) && (
+                          <div className="req-row-reason">
+                            {r.reason && <span>{r.reason}</span>}
+                            {r.reason && r.manager_note && <span className="req-row-sep">·</span>}
+                            {r.manager_note && <span><b>Manager:</b> {r.manager_note}</span>}
+                          </div>
+                        )}
+                        <div className="req-row-meta">
+                          {r.comp_cat && <span className="req-tag">{r.comp_cat}</span>}
+                          {r.importance_level && <span className="req-tag">Əhəmiyyət: {r.importance_level}</span>}
+                          {r.current_skill_level && <span className="req-tag">Cari: {r.current_skill_level}</span>}
+                          {r.required_skill_level && <span className="req-tag">Tələb: {r.required_skill_level}</span>}
+                        </div>
+                      </div>
+                      <div className="req-row-side">
+                        <div className="req-row-badges">
+                          <Badge meta={priorityMeta(r.priority)} />
+                          <Badge meta={reqStatusMeta(r.status)} />
+                        </div>
+                        <div className="req-row-actions">
+                          {r.status === 'Pending' && (
+                            <button onClick={() => takeIntoReview(r.id)} className="btn btn-accent btn-sm">Analizə götür</button>
+                          )}
+                          {r.status === 'In Review' && (
+                            <>
+                              <button onClick={() => setNoteAction({ type: 'ld-approve', id: r.id })} className="btn btn-success btn-sm">Təsdiqlə</button>
+                              <button onClick={() => setNoteAction({ type: 'ld-reject', id: r.id })} className="btn btn-danger btn-sm">Rədd et</button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}

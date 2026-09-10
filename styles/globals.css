@@ -327,7 +327,34 @@ tbody tr:hover td { background: var(--ink-50); }
 
 /* ---------- empty state ---------- */
 
-.empty-state { text-align: center; color: var(--ink-400); padding: 30px; }
+.empty-state { text-align: center; color: var(--ink-400); font-size: 13px; padding: 34px 20px; }
+.empty-state::before { content: '🗂️'; display: block; font-size: 21px; margin-bottom: 8px; opacity: .55; }
+
+/* ---------- request / review row list (replaces dense wide tables for sparse data) ---------- */
+
+.req-dept-head { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 4px; }
+.req-dept-count { font-size: 11.5px; font-weight: 700; color: var(--ink-500); background: var(--ink-50); border: 1px solid var(--border); border-radius: 999px; padding: 1px 9px; }
+
+.req-list { display: flex; flex-direction: column; }
+.req-row {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 18px;
+  padding: 14px 2px; border-top: 1px solid var(--ink-100);
+  transition: background .15s ease;
+}
+.req-row:first-child { border-top: none; }
+.req-row:hover { background: var(--ink-50); margin: 0 -12px; padding-left: 14px; padding-right: 14px; border-radius: 10px; }
+.req-row-main { min-width: 0; flex: 1; }
+.req-row-title { font-weight: 700; font-size: 13.5px; color: var(--ink-900); margin-bottom: 5px; }
+.req-row-sep { color: var(--ink-300); margin: 0 6px; font-weight: 400; }
+.req-row-reason { font-size: 12px; color: var(--ink-500); margin-bottom: 6px; }
+.req-row-meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.req-tag {
+  background: var(--ink-50); border: 1px solid var(--border); color: var(--ink-700);
+  padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap;
+}
+.req-row-side { display: flex; flex-direction: column; align-items: flex-end; gap: 9px; flex-shrink: 0; }
+.req-row-badges { display: flex; gap: 6px; }
+.req-row-actions { display: flex; gap: 6px; }
 
 /* ---------- modals ---------- */
 
