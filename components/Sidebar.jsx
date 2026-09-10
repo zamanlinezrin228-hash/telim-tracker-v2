@@ -1,9 +1,10 @@
+import { GraduationCap, Home, LayoutDashboard, ClipboardList, FileText, CalendarDays, LogOut } from 'lucide-react';
 import { sb } from '../lib/supabase';
 
 const NAV_ITEMS = [
-  { key: 'dashboard', label: 'Dashboard', icon: '📊' },
-  { key: 'tracking', label: 'İzləmə Cədvəli', icon: '📋' },
-  { key: 'requests', label: 'Təlim Sorğuları', icon: '📝' },
+  { key: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard },
+  { key: 'tracking', label: 'İzləmə Cədvəli', Icon: ClipboardList },
+  { key: 'requests', label: 'Təlim Sorğuları', Icon: FileText },
 ];
 
 function initials(name) {
@@ -21,13 +22,13 @@ export default function Sidebar({ view, setView, profile, showAnnualTna, badges 
   }
 
   const items = showAnnualTna
-    ? [...NAV_ITEMS, { key: 'annual-tna', label: 'İllik TNA', icon: '🗓️' }]
+    ? [...NAV_ITEMS, { key: 'annual-tna', label: 'İllik TNA', Icon: CalendarDays }]
     : NAV_ITEMS;
 
   return (
     <aside className="sidebar">
       <button className="sidebar-brand" onClick={() => setView('home')} title="Əsas səhifə">
-        <span className="mark">🎓</span>
+        <span className="mark"><GraduationCap size={19} strokeWidth={2.2} /></span>
         <span>Təlim Tracker</span>
       </button>
 
@@ -36,18 +37,19 @@ export default function Sidebar({ view, setView, profile, showAnnualTna, badges 
           className={'sidebar-link' + (view === 'home' ? ' active' : '')}
           onClick={() => setView('home')}
         >
-          <span className="icon">🏠</span>
+          <span className="icon"><Home size={17} strokeWidth={2} /></span>
           <span>Əsas səhifə</span>
         </button>
         {items.map((item) => {
           const badgeCount = badges[item.key];
+          const Icon = item.Icon;
           return (
             <button
               key={item.key}
               className={'sidebar-link' + (view === item.key ? ' active' : '')}
               onClick={() => setView(item.key)}
             >
-              <span className="icon">{item.icon}</span>
+              <span className="icon"><Icon size={17} strokeWidth={2} /></span>
               <span>{item.label}</span>
               {!!badgeCount && <span className="sidebar-link-badge">{badgeCount > 99 ? '99+' : badgeCount}</span>}
             </button>
@@ -63,7 +65,9 @@ export default function Sidebar({ view, setView, profile, showAnnualTna, badges 
             <div className="sidebar-user-role">{ROLE_LABELS[profile?.role] || profile?.role || ''}</div>
           </div>
         </div>
-        <button className="btn btn-outline btn-sm btn-block" onClick={handleLogout}>Çıxış</button>
+        <button className="btn btn-outline btn-sm btn-block" onClick={handleLogout}>
+          <LogOut size={14} strokeWidth={2} /> Çıxış
+        </button>
       </div>
     </aside>
   );

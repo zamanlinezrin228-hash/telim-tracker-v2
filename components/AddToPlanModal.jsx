@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ListPlus } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import { computeBudgetStatus } from '../lib/helpers';
 
@@ -82,7 +83,7 @@ export default function AddToPlanModal({ request, planYear, onClose, onSubmitted
         <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={onClose} className="btn btn-outline" style={{ flex: 1 }}>Ləğv et</button>
           <button onClick={handleSubmit} disabled={saving} className="btn btn-primary" style={{ flex: 1 }}>
-            {saving ? 'Əlavə olunur...' : 'Plana Əlavə Et'}
+            <ListPlus size={14} strokeWidth={2.2} /> {saving ? 'Əlavə olunur...' : 'Plana Əlavə Et'}
           </button>
         </div>
       </div>

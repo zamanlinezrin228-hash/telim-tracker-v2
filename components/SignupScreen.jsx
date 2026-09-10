@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { GraduationCap, CheckCircle2, ShieldCheck, Zap, UserPlus } from 'lucide-react';
 import { sb } from '../lib/supabase';
 
 export default function SignupScreen({ onSignedUp, onBackToLogin }) {
@@ -69,13 +70,13 @@ export default function SignupScreen({ onSignedUp, onBackToLogin }) {
   return (
     <div className="auth-shell">
       <div className="auth-brand">
-        <div className="mark">🎓</div>
+        <div className="mark"><GraduationCap size={22} strokeWidth={2} /></div>
         <h1>Yeni əməkdaş olaraq qoşulun</h1>
         <p>Bir neçə sahəni doldurun — sistem sizi departamentiniz və birbaşa rəhbəriniz üzrə avtomatik təşkil edəcək.</p>
         <ul>
-          <li><span className="dot">✅</span> Mövcud direktoriyadan dəqiq departament/şöbə seçimi</li>
-          <li><span className="dot">🔒</span> Yalnız rəhbərinizə və L&D-yə görünən sorğu axını</li>
-          <li><span className="dot">⚡</span> Qeydiyyatdan sonra dərhal istifadəyə hazır</li>
+          <li><span className="dot"><CheckCircle2 size={12} strokeWidth={2.3} /></span> Mövcud direktoriyadan dəqiq departament/şöbə seçimi</li>
+          <li><span className="dot"><ShieldCheck size={12} strokeWidth={2.3} /></span> Yalnız rəhbərinizə və L&D-yə görünən sorğu axını</li>
+          <li><span className="dot"><Zap size={12} strokeWidth={2.3} /></span> Qeydiyyatdan sonra dərhal istifadəyə hazır</li>
         </ul>
       </div>
 
@@ -127,7 +128,7 @@ export default function SignupScreen({ onSignedUp, onBackToLogin }) {
           {error && <div className="notice notice-error" style={{ marginBottom: 12 }}>{error}</div>}
 
           <button className="btn btn-primary btn-block" onClick={handleSignup} disabled={loading} style={{ marginBottom: 10 }}>
-            {loading ? 'Qeydiyyat aparılır...' : 'Qeydiyyatdan keç'}
+            <UserPlus size={15} strokeWidth={2.2} /> {loading ? 'Qeydiyyat aparılır...' : 'Qeydiyyatdan keç'}
           </button>
           <button onClick={onBackToLogin} className="btn btn-ghost btn-block">
             Artıq hesabım var, daxil ol

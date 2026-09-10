@@ -1,3 +1,5 @@
+import { LayoutDashboard, ClipboardList, FileText, CalendarDays, ArrowRight } from 'lucide-react';
+
 export default function HomeScreen({ profile, team, setView, tnaWindowOpen, planYear }) {
   const hasTeam = team && team.length > 0;
 
@@ -6,7 +8,7 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
       key: 'dashboard',
       title: 'Dashboard',
       desc: 'Ümumi mənzərə — təlim sayı, büdcə, status və departament üzrə analiz.',
-      icon: '📊',
+      Icon: LayoutDashboard,
       accent: '#2563eb',
       bg: '#eff6ff',
       linkLabel: 'Analizə bax',
@@ -15,7 +17,7 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
       key: 'tracking',
       title: 'İzləmə Cədvəli',
       desc: 'Bütün təlimlərin təfərrüatlı siyahısı — filtrlə, axtar, Excel-ə ixrac et.',
-      icon: '📋',
+      Icon: ClipboardList,
       accent: '#059669',
       bg: '#f0fdf4',
       linkLabel: 'Cədvələ keç',
@@ -26,7 +28,7 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
       desc: hasTeam
         ? 'Yeni sorğu göndər, komandanın sorğularına bax və qərar ver.'
         : 'Öz təlim ehtiyacın üçün sorğu göndər və statusunu izlə.',
-      icon: '📝',
+      Icon: FileText,
       accent: '#d97706',
       bg: '#fffbeb',
       linkLabel: 'Sorğu göndər',
@@ -40,7 +42,7 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
       desc: tnaWindowOpen
         ? 'Komandanızın illik təlim ehtiyaclarını cədvəl formasında doldurun.'
         : 'Pəncərə hazırda bağlıdır (yalnız L&D test məqsədilə görür).',
-      icon: '🗓️',
+      Icon: CalendarDays,
       accent: '#dc2626',
       bg: '#fef2f2',
       linkLabel: 'Formu doldur',
@@ -59,12 +61,12 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
           {cards.map((c, i) => (
             <button key={c.key} className="home-card stagger-item" style={{ '--i': i }} onClick={() => setView(c.key)}>
               <div className="home-card-icon" style={{ background: c.bg, color: c.accent }}>
-                {c.icon}
+                <c.Icon size={22} strokeWidth={2} />
               </div>
               <div className="home-card-title">{c.title}</div>
               <div className="home-card-desc">{c.desc}</div>
               <div className="home-card-link" style={{ color: c.accent }}>
-                {c.linkLabel} <span>→</span>
+                {c.linkLabel} <ArrowRight size={15} strokeWidth={2.3} />
               </div>
             </button>
           ))}

@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { CheckCircle2, XCircle } from 'lucide-react';
 
 export default function NoteModal({ title, placeholder, confirmLabel, confirmVariant, onConfirm, onCancel }) {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const ConfirmIcon = confirmVariant === 'danger' ? XCircle : CheckCircle2;
 
   async function handleConfirm() {
     setSaving(true);
@@ -29,7 +31,7 @@ export default function NoteModal({ title, placeholder, confirmLabel, confirmVar
             className={'btn ' + (confirmVariant === 'success' ? 'btn-success' : confirmVariant === 'danger' ? 'btn-danger' : 'btn-primary')}
             style={{ flex: 1 }}
           >
-            {saving ? 'Göndərilir...' : confirmLabel}
+            <ConfirmIcon size={14} strokeWidth={2.2} /> {saving ? 'Göndərilir...' : confirmLabel}
           </button>
         </div>
       </div>

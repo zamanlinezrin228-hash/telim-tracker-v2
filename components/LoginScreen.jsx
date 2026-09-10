@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { GraduationCap, LayoutDashboard, FileText, ClipboardList, Eye, EyeOff, LogIn } from 'lucide-react';
 import { sb } from '../lib/supabase';
 
 export default function LoginScreen({ onLoggedIn, onShowSignup }) {
@@ -33,13 +34,13 @@ export default function LoginScreen({ onLoggedIn, onShowSignup }) {
   return (
     <div className="auth-shell">
       <div className="auth-brand">
-        <div className="mark">🎓</div>
+        <div className="mark"><GraduationCap size={22} strokeWidth={2} /></div>
         <h1>Komandanızın təlim ehtiyaclarını bir platformada idarə edin</h1>
         <p>Təlim Tracker — illik TNA planlaması, sorğu axını və icra analitikası üçün vahid mərkəz.</p>
         <ul>
-          <li><span className="dot">📊</span> Departament və büdcə üzrə real-vaxt analitika</li>
-          <li><span className="dot">📝</span> Rəhbər → L&D təsdiq axını ilə sorğu idarəetməsi</li>
-          <li><span className="dot">📋</span> Filtrlənə bilən izləmə cədvəli və Excel ixracı</li>
+          <li><span className="dot"><LayoutDashboard size={12} strokeWidth={2.3} /></span> Departament və büdcə üzrə real-vaxt analitika</li>
+          <li><span className="dot"><FileText size={12} strokeWidth={2.3} /></span> Rəhbər → L&D təsdiq axını ilə sorğu idarəetməsi</li>
+          <li><span className="dot"><ClipboardList size={12} strokeWidth={2.3} /></span> Filtrlənə bilən izləmə cədvəli və Excel ixracı</li>
         </ul>
       </div>
 
@@ -67,9 +68,10 @@ export default function LoginScreen({ onLoggedIn, onShowSignup }) {
                 type="button"
                 onClick={() => setShowPw((s) => !s)}
                 className="btn-ghost"
-                style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 12.5, padding: '4px 6px' }}
+                aria-label={showPw ? 'Parolu gizlət' : 'Parolu göstər'}
+                style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', padding: '4px 6px' }}
               >
-                {showPw ? 'Gizlət' : 'Göstər'}
+                {showPw ? <EyeOff size={16} strokeWidth={2} /> : <Eye size={16} strokeWidth={2} />}
               </button>
             </div>
           </div>
@@ -81,7 +83,7 @@ export default function LoginScreen({ onLoggedIn, onShowSignup }) {
           </div>
 
           <button className="btn btn-primary btn-block" onClick={handleLogin} disabled={loading}>
-            {loading ? 'Daxil olunur...' : 'Daxil ol'}
+            <LogIn size={15} strokeWidth={2.2} /> {loading ? 'Daxil olunur...' : 'Daxil ol'}
           </button>
 
           {error && <div className="notice notice-error" style={{ marginTop: 12, textAlign: 'center' }}>{error}</div>}
