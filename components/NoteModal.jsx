@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export default function NoteModal({ title, placeholder, confirmLabel, confirmColor, onConfirm, onCancel }) {
+export default function NoteModal({ title, placeholder, confirmLabel, confirmVariant, onConfirm, onCancel }) {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -13,22 +13,21 @@ export default function NoteModal({ title, placeholder, confirmLabel, confirmCol
   return (
     <div className="modal-overlay">
       <div className="modal-card" style={{ width: 420 }}>
-        <div style={{ fontWeight: 800, fontSize: 17, marginBottom: 14 }}>{title}</div>
+        <div className="modal-title">{title}</div>
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder={placeholder}
           rows={4}
-          style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13.5, fontFamily: 'inherit', resize: 'vertical' }}
+          style={{ resize: 'vertical' }}
         />
         <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-          <button onClick={onCancel} style={{ flex: 1, padding: 10, borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}>
-            Ləğv et
-          </button>
+          <button onClick={onCancel} className="btn btn-outline" style={{ flex: 1 }}>Ləğv et</button>
           <button
             onClick={handleConfirm}
             disabled={saving}
-            style={{ flex: 1, padding: 10, borderRadius: 8, border: 'none', background: confirmColor || '#0b2545', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
+            className={'btn ' + (confirmVariant === 'success' ? 'btn-success' : confirmVariant === 'danger' ? 'btn-danger' : 'btn-primary')}
+            style={{ flex: 1 }}
           >
             {saving ? 'Göndərilir...' : confirmLabel}
           </button>

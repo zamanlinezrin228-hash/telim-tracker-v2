@@ -106,8 +106,8 @@ export default function AnalysisView({ trainings }) {
 
   return (
     <div style={{ marginTop: 8 }}>
-      <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 4 }}>Ətraflı Analiz</div>
-      <div style={{ fontSize: 13, color: '#64748b', marginBottom: 18 }}>Sahələri seçib canlı cədvəl analiz qurun</div>
+      <div className="section-title">Ətraflı Analiz</div>
+      <div className="section-sub" style={{ marginBottom: 18 }}>Sahələri seçib canlı cədvəl analiz qurun</div>
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 16, alignItems: 'flex-end' }}>

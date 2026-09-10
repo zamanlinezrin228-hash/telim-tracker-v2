@@ -31,57 +31,68 @@ export default function LoginScreen({ onLoggedIn, onShowSignup }) {
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(120deg,#0b2545 0%,#13315c 45%,#2f9bd6 100%)' }}>
-      <div className="card" style={{ width: 360, padding: 32 }}>
-        <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 6, textAlign: 'center' }}>Təlim Tracker</div>
-        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 22, textAlign: 'center' }}>Daxil olun</div>
+    <div className="auth-shell">
+      <div className="auth-brand">
+        <div className="mark">🎓</div>
+        <h1>Komandanızın təlim ehtiyaclarını bir platformada idarə edin</h1>
+        <p>Təlim Tracker — illik TNA planlaması, sorğu axını və icra analitikası üçün vahid mərkəz.</p>
+        <ul>
+          <li><span className="dot">📊</span> Departament və büdcə üzrə real-vaxt analitika</li>
+          <li><span className="dot">📝</span> Rəhbər → L&D təsdiq axını ilə sorğu idarəetməsi</li>
+          <li><span className="dot">📋</span> Filtrlənə bilən izləmə cədvəli və Excel ixracı</li>
+        </ul>
+      </div>
 
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ fontSize: 12.5, color: '#64748b', display: 'block', marginBottom: 5 }}>Email</label>
-          <input type="text" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={handleKeyDown} style={{ width: '100%' }} />
-        </div>
+      <div className="auth-form-panel">
+        <div className="auth-form-card">
+          <div className="auth-form-title">Xoş gəlmisiniz</div>
+          <div className="auth-form-sub">Hesabınıza daxil olun</div>
 
-        <div style={{ marginBottom: 8 }}>
-          <label style={{ fontSize: 12.5, color: '#64748b', display: 'block', marginBottom: 5 }}>Parol</label>
-          <div style={{ position: 'relative' }}>
-            <input
-              type={showPw ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={handleKeyDown}
-              style={{ width: '100%', paddingRight: 70 }}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPw((s) => !s)}
-              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#2563eb', fontSize: 12.5, cursor: 'pointer', fontWeight: 600 }}
-            >
-              {showPw ? 'Gizlət' : 'Göstər'}
+          <div className="auth-field">
+            <label>Email</label>
+            <input type="text" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={handleKeyDown} />
+          </div>
+
+          <div className="auth-field" style={{ marginBottom: 8 }}>
+            <label>Parol</label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPw ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={handleKeyDown}
+                style={{ paddingRight: 72 }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw((s) => !s)}
+                className="btn-ghost"
+                style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 12.5, padding: '4px 6px' }}
+              >
+                {showPw ? 'Gizlət' : 'Göstər'}
+              </button>
+            </div>
+          </div>
+
+          <div style={{ textAlign: 'right', marginBottom: 18 }}>
+            <a href="#" onClick={(e) => { e.preventDefault(); handleForgotPassword(); }} style={{ fontSize: 12.5, color: 'var(--blue)', textDecoration: 'none', fontWeight: 600 }}>
+              Parolu unutmusunuz?
+            </a>
+          </div>
+
+          <button className="btn btn-primary btn-block" onClick={handleLogin} disabled={loading}>
+            {loading ? 'Daxil olunur...' : 'Daxil ol'}
+          </button>
+
+          {error && <div className="notice notice-error" style={{ marginTop: 12, textAlign: 'center' }}>{error}</div>}
+          {info && <div className="notice notice-success" style={{ marginTop: 12, textAlign: 'center' }}>{info}</div>}
+
+          <div style={{ textAlign: 'center', marginTop: 20, paddingTop: 18, borderTop: '1px solid var(--border)' }}>
+            <span style={{ fontSize: 13, color: 'var(--ink-500)' }}>Hesabınız yoxdur? </span>
+            <button onClick={onShowSignup} className="btn-ghost" style={{ fontSize: 13, fontWeight: 700 }}>
+              Qeydiyyatdan keçin
             </button>
           </div>
-        </div>
-
-        <div style={{ textAlign: 'right', marginBottom: 18 }}>
-          <a href="#" onClick={(e) => { e.preventDefault(); handleForgotPassword(); }} style={{ fontSize: 12.5, color: '#2563eb', textDecoration: 'none' }}>
-            Parolu unutmusunuz?
-          </a>
-        </div>
-
-        <button onClick={handleLogin} disabled={loading} style={{ width: '100%', padding: 12, borderRadius: 8, border: 'none', background: '#0b2545', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>
-          {loading ? 'Daxil olunur...' : 'Daxil ol'}
-        </button>
-
-        {error && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 12, textAlign: 'center' }}>{error}</div>}
-        {info && <div style={{ color: '#059669', fontSize: 13, marginTop: 12, textAlign: 'center' }}>{info}</div>}
-
-        <div style={{ textAlign: 'center', marginTop: 18, paddingTop: 16, borderTop: '1px solid #f1f5f9' }}>
-          <span style={{ fontSize: 13, color: '#64748b' }}>Hesabınız yoxdur? </span>
-          <button
-            onClick={onShowSignup}
-            style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: 0 }}
-          >
-            Qeydiyyatdan keçin
-          </button>
         </div>
       </div>
     </div>

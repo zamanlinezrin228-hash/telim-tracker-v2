@@ -96,29 +96,27 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
   return (
     <div className="modal-overlay">
       <div className="modal-card" style={{ width: 480, maxHeight: '90vh', overflow: 'auto' }}>
-        <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 4 }}>Yeni Təlim Sorğusu</div>
-        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 14 }}>Aşağıdakı sahələri doldurub göndərin.</div>
+        <div className="modal-title" style={{ marginBottom: 4 }}>Yeni Təlim Sorğusu</div>
+        <div className="section-sub" style={{ marginBottom: 14 }}>Aşağıdakı sahələri doldurub göndərin.</div>
 
-        {budgetStatus === 'Büdcədən kənar' ? (
-          <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412', fontSize: 12.5, padding: '10px 12px', borderRadius: 8, marginBottom: 16 }}>
-            <b>Diqqət:</b> Hazırda illik büdcə planlaşdırma dövründən (Oktyabr–Yanvar) kənardayıq. Bu sorğu təsdiqlənsə belə, <b>&quot;Büdcədən kənar&quot;</b> kateqoriyasında qeyd olunacaq və əvvəlcədən planlaşdırılmış büdcəyə daxil olmadığı üçün <b>təsdiq ehtimalı aşağıdır</b>.
-          </div>
-        ) : (
-          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', fontSize: 12.5, padding: '10px 12px', borderRadius: 8, marginBottom: 16 }}>
-            Hazırda illik büdcə planlaşdırma dövründəyik — bu sorğu təsdiqlənsə, <b>&quot;Büdcələnmiş&quot;</b> kateqoriyasında qeyd olunacaq.
-          </div>
-        )}
+        <div className={'notice ' + (budgetStatus === 'Büdcədən kənar' ? 'notice-warning' : 'notice-success')} style={{ marginBottom: 16 }}>
+          {budgetStatus === 'Büdcədən kənar' ? (
+            <><b>Diqqət:</b> Hazırda illik büdcə planlaşdırma dövründən (Oktyabr–Yanvar) kənardayıq. Bu sorğu təsdiqlənsə belə, <b>&quot;Büdcədən kənar&quot;</b> kateqoriyasında qeyd olunacaq və əvvəlcədən planlaşdırılmış büdcəyə daxil olmadığı üçün <b>təsdiq ehtimalı aşağıdır</b>.</>
+          ) : (
+            <>Hazırda illik büdcə planlaşdırma dövründəyik — bu sorğu təsdiqlənsə, <b>&quot;Büdcələnmiş&quot;</b> kateqoriyasında qeyd olunacaq.</>
+          )}
+        </div>
 
         {hasTeam && (
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: '#64748b', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 }}>Kimin üçün?</div>
+            <div className="filter-label" style={{ marginBottom: 8 }}>Kimin üçün?</div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button
                 onClick={() => setForWhom('self')}
                 style={{
                   flex: 1, padding: '10px 12px', borderRadius: 10, cursor: 'pointer', fontSize: 13.5, fontWeight: 600,
-                  border: forWhom === 'self' ? '2px solid #0b2545' : '1px solid #e2e8f0',
-                  background: forWhom === 'self' ? '#eff6ff' : '#fff',
+                  border: forWhom === 'self' ? '2px solid var(--navy)' : '1px solid var(--ink-200)',
+                  background: forWhom === 'self' ? 'var(--blue-light)' : '#fff',
                 }}
               >
                 Özüm üçün
@@ -127,8 +125,8 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
                 onClick={() => setForWhom('team')}
                 style={{
                   flex: 1, padding: '10px 12px', borderRadius: 10, cursor: 'pointer', fontSize: 13.5, fontWeight: 600,
-                  border: forWhom === 'team' ? '2px solid #0b2545' : '1px solid #e2e8f0',
-                  background: forWhom === 'team' ? '#eff6ff' : '#fff',
+                  border: forWhom === 'team' ? '2px solid var(--navy)' : '1px solid var(--ink-200)',
+                  background: forWhom === 'team' ? 'var(--blue-light)' : '#fff',
                 }}
               >
                 Komandam üçün
@@ -136,12 +134,12 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
             </div>
 
             {forWhom === 'team' && (
-              <div style={{ marginTop: 10, border: '1px solid #e2e8f0', borderRadius: 10, padding: 10, maxHeight: 180, overflow: 'auto' }}>
+              <div style={{ marginTop: 10, border: '1px solid var(--ink-200)', borderRadius: 10, padding: 10, maxHeight: 180, overflow: 'auto' }}>
                 {team.map((m) => (
                   <label key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 4px', cursor: 'pointer', fontSize: 13.5 }}>
-                    <input type="checkbox" checked={selectedIds.includes(m.id)} onChange={() => toggleMember(m.id)} />
+                    <input type="checkbox" checked={selectedIds.includes(m.id)} onChange={() => toggleMember(m.id)} style={{ width: 'auto' }} />
                     <span style={{ flex: 1 }}>{m.full_name_az}</span>
-                    <span style={{ color: '#94a3b8', fontSize: 12 }}>{m.position || ''}</span>
+                    <span style={{ color: 'var(--ink-400)', fontSize: 12 }}>{m.position || ''}</span>
                   </label>
                 ))}
               </div>
@@ -150,19 +148,19 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
         )}
 
         <div style={{ marginBottom: 12 }}>
-          <label style={{ fontSize: 12.5, color: '#64748b', display: 'block', marginBottom: 4 }}>Təlimin adı *</label>
-          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} style={{ width: '100%' }} placeholder="məs. Excel Advanced Kursu" />
+          <label>Təlimin adı *</label>
+          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="məs. Excel Advanced Kursu" />
         </div>
 
         <div style={{ marginBottom: 12 }}>
-          <label style={{ fontSize: 12.5, color: '#64748b', display: 'block', marginBottom: 4 }}>Səbəb</label>
-          <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} style={{ width: '100%' }} placeholder="Qısaca niyə lazımdır" />
+          <label>Səbəb</label>
+          <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Qısaca niyə lazımdır" />
         </div>
 
         <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
           <div style={{ flex: 1 }}>
-            <label style={{ fontSize: 12.5, color: '#64748b', display: 'block', marginBottom: 4 }}>Prioritet</label>
-            <select value={priority} onChange={(e) => setPriority(e.target.value)} style={{ width: '100%' }}>
+            <label>Prioritet</label>
+            <select value={priority} onChange={(e) => setPriority(e.target.value)}>
               <option value="Low">Aşağı</option>
               <option value="Medium">Orta</option>
               <option value="High">Yüksək</option>
@@ -170,43 +168,43 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
             </select>
           </div>
           <div style={{ flex: 1 }}>
-            <label style={{ fontSize: 12.5, color: '#64748b', display: 'block', marginBottom: 4 }}>İstənilən başlama</label>
-            <input type="date" value={start} onChange={(e) => setStart(e.target.value)} style={{ width: '100%' }} />
+            <label>İstənilən başlama</label>
+            <input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
           </div>
           <div style={{ flex: 1 }}>
-            <label style={{ fontSize: 12.5, color: '#64748b', display: 'block', marginBottom: 4 }}>İstənilən bitmə</label>
-            <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} style={{ width: '100%' }} />
+            <label>İstənilən bitmə</label>
+            <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
           </div>
         </div>
 
-        <div style={{ fontSize: 12.5, fontWeight: 700, color: '#64748b', margin: '4px 0 10px', textTransform: 'uppercase', letterSpacing: 0.4 }}>Ətraflı məlumat</div>
-        <div style={{ background: '#f8fafc', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+        <div className="filter-label" style={{ margin: '4px 0 10px' }}>Ətraflı məlumat</div>
+        <div style={{ background: 'var(--ink-50)', borderRadius: 10, padding: 14, marginBottom: 14 }}>
           <div style={{ marginBottom: 10 }}>
-            <label style={{ fontSize: 12.5, color: '#64748b', display: 'block', marginBottom: 4 }}>Səriştə Kateqoriyası *</label>
-            <select value={compCat} onChange={(e) => setCompCat(e.target.value)} style={{ width: '100%' }}>
+            <label>Səriştə Kateqoriyası *</label>
+            <select value={compCat} onChange={(e) => setCompCat(e.target.value)}>
               <option value="">— Seçin —</option>
               <option value="Hard Skills">Hard Skills</option>
               <option value="Soft Skills">Soft Skills</option>
             </select>
           </div>
           <div style={{ marginBottom: 10 }}>
-            <label style={{ fontSize: 12.5, color: '#64748b', display: 'block', marginBottom: 4 }}>Əhəmiyyət dərəcəsi *</label>
-            <select value={importance} onChange={(e) => setImportance(e.target.value)} style={{ width: '100%' }}>
+            <label>Əhəmiyyət dərəcəsi *</label>
+            <select value={importance} onChange={(e) => setImportance(e.target.value)}>
               <option value="">— Seçin —</option>
               {IMPORTANCE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12.5, color: '#64748b', display: 'block', marginBottom: 4 }}>Cari səviyyə *</label>
-              <select value={currentLevel} onChange={(e) => setCurrentLevel(e.target.value)} style={{ width: '100%' }}>
+              <label>Cari səviyyə *</label>
+              <select value={currentLevel} onChange={(e) => setCurrentLevel(e.target.value)}>
                 <option value="">—</option>
                 {LEVEL_OPTIONS.map((o) => <option key={o} value={o}>{o.split(' – ')[0]} – {o.split(' – ')[1].split(' ')[0]}</option>)}
               </select>
             </div>
             <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12.5, color: '#64748b', display: 'block', marginBottom: 4 }}>Tələb olunan səviyyə *</label>
-              <select value={requiredLevel} onChange={(e) => setRequiredLevel(e.target.value)} style={{ width: '100%' }}>
+              <label>Tələb olunan səviyyə *</label>
+              <select value={requiredLevel} onChange={(e) => setRequiredLevel(e.target.value)}>
                 <option value="">—</option>
                 {LEVEL_OPTIONS.map((o) => <option key={o} value={o}>{o.split(' – ')[0]} – {o.split(' – ')[1].split(' ')[0]}</option>)}
               </select>
@@ -214,11 +212,11 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
           </div>
         </div>
 
-        {error && <div style={{ color: '#dc2626', fontSize: 13, marginBottom: 10 }}>{error}</div>}
+        {error && <div className="notice notice-error" style={{ marginBottom: 10 }}>{error}</div>}
 
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: 11, borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}>Ləğv et</button>
-          <button onClick={handleSubmit} disabled={submitting} style={{ flex: 1, padding: 11, borderRadius: 8, border: 'none', background: '#0b2545', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={onClose} className="btn btn-outline" style={{ flex: 1 }}>Ləğv et</button>
+          <button onClick={handleSubmit} disabled={submitting} className="btn btn-primary" style={{ flex: 1 }}>
             {submitting ? 'Göndərilir...' : 'Göndər'}
           </button>
         </div>

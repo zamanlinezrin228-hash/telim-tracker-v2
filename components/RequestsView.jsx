@@ -88,7 +88,7 @@ export default function RequestsView({ profile, team, requests, planYear, onData
               {showNotes && (<><td style={{ fontSize: 12.5 }}>{r.manager_note || '—'}</td><td style={{ fontSize: 12.5 }}>{r.reviewer_note || '—'}</td></>)}
             </tr>
           )) : (
-            <tr><td colSpan={showNotes ? 6 : 4} style={{ textAlign: 'center', color: '#94a3b8', padding: 20 }}>Hələ sorğu yoxdur</td></tr>
+            <tr><td colSpan={showNotes ? 6 : 4} className="empty-state">Hələ sorğu yoxdur</td></tr>
           )}
         </tbody>
       </table>
@@ -96,196 +96,187 @@ export default function RequestsView({ profile, team, requests, planYear, onData
   }
 
   return (
-    <div className="page">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <div style={{ fontSize: 20, fontWeight: 800 }}>Təlim Sorğuları</div>
-        <button onClick={() => setShowForm(true)} style={{ padding: '10px 18px', borderRadius: 8, border: 'none', background: '#0b2545', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
-          + Yeni Sorğu
-        </button>
+    <div>
+      <div className="page-header">
+        <div className="page-header-row">
+          <div>
+            <h1>Təlim Sorğuları</h1>
+            <p>Yeni sorğu göndər, komandanın sorğularına bax və qərar ver.</p>
+          </div>
+          <button onClick={() => setShowForm(true)} className="btn btn-primary">+ Yeni Sorğu</button>
+        </div>
       </div>
 
-      {hasTeam && (
-        <>
-          <div style={{ fontSize: 16, fontWeight: 800, margin: '20px 0 8px' }}>Baxılmalı Komanda Sorğuları ({toReview.length})</div>
-          <div className="card" style={{ marginBottom: 20 }}>
-            <table>
-              <thead><tr><th>Ad Soyad</th><th>Təlim</th><th>Səbəb</th><th>Prioritet</th><th>Əməliyyat</th></tr></thead>
-              <tbody>
-                {toReview.length ? toReview.map((r) => (
-                  <tr key={r.id}>
-                    <td>{r.employee_name}</td>
-                    <td>{r.training_title}</td>
-                    <td style={{ fontSize: 12.5, color: '#64748b' }}>{r.reason || '—'}</td>
-                    <td><Badge meta={priorityMeta(r.priority)} /></td>
-                    <td>
-                      <button
-                        onClick={() => setNoteAction({ type: 'manager-approve', id: r.id })}
-                        style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#059669', color: '#fff', fontSize: 12.5, cursor: 'pointer', marginRight: 6 }}
-                      >
-                        Təsdiqlə → göndər
-                      </button>
-                      <button
-                        onClick={() => setNoteAction({ type: 'manager-reject', id: r.id })}
-                        style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#dc2626', color: '#fff', fontSize: 12.5, cursor: 'pointer' }}
-                      >
-                        Rədd et
-                      </button>
-                    </td>
-                  </tr>
-                )) : (
-                  <tr><td colSpan={5} style={{ textAlign: 'center', color: '#94a3b8', padding: 16 }}>Baxılmalı sorğu yoxdur</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div style={{ fontSize: 15, fontWeight: 800, margin: '20px 0 12px' }}>Sahəmin Qərarları ({scopeHistory.length})</div>
-          {scopeHistory.length ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14, marginBottom: 24 }}>
-              {scopeHistory.map((r) => {
-                const sm = reqStatusMeta(r.status);
-                return (
-                  <div key={r.id} style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
-                    <div style={{ height: 6, background: sm.color }} />
-                    <div style={{ padding: 14 }}>
-                      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{r.employee_name}</div>
-                      <div style={{ fontSize: 13, color: '#334155', marginBottom: 10 }}>{r.training_title}</div>
-                      <Badge meta={sm} />
-                      {r.manager_note && <div style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}><b>Manager:</b> {r.manager_note}</div>}
-                      {r.reviewer_note && <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}><b>L&D:</b> {r.reviewer_note}</div>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="card" style={{ textAlign: 'center', color: '#94a3b8', padding: 24, marginBottom: 24 }}>Hələ qərar yoxdur</div>
-          )}
-        </>
-      )}
-
-      {isReviewer && (
-        <>
-          <div style={{ fontSize: 16, fontWeight: 800, margin: '20px 0 4px' }}>Gələn Təlim Sorğuları (L&D)</div>
-          <div style={{ fontSize: 13, color: '#64748b', marginBottom: 14 }}>{pendingCount} sorğu analiz gözləyir</div>
-          {Object.keys(reviewerActive).sort().map((dept) => (
-            <div key={dept} className="card" style={{ marginBottom: 14 }}>
-              <div style={{ fontWeight: 700, marginBottom: 12 }}>📁 {dept} ({reviewerActive[dept].length})</div>
-              <div style={{ overflowX: 'auto' }}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Ad Soyad</th><th>Təlim</th><th>Manager qeydi</th>
-                      <th>Kateqoriya</th><th>Əhəmiyyət</th><th>Cari səviyyə</th><th>Tələb olunan</th>
-                      <th>Prioritet</th><th>Status</th><th>Əməliyyat</th>
+      <div className="page">
+        {hasTeam && (
+          <>
+            <div className="section-head"><div className="section-title">Baxılmalı Komanda Sorğuları ({toReview.length})</div></div>
+            <div className="card" style={{ marginBottom: 20 }}>
+              <table>
+                <thead><tr><th>Ad Soyad</th><th>Təlim</th><th>Səbəb</th><th>Prioritet</th><th>Əməliyyat</th></tr></thead>
+                <tbody>
+                  {toReview.length ? toReview.map((r) => (
+                    <tr key={r.id}>
+                      <td>{r.employee_name}</td>
+                      <td>{r.training_title}</td>
+                      <td style={{ fontSize: 12.5, color: 'var(--ink-500)' }}>{r.reason || '—'}</td>
+                      <td><Badge meta={priorityMeta(r.priority)} /></td>
+                      <td>
+                        <button onClick={() => setNoteAction({ type: 'manager-approve', id: r.id })} className="btn btn-success btn-sm" style={{ marginRight: 6 }}>
+                          Təsdiqlə → göndər
+                        </button>
+                        <button onClick={() => setNoteAction({ type: 'manager-reject', id: r.id })} className="btn btn-danger btn-sm">
+                          Rədd et
+                        </button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {reviewerActive[dept].map((r) => (
-                      <tr key={r.id}>
-                        <td>{r.employee_name}</td>
-                        <td>{r.training_title}<div style={{ fontSize: 12, color: '#94a3b8' }}>{r.reason || ''}</div></td>
-                        <td style={{ fontSize: 12.5, color: '#64748b' }}>{r.manager_note || '—'}</td>
-                        <td style={{ fontSize: 12.5 }}>{r.comp_cat || '—'}</td>
-                        <td style={{ fontSize: 12.5 }}>{r.importance_level || '—'}</td>
-                        <td style={{ fontSize: 12.5 }}>{r.current_skill_level || '—'}</td>
-                        <td style={{ fontSize: 12.5 }}>{r.required_skill_level || '—'}</td>
-                        <td><Badge meta={priorityMeta(r.priority)} /></td>
-                        <td><Badge meta={reqStatusMeta(r.status)} /></td>
-                        <td style={{ whiteSpace: 'nowrap' }}>
-                          {r.status === 'Pending' && (
-                            <button onClick={() => takeIntoReview(r.id)} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#2563eb', color: '#fff', fontSize: 12.5, cursor: 'pointer' }}>
-                              Analizə götür
-                            </button>
-                          )}
-                          {r.status === 'In Review' && (
-                            <>
-                              <button onClick={() => setNoteAction({ type: 'ld-approve', id: r.id })} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#059669', color: '#fff', fontSize: 12.5, cursor: 'pointer', marginRight: 6 }}>
-                                Təsdiqlə
-                              </button>
-                              <button onClick={() => setNoteAction({ type: 'ld-reject', id: r.id })} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#dc2626', color: '#fff', fontSize: 12.5, cursor: 'pointer' }}>
-                                Rədd et
-                              </button>
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  )) : (
+                    <tr><td colSpan={5} className="empty-state">Baxılmalı sorğu yoxdur</td></tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-          ))}
-          {Object.keys(reviewerActive).length === 0 && (
-            <div className="card" style={{ textAlign: 'center', color: '#94a3b8', padding: 30, marginBottom: 20 }}>Aktiv sorğu yoxdur</div>
-          )}
 
-          {reviewerDecided.length > 0 && (
-            <>
-              <div style={{ fontSize: 15, fontWeight: 800, margin: '20px 0 12px' }}>Qərarlar tarixçəsi ({reviewerDecided.length})</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14, marginBottom: 24 }}>
-                {reviewerDecided.map((r) => {
+            <div className="section-head"><div className="section-title">Sahəmin Qərarları ({scopeHistory.length})</div></div>
+            {scopeHistory.length ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14, marginBottom: 24 }}>
+                {scopeHistory.map((r) => {
                   const sm = reqStatusMeta(r.status);
                   return (
-                    <div key={r.id} style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+                    <div key={r.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
                       <div style={{ height: 6, background: sm.color }} />
                       <div style={{ padding: 14 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                          <div>
-                            <div style={{ fontWeight: 700, fontSize: 14 }}>{r.employee_name}</div>
-                            <div style={{ fontSize: 12, color: '#94a3b8' }}>{r.dept}</div>
-                          </div>
-                          <Badge meta={sm} />
-                        </div>
-                        <div style={{ fontSize: 13, color: '#334155', marginBottom: 8 }}>{r.training_title}</div>
-                        {r.reviewer_note && <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}><b>L&D qeyd:</b> {r.reviewer_note}</div>}
-                        {r.status === 'Approved' && !r.linked_training_id && (
-                          <button onClick={() => setAddToPlanRequest(r)} style={{ width: '100%', padding: '8px 0', borderRadius: 8, border: 'none', background: '#7c3aed', color: '#fff', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
-                            Plana Əlavə Et
-                          </button>
-                        )}
-                        {r.linked_training_id && <div style={{ fontSize: 12, color: '#059669', fontWeight: 600 }}>✓ Planda var</div>}
+                        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{r.employee_name}</div>
+                        <div style={{ fontSize: 13, color: 'var(--ink-700)', marginBottom: 10 }}>{r.training_title}</div>
+                        <Badge meta={sm} />
+                        {r.manager_note && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginTop: 8 }}><b>Manager:</b> {r.manager_note}</div>}
+                        {r.reviewer_note && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginTop: 4 }}><b>L&D:</b> {r.reviewer_note}</div>}
                       </div>
                     </div>
                   );
                 })}
               </div>
-            </>
-          )}
-        </>
-      )}
+            ) : (
+              <div className="card empty-state" style={{ marginBottom: 24 }}>Hələ qərar yoxdur</div>
+            )}
+          </>
+        )}
 
-      <div style={{ fontSize: 16, fontWeight: 800, margin: '20px 0 8px' }}>Mənim Göndərdiklərim</div>
-      <div className="card"><RequestTable list={myRequests} showNotes /></div>
+        {isReviewer && (
+          <>
+            <div className="section-head" style={{ marginBottom: 4 }}><div className="section-title">Gələn Təlim Sorğuları (L&D)</div></div>
+            <div className="section-sub">{pendingCount} sorğu analiz gözləyir</div>
+            {Object.keys(reviewerActive).sort().map((dept) => (
+              <div key={dept} className="card" style={{ marginBottom: 14 }}>
+                <div style={{ fontWeight: 700, marginBottom: 12 }}>📁 {dept} ({reviewerActive[dept].length})</div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Ad Soyad</th><th>Təlim</th><th>Manager qeydi</th>
+                        <th>Kateqoriya</th><th>Əhəmiyyət</th><th>Cari səviyyə</th><th>Tələb olunan</th>
+                        <th>Prioritet</th><th>Status</th><th>Əməliyyat</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reviewerActive[dept].map((r) => (
+                        <tr key={r.id}>
+                          <td>{r.employee_name}</td>
+                          <td>{r.training_title}<div style={{ fontSize: 12, color: 'var(--ink-400)' }}>{r.reason || ''}</div></td>
+                          <td style={{ fontSize: 12.5, color: 'var(--ink-500)' }}>{r.manager_note || '—'}</td>
+                          <td style={{ fontSize: 12.5 }}>{r.comp_cat || '—'}</td>
+                          <td style={{ fontSize: 12.5 }}>{r.importance_level || '—'}</td>
+                          <td style={{ fontSize: 12.5 }}>{r.current_skill_level || '—'}</td>
+                          <td style={{ fontSize: 12.5 }}>{r.required_skill_level || '—'}</td>
+                          <td><Badge meta={priorityMeta(r.priority)} /></td>
+                          <td><Badge meta={reqStatusMeta(r.status)} /></td>
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            {r.status === 'Pending' && (
+                              <button onClick={() => takeIntoReview(r.id)} className="btn btn-accent btn-sm">Analizə götür</button>
+                            )}
+                            {r.status === 'In Review' && (
+                              <>
+                                <button onClick={() => setNoteAction({ type: 'ld-approve', id: r.id })} className="btn btn-success btn-sm" style={{ marginRight: 6 }}>Təsdiqlə</button>
+                                <button onClick={() => setNoteAction({ type: 'ld-reject', id: r.id })} className="btn btn-danger btn-sm">Rədd et</button>
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+            {Object.keys(reviewerActive).length === 0 && (
+              <div className="card empty-state" style={{ marginBottom: 20 }}>Aktiv sorğu yoxdur</div>
+            )}
 
-      {showForm && (
-        <RequestFormModal profile={profile} team={team} onClose={() => setShowForm(false)} onSubmitted={refresh} />
-      )}
+            {reviewerDecided.length > 0 && (
+              <>
+                <div className="section-head"><div className="section-title">Qərarlar tarixçəsi ({reviewerDecided.length})</div></div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14, marginBottom: 24 }}>
+                  {reviewerDecided.map((r) => {
+                    const sm = reqStatusMeta(r.status);
+                    return (
+                      <div key={r.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                        <div style={{ height: 6, background: sm.color }} />
+                        <div style={{ padding: 14 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                            <div>
+                              <div style={{ fontWeight: 700, fontSize: 14 }}>{r.employee_name}</div>
+                              <div style={{ fontSize: 12, color: 'var(--ink-400)' }}>{r.dept}</div>
+                            </div>
+                            <Badge meta={sm} />
+                          </div>
+                          <div style={{ fontSize: 13, color: 'var(--ink-700)', marginBottom: 8 }}>{r.training_title}</div>
+                          {r.reviewer_note && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginBottom: 10 }}><b>L&D qeyd:</b> {r.reviewer_note}</div>}
+                          {r.status === 'Approved' && !r.linked_training_id && (
+                            <button onClick={() => setAddToPlanRequest(r)} className="btn btn-purple btn-sm btn-block">Plana Əlavə Et</button>
+                          )}
+                          {r.linked_training_id && <div style={{ fontSize: 12, color: 'var(--green)', fontWeight: 600 }}>✓ Planda var</div>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </>
+        )}
 
-      {noteAction && (
-        <NoteModal
-          title={
-            noteAction.type === 'manager-approve' ? 'Təsdiq qeydiniz (əsaslandırma)' :
-            noteAction.type === 'manager-reject' ? 'Rədd səbəbi' :
-            noteAction.type === 'ld-approve' ? 'Analiz qeydiniz (vəzifə uyğunluğu, büdcə və s.)' :
-            'Rədd səbəbi'
-          }
-          placeholder="Qeydinizi yazın (istəyə bağlı)..."
-          confirmLabel={noteAction.type.includes('approve') ? 'Təsdiqlə' : 'Rədd et'}
-          confirmColor={noteAction.type.includes('approve') ? '#059669' : '#dc2626'}
-          onCancel={() => setNoteAction(null)}
-          onConfirm={async (note) => {
-            if (noteAction.type === 'manager-approve') await managerDecide(noteAction.id, 'Pending', note);
-            if (noteAction.type === 'manager-reject') await managerDecide(noteAction.id, 'Rejected', note);
-            if (noteAction.type === 'ld-approve') await ldDecide(noteAction.id, 'Approved', note);
-            if (noteAction.type === 'ld-reject') await ldDecide(noteAction.id, 'Rejected', note);
-          }}
-        />
-      )}
+        <div className="section-head"><div className="section-title">Mənim Göndərdiklərim</div></div>
+        <div className="card"><RequestTable list={myRequests} showNotes /></div>
 
-      {addToPlanRequest && (
-        <AddToPlanModal request={addToPlanRequest} planYear={planYear} onClose={() => setAddToPlanRequest(null)} onSubmitted={refresh} />
-      )}
+        {showForm && (
+          <RequestFormModal profile={profile} team={team} onClose={() => setShowForm(false)} onSubmitted={refresh} />
+        )}
+
+        {noteAction && (
+          <NoteModal
+            title={
+              noteAction.type === 'manager-approve' ? 'Təsdiq qeydiniz (əsaslandırma)' :
+              noteAction.type === 'manager-reject' ? 'Rədd səbəbi' :
+              noteAction.type === 'ld-approve' ? 'Analiz qeydiniz (vəzifə uyğunluğu, büdcə və s.)' :
+              'Rədd səbəbi'
+            }
+            placeholder="Qeydinizi yazın (istəyə bağlı)..."
+            confirmLabel={noteAction.type.includes('approve') ? 'Təsdiqlə' : 'Rədd et'}
+            confirmVariant={noteAction.type.includes('approve') ? 'success' : 'danger'}
+            onCancel={() => setNoteAction(null)}
+            onConfirm={async (note) => {
+              if (noteAction.type === 'manager-approve') await managerDecide(noteAction.id, 'Pending', note);
+              if (noteAction.type === 'manager-reject') await managerDecide(noteAction.id, 'Rejected', note);
+              if (noteAction.type === 'ld-approve') await ldDecide(noteAction.id, 'Approved', note);
+              if (noteAction.type === 'ld-reject') await ldDecide(noteAction.id, 'Rejected', note);
+            }}
+          />
+        )}
+
+        {addToPlanRequest && (
+          <AddToPlanModal request={addToPlanRequest} planYear={planYear} onClose={() => setAddToPlanRequest(null)} onSubmitted={refresh} />
+        )}
+      </div>
     </div>
   );
 }
