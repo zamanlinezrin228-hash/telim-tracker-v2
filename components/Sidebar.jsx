@@ -14,7 +14,7 @@ function initials(name) {
 
 const ROLE_LABELS = { ld: 'L&D', hr: 'HR', employee: 'İşçi' };
 
-export default function Sidebar({ view, setView, profile, showAnnualTna }) {
+export default function Sidebar({ view, setView, profile, showAnnualTna, badges = {} }) {
   async function handleLogout() {
     await sb.auth.signOut();
     window.location.reload();
@@ -39,16 +39,20 @@ export default function Sidebar({ view, setView, profile, showAnnualTna }) {
           <span className="icon">🏠</span>
           <span>Əsas səhifə</span>
         </button>
-        {items.map((item) => (
-          <button
-            key={item.key}
-            className={'sidebar-link' + (view === item.key ? ' active' : '')}
-            onClick={() => setView(item.key)}
-          >
-            <span className="icon">{item.icon}</span>
-            <span>{item.label}</span>
-          </button>
-        ))}
+        {items.map((item) => {
+          const badgeCount = badges[item.key];
+          return (
+            <button
+              key={item.key}
+              className={'sidebar-link' + (view === item.key ? ' active' : '')}
+              onClick={() => setView(item.key)}
+            >
+              <span className="icon">{item.icon}</span>
+              <span>{item.label}</span>
+              {!!badgeCount && <span className="sidebar-link-badge">{badgeCount > 99 ? '99+' : badgeCount}</span>}
+            </button>
+          );
+        })}
       </nav>
 
       <div className="sidebar-footer">
