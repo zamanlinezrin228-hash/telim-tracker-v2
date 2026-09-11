@@ -1,24 +1,17 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import {
   BookOpen, Users, CheckCircle2, RefreshCw, Timer, Wallet, TrendingUp, Percent,
   XCircle, AlertTriangle, PauseCircle, CalendarClock, Building2, Trophy, Target,
-  Sparkles, ThumbsUp, ShieldAlert, FilterX, Award, GraduationCap,
+  Sparkles, ThumbsUp, ShieldAlert, Award, GraduationCap,
 } from 'lucide-react';
 import { fmtMoney, statusMeta } from '../lib/helpers';
 import {
-  displayVal, computeKPIs, departmentBreakdown, monthlyTrend, topBy, topLearners,
+  computeKPIs, departmentBreakdown, monthlyTrend, topBy, topLearners,
   completionFunnel, generateInsights,
 } from '../lib/analytics';
 import AnalysisView from './AnalysisView';
 import CountUp from './CountUp';
-import MultiSelectFilter from './MultiSelectFilter';
 import EmptyState from './EmptyState';
-
-const CAT_LABELS = { dept: 'Departament', sube: 'Filial', comp_cat: 'Təlim Kateqoriyası', category: 'Vəzifə Kateqoriyası', vendor: 'Provayder', budget_status: 'Büdcə Statusu' };
-const CAT_FIELDS = ['dept', 'sube', 'comp_cat', 'category', 'vendor', 'budget_status'];
-const STATUS_OPTIONS = ['Scheduled to Commence on Planned Date', 'In Progress', 'Postponed', 'Completed', 'Canceled'];
-const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical'];
-const PRIORITY_LABELS = { Low: 'Aşağı', Medium: 'Orta', High: 'Yüksək', Critical: 'Kritik' };
 
 const MONTH_LABELS = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'İyn', 'İyl', 'Avq', 'Sen', 'Okt', 'Noy', 'Dek'];
 
@@ -94,76 +87,21 @@ export default function DashboardView({ trainings }) {
   }, [trainings]);
 
   const [selectedYear, setSelectedYear] = useState('all');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [budgetMin, setBudgetMin] = useState('');
-  const [budgetMax, setBudgetMax] = useState('');
-  const [hoursMin, setHoursMin] = useState('');
-  const [hoursMax, setHoursMax] = useState('');
-  const [catFilters, setCatFilters] = useState({});
-  const [statusFilter, setStatusFilter] = useState(new Set(STATUS_OPTIONS));
-  const [priorityFilter, setPriorityFilter] = useState(new Set(PRIORITY_OPTIONS));
-
-  const uniqueValsByField = useMemo(() => {
-    const map = {};
-    CAT_FIELDS.forEach((f) => { map[f] = [...new Set(trainings.map((t) => displayVal(t[f])))].filter((v) => v !== '—').sort(); });
-    return map;
-  }, [trainings]);
-
-  useEffect(() => {
-    const initial = {};
-    CAT_FIELDS.forEach((f) => { initial[f] = new Set(uniqueValsByField[f]); });
-    setCatFilters(initial);
-    setStatusFilter(new Set(STATUS_OPTIONS));
-    setPriorityFilter(new Set(PRIORITY_OPTIONS));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trainings.length]);
-
-  function setCatFilter(field, set) { setCatFilters((prev) => ({ ...prev, [field]: set })); }
 
   const filtered = useMemo(() => {
-    return trainings.filter((t) => {
-      if (selectedYear !== 'all' && t.plan_year !== Number(selectedYear)) return false;
-      if (dateFrom && (!t.start_date || t.start_date < dateFrom)) return false;
-      if (dateTo && (!t.start_date || t.start_date > dateTo)) return false;
-      const budget = Number(t.budget) || 0;
-      if (budgetMin !== '' && budget < Number(budgetMin)) return false;
-      if (budgetMax !== '' && budget > Number(budgetMax)) return false;
-      const hours = Number(t.man_hours) || 0;
-      if (hoursMin !== '' && hours < Number(hoursMin)) return false;
-      if (hoursMax !== '' && hours > Number(hoursMax)) return false;
-      for (const f of CAT_FIELDS) {
-        const sel = catFilters[f];
-        if (sel && displayVal(t[f]) !== '—' && !sel.has(displayVal(t[f]))) return false;
-      }
-      if (!statusFilter.has(t.status)) return false;
-      if (t.priority && !priorityFilter.has(t.priority)) return false;
-      return true;
-    });
-  }, [trainings, selectedYear, dateFrom, dateTo, budgetMin, budgetMax, hoursMin, hoursMax, catFilters, statusFilter, priorityFilter]);
+    if (selectedYear === 'all') return trainings;
+    return trainings.filter((t) => t.plan_year === Number(selectedYear));
+  }, [trainings, selectedYear]);
 
-  const activeSlicerCount =
-    CAT_FIELDS.filter((f) => catFilters[f] && catFilters[f].size < uniqueValsByField[f].length).length +
-    (statusFilter.size < STATUS_OPTIONS.length ? 1 : 0) +
-    (priorityFilter.size < PRIORITY_OPTIONS.length ? 1 : 0) +
-    (dateFrom || dateTo ? 1 : 0) + (budgetMin !== '' || budgetMax !== '' ? 1 : 0) + (hoursMin !== '' || hoursMax !== '' ? 1 : 0);
-
-  function clearAllSlicers() {
-    const reset = {};
-    CAT_FIELDS.forEach((f) => { reset[f] = new Set(uniqueValsByField[f]); });
-    setCatFilters(reset);
-    setStatusFilter(new Set(STATUS_OPTIONS));
-    setPriorityFilter(new Set(PRIORITY_OPTIONS));
-    setSelectedYear('all'); setDateFrom(''); setDateTo('');
-    setBudgetMin(''); setBudgetMax(''); setHoursMin(''); setHoursMax('');
-  }
+  const completedOnly = useMemo(() => filtered.filter((t) => t.status === 'Completed'), [filtered]);
 
   const kpis = useMemo(() => computeKPIs(filtered), [filtered]);
   const depts = useMemo(() => departmentBreakdown(filtered), [filtered]);
   const trend = useMemo(() => monthlyTrend(filtered), [filtered]);
-  const topTrainings = useMemo(() => topBy(filtered, 'skill', 6), [filtered]);
-  const topVendors = useMemo(() => topBy(filtered, 'vendor', 6), [filtered]);
-  const topLearnersList = useMemo(() => topLearners(filtered, 6), [filtered]);
+  // Rankings reflect verified, completed trainings — not everything that was merely requested or started.
+  const topTrainings = useMemo(() => topBy(completedOnly, 'skill', 6), [completedOnly]);
+  const topVendors = useMemo(() => topBy(completedOnly, 'vendor', 6), [completedOnly]);
+  const topLearnersList = useMemo(() => topLearners(completedOnly, 6), [completedOnly]);
   const funnel = useMemo(() => completionFunnel(filtered), [filtered]);
   const insights = useMemo(() => generateInsights(filtered, fmtMoney), [filtered]);
 
@@ -200,206 +138,153 @@ export default function DashboardView({ trainings }) {
       </div>
 
       <div className="page">
-        {/* ---------- Slicer bar ---------- */}
-        <div className="card slicer-bar-card">
-          <div className="slicer-bar-head">
-            <div className="filter-label" style={{ marginBottom: 0 }}>
-              Slicer-lər {activeSlicerCount > 0 && <span style={{ color: 'var(--blue)' }}>· {activeSlicerCount} aktiv</span>}
-            </div>
-            {activeSlicerCount > 0 && (
-              <button onClick={clearAllSlicers} className="btn btn-outline btn-sm"><FilterX size={13} strokeWidth={2.2} /> Hamısını təmizlə</button>
-            )}
+        {/* ---------- KPI groups ---------- */}
+        <StatGroup title="Learning KPI-lər" stats={LEARNING_STATS} raw={kpis} i0={0} />
+        <StatGroup title="Maliyyə KPI-ləri" stats={FINANCIAL_STATS} raw={kpis} i0={5} />
+        <StatGroup title="Fəallıq KPI-ləri" stats={ENGAGEMENT_STATS} raw={kpis} i0={10} />
+
+        <div className="kpi-group-title">İdarəetmə KPI-ləri</div>
+        <div className="kpi-grid">
+          <div className="stat-card stagger-item" style={{ '--i': 15 }}>
+            <div className="stat-icon" style={{ '--icon-color': '#0891b2', color: '#0891b2' }}><Building2 size={16} strokeWidth={2.2} /></div>
+            <div className="stat-label">Aktiv Departament</div>
+            <div className="stat-value" style={{ color: '#0891b2' }}><CountUp value={kpis.departments} /></div>
           </div>
-          <div className="slicer-row">
-            {CAT_FIELDS.map((f) => (
-              <MultiSelectFilter
-                key={f}
-                label={CAT_LABELS[f]}
-                options={uniqueValsByField[f] || []}
-                selected={catFilters[f] || new Set()}
-                onChange={(s) => setCatFilter(f, s)}
-              />
-            ))}
-            <MultiSelectFilter label="Status" options={STATUS_OPTIONS} selected={statusFilter} onChange={setStatusFilter} labelFor={(v) => statusMeta(v).label} />
-            <MultiSelectFilter label="Prioritet" options={PRIORITY_OPTIONS} selected={priorityFilter} onChange={setPriorityFilter} labelFor={(v) => PRIORITY_LABELS[v] || v} />
+          <div className="stat-card stagger-item" style={{ '--i': 16 }}>
+            <div className="stat-icon" style={{ '--icon-color': '#2563eb', color: '#2563eb' }}><Trophy size={16} strokeWidth={2.2} /></div>
+            <div className="stat-label">Ən Fəal Departament</div>
+            <div className="stat-value stat-value-text" style={{ color: '#2563eb' }} title={topDept?.dept}>{topDept ? topDept.dept : '—'}</div>
+            {topDept && <div className="stat-sub">{topDept.total} təlim</div>}
           </div>
-          <div className="slicer-row slicer-row-ranges">
-            <div className="range-filter">
-              <span className="filter-label" style={{ marginBottom: 0 }}>Tarix aralığı</span>
-              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ width: 140 }} />
-              <span className="range-sep">—</span>
-              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ width: 140 }} />
-            </div>
-            <div className="range-filter">
-              <span className="filter-label" style={{ marginBottom: 0 }}>Büdcə (₼)</span>
-              <input type="number" placeholder="min" value={budgetMin} onChange={(e) => setBudgetMin(e.target.value)} style={{ width: 90 }} />
-              <span className="range-sep">—</span>
-              <input type="number" placeholder="max" value={budgetMax} onChange={(e) => setBudgetMax(e.target.value)} style={{ width: 90 }} />
-            </div>
-            <div className="range-filter">
-              <span className="filter-label" style={{ marginBottom: 0 }}>Saat</span>
-              <input type="number" placeholder="min" value={hoursMin} onChange={(e) => setHoursMin(e.target.value)} style={{ width: 80 }} />
-              <span className="range-sep">—</span>
-              <input type="number" placeholder="max" value={hoursMax} onChange={(e) => setHoursMax(e.target.value)} style={{ width: 80 }} />
-            </div>
+          <div className="stat-card stagger-item" style={{ '--i': 17 }}>
+            <div className="stat-icon" style={{ '--icon-color': '#059669', color: '#059669' }}><Award size={16} strokeWidth={2.2} /></div>
+            <div className="stat-label">Ən Yüksək Tamamlanma</div>
+            <div className="stat-value stat-value-text" style={{ color: '#059669' }} title={bestCompletionDept?.dept}>{bestCompletionDept ? bestCompletionDept.dept : '—'}</div>
+            {bestCompletionDept && <div className="stat-sub">{bestCompletionDept.completionRate}%</div>}
+          </div>
+          <div className="stat-card stagger-item" style={{ '--i': 18 }}>
+            <div className="stat-icon" style={{ '--icon-color': '#7c3aed', color: '#7c3aed' }}><Target size={16} strokeWidth={2.2} /></div>
+            <div className="stat-label">Orta Təlim / Departament</div>
+            <div className="stat-value" style={{ color: '#7c3aed' }}><CountUp value={avgPerDept} /></div>
           </div>
         </div>
 
-        {filtered.length === 0 ? (
-          <div className="card" style={{ marginTop: 16 }}>
-            <EmptyState icon={FilterX}>Seçilmiş filtrlərə uyğun nəticə yoxdur.</EmptyState>
-          </div>
-        ) : (
+        {/* ---------- Executive Insights ---------- */}
+        {insights.length > 0 && (
           <>
-            {/* ---------- KPI groups ---------- */}
-            <StatGroup title="Learning KPI-lər" stats={LEARNING_STATS} raw={kpis} i0={0} />
-            <StatGroup title="Maliyyə KPI-ləri" stats={FINANCIAL_STATS} raw={kpis} i0={5} />
-            <StatGroup title="Fəallıq KPI-ləri" stats={ENGAGEMENT_STATS} raw={kpis} i0={10} />
-
-            <div className="kpi-group-title">İdarəetmə KPI-ləri</div>
-            <div className="kpi-grid">
-              <div className="stat-card stagger-item" style={{ '--i': 15 }}>
-                <div className="stat-icon" style={{ '--icon-color': '#0891b2', color: '#0891b2' }}><Building2 size={16} strokeWidth={2.2} /></div>
-                <div className="stat-label">Aktiv Departament</div>
-                <div className="stat-value" style={{ color: '#0891b2' }}><CountUp value={kpis.departments} /></div>
-              </div>
-              <div className="stat-card stagger-item" style={{ '--i': 16 }}>
-                <div className="stat-icon" style={{ '--icon-color': '#2563eb', color: '#2563eb' }}><Trophy size={16} strokeWidth={2.2} /></div>
-                <div className="stat-label">Ən Fəal Departament</div>
-                <div className="stat-value stat-value-text" style={{ color: '#2563eb' }} title={topDept?.dept}>{topDept ? topDept.dept : '—'}</div>
-                {topDept && <div className="stat-sub">{topDept.total} təlim</div>}
-              </div>
-              <div className="stat-card stagger-item" style={{ '--i': 17 }}>
-                <div className="stat-icon" style={{ '--icon-color': '#059669', color: '#059669' }}><Award size={16} strokeWidth={2.2} /></div>
-                <div className="stat-label">Ən Yüksək Tamamlanma</div>
-                <div className="stat-value stat-value-text" style={{ color: '#059669' }} title={bestCompletionDept?.dept}>{bestCompletionDept ? bestCompletionDept.dept : '—'}</div>
-                {bestCompletionDept && <div className="stat-sub">{bestCompletionDept.completionRate}%</div>}
-              </div>
-              <div className="stat-card stagger-item" style={{ '--i': 18 }}>
-                <div className="stat-icon" style={{ '--icon-color': '#7c3aed', color: '#7c3aed' }}><Target size={16} strokeWidth={2.2} /></div>
-                <div className="stat-label">Orta Təlim / Departament</div>
-                <div className="stat-value" style={{ color: '#7c3aed' }}><CountUp value={avgPerDept} /></div>
-              </div>
-            </div>
-
-            {/* ---------- Executive Insights ---------- */}
-            {insights.length > 0 && (
-              <>
-                <div className="section-head"><div className="section-title">Analitik Nəticələr</div></div>
-                <div className="insights-grid">
-                  {insights.map((ins, i) => {
-                    const Icon = INSIGHT_ICONS[ins.type] || Sparkles;
-                    const color = INSIGHT_COLORS[ins.type];
-                    return (
-                      <div className="insight-card stagger-item" key={i} style={{ '--i': i, borderLeftColor: color }}>
-                        <div className="insight-icon" style={{ '--icon-color': color, color }}><Icon size={16} strokeWidth={2.2} /></div>
-                        <div>
-                          <div className="insight-title">{ins.title}</div>
-                          <div className="insight-text">{ins.text}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-
-            {/* ---------- Charts row 1 ---------- */}
-            <div className="charts-grid">
-              <div className="card">
-                <div style={{ fontWeight: 700, marginBottom: 14 }}>Aylıq Təlim Trendi</div>
-                {trend.length ? (
-                  <div className="trend-chart">
-                    {trend.map((m) => {
-                      const [y, mo] = m.key.split('-');
-                      const label = MONTH_LABELS[Number(mo) - 1] + " '" + y.slice(2);
-                      return (
-                        <div className="trend-col" key={m.key} title={`${label}: ${m.count} təlim, ${fmtMoney(m.budget)}`}>
-                          <div className="trend-bar-wrap"><div className="trend-bar" style={{ height: `${Math.max(6, Math.round((m.count / maxTrend) * 100))}%` }} /></div>
-                          <div className="trend-label">{label}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : <EmptyState>Tarix məlumatı yoxdur</EmptyState>}
-              </div>
-
-              <div className="card">
-                <div style={{ fontWeight: 700, marginBottom: 14 }}>Tamamlanma Hunisi (Funnel)</div>
-                <div className="funnel-chart">
-                  {funnel.map((f) => (
-                    <div className="funnel-row" key={f.status}>
-                      <div className="funnel-label">{f.label}</div>
-                      <div className="funnel-track"><div className="funnel-fill" style={{ width: `${Math.max(8, Math.round((f.count / maxFunnel) * 100))}%`, background: f.color }} /></div>
-                      <div className="funnel-val">{f.count} <span className="funnel-pct">({f.pct}%)</span></div>
+            <div className="section-head"><div className="section-title">Analitik Nəticələr</div></div>
+            <div className="insights-grid">
+              {insights.map((ins, i) => {
+                const Icon = INSIGHT_ICONS[ins.type] || Sparkles;
+                const color = INSIGHT_COLORS[ins.type];
+                return (
+                  <div className="insight-card stagger-item" key={i} style={{ '--i': i, borderLeftColor: color }}>
+                    <div className="insight-icon" style={{ '--icon-color': color, color }}><Icon size={16} strokeWidth={2.2} /></div>
+                    <div>
+                      <div className="insight-title">{ins.title}</div>
+                      <div className="insight-text">{ins.text}</div>
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
+                );
+              })}
             </div>
+          </>
+        )}
 
-            {/* ---------- Charts row 2 ---------- */}
-            <div className="charts-grid">
-              <div className="card">
-                <div style={{ fontWeight: 700, marginBottom: 14 }}>Status üzrə bölgü</div>
-                {statusRows.map(([st, count]) => {
-                  const meta = statusMeta(st);
+        {/* ---------- Charts row 1 ---------- */}
+        <div className="charts-grid">
+          <div className="card">
+            <div style={{ fontWeight: 700, marginBottom: 14 }}>Aylıq Təlim Trendi</div>
+            {trend.length ? (
+              <div className="trend-chart">
+                {trend.map((m) => {
+                  const [y, mo] = m.key.split('-');
+                  const label = MONTH_LABELS[Number(mo) - 1] + " '" + y.slice(2);
                   return (
-                    <div className="bar-row" key={st}>
-                      <div className="bar-label">{meta.label}</div>
-                      <div className="bar-track"><div className="bar-fill" style={{ width: `${Math.round((count / maxStatus) * 100)}%`, background: meta.color }} /></div>
-                      <div className="bar-val">{count}</div>
+                    <div className="trend-col" key={m.key} title={`${label}: ${m.count} təlim, ${fmtMoney(m.budget)}`}>
+                      <div className="trend-bar-wrap"><div className="trend-bar" style={{ height: `${Math.max(6, Math.round((m.count / maxTrend) * 100))}%` }} /></div>
+                      <div className="trend-label">{label}</div>
                     </div>
                   );
                 })}
               </div>
-              <div className="card">
-                <div style={{ fontWeight: 700, marginBottom: 14 }}>Departament Müqayisəsi (say / tamamlanma)</div>
-                {depts.slice(0, 10).map((d) => (
-                  <div className="bar-row" key={d.dept}>
-                    <div className="bar-label" title={d.dept}>{d.dept}</div>
-                    <div className="bar-track"><div className="bar-fill" style={{ width: `${Math.max(4, d.completionRate)}%`, background: d.completionRate >= 60 ? 'var(--green)' : d.completionRate >= 30 ? 'var(--amber)' : 'var(--red)' }} /></div>
-                    <div className="bar-val">{d.total} / {d.completionRate}%</div>
+            ) : <EmptyState>Tarix məlumatı yoxdur</EmptyState>}
+          </div>
+
+          <div className="card">
+            <div style={{ fontWeight: 700, marginBottom: 14 }}>Tamamlanma Hunisi (Funnel)</div>
+            <div className="funnel-chart">
+              {funnel.map((f) => (
+                <div className="funnel-row" key={f.status}>
+                  <div className="funnel-label">{f.label}</div>
+                  <div className="funnel-track"><div className="funnel-fill" style={{ width: `${Math.max(8, Math.round((f.count / maxFunnel) * 100))}%`, background: f.color }} /></div>
+                  <div className="funnel-val">{f.count} <span className="funnel-pct">({f.pct}%)</span></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ---------- Charts row 2 ---------- */}
+        <div className="charts-grid">
+          <div className="card">
+            <div style={{ fontWeight: 700, marginBottom: 14 }}>Status üzrə bölgü</div>
+            {statusRows.map(([st, count]) => {
+              const meta = statusMeta(st);
+              return (
+                <div className="bar-row" key={st}>
+                  <div className="bar-label">{meta.label}</div>
+                  <div className="bar-track"><div className="bar-fill" style={{ width: `${Math.round((count / maxStatus) * 100)}%`, background: meta.color }} /></div>
+                  <div className="bar-val">{count}</div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="card">
+            <div style={{ fontWeight: 700, marginBottom: 14 }}>Departament Müqayisəsi (say / tamamlanma)</div>
+            {depts.slice(0, 10).map((d) => (
+              <div className="bar-row" key={d.dept}>
+                <div className="bar-label" title={d.dept}>{d.dept}</div>
+                <div className="bar-track"><div className="bar-fill" style={{ width: `${Math.max(4, d.completionRate)}%`, background: d.completionRate >= 60 ? 'var(--green)' : d.completionRate >= 30 ? 'var(--amber)' : 'var(--red)' }} /></div>
+                <div className="bar-val">{d.total} / {d.completionRate}%</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ---------- Rankings (based on completed trainings only) ---------- */}
+        <div className="charts-grid">
+          <div className="card">
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Top Təlimlər (tamamlanmış, büdcəyə görə)</div>
+            <div className="section-sub" style={{ marginBottom: 4 }}>Tamamlanmış təlimlər arasında ən çox resurs ayrılan istiqamətlər</div>
+            <RankList items={topTrainings} renderValue={(it) => fmtMoney(it.budget)} emptyLabel="Hələ tamamlanmış təlim yoxdur" />
+          </div>
+          <div className="card">
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Top Provayderlər (tamamlanmış)</div>
+            <div className="section-sub" style={{ marginBottom: 4 }}>Tamamlanmış təlimlərə görə ən çox işlənən provayderlər</div>
+            <RankList items={topVendors} renderValue={(it) => `${it.count} təlim`} emptyLabel="Hələ tamamlanmış təlim yoxdur" />
+          </div>
+          <div className="card">
+            <div style={{ fontWeight: 700, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}><GraduationCap size={15} strokeWidth={2.2} /> Top İştirakçılar (tamamlanmış, saata görə)</div>
+            <div className="section-sub" style={{ marginBottom: 4 }}>Tamamlanmış təlimlər üzrə ən çox saat alan işçilər</div>
+            {topLearnersList.length ? (
+              <div className="rank-list">
+                {topLearnersList.map((l, i) => (
+                  <div className="rank-row" key={l.key}>
+                    <div className="rank-num">{i + 1}</div>
+                    <div className="rank-body">
+                      <div className="rank-name" title={l.key}>{l.key}</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--ink-500)' }}>{l.dept}</div>
+                    </div>
+                    <div className="rank-val">{l.hours} saat</div>
                   </div>
                 ))}
               </div>
-            </div>
+            ) : <EmptyState>Hələ tamamlanmış təlim yoxdur</EmptyState>}
+          </div>
+        </div>
 
-            {/* ---------- Rankings ---------- */}
-            <div className="charts-grid">
-              <div className="card">
-                <div style={{ fontWeight: 700, marginBottom: 6 }}>Top Təlimlər (büdcəyə görə)</div>
-                <div className="section-sub" style={{ marginBottom: 4 }}>İstiqamət üzrə ən çox resurs ayrılan təlimlər</div>
-                <RankList items={topTrainings} renderValue={(it) => fmtMoney(it.budget)} emptyLabel="Məlumat yoxdur" />
-              </div>
-              <div className="card">
-                <div style={{ fontWeight: 700, marginBottom: 6 }}>Top Provayderlər</div>
-                <div className="section-sub" style={{ marginBottom: 4 }}>Büdcəyə görə ən çox işlənən provayderlər</div>
-                <RankList items={topVendors} renderValue={(it) => `${it.count} təlim`} emptyLabel="Məlumat yoxdur" />
-              </div>
-              <div className="card">
-                <div style={{ fontWeight: 700, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}><GraduationCap size={15} strokeWidth={2.2} /> Top İştirakçılar (saata görə)</div>
-                <div className="section-sub" style={{ marginBottom: 4 }}>Ən çox təlim saatı alan işçilər</div>
-                {topLearnersList.length ? (
-                  <div className="rank-list">
-                    {topLearnersList.map((l, i) => (
-                      <div className="rank-row" key={l.key}>
-                        <div className="rank-num">{i + 1}</div>
-                        <div className="rank-body">
-                          <div className="rank-name" title={l.key}>{l.key}</div>
-                          <div style={{ fontSize: 11.5, color: 'var(--ink-500)' }}>{l.dept}</div>
-                        </div>
-                        <div className="rank-val">{l.hours} saat</div>
-                      </div>
-                    ))}
-                  </div>
-                ) : <EmptyState>Məlumat yoxdur</EmptyState>}
-              </div>
-            </div>
-
-            <AnalysisView trainings={filtered} />
-          </>
-        )}
+        <AnalysisView trainings={filtered} />
       </div>
     </div>
   );
