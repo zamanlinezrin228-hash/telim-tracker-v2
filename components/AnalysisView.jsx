@@ -1,29 +1,48 @@
 import { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
-import { ArrowLeftRight, Download, X } from 'lucide-react';
-import { statusMeta } from '../lib/helpers';
+import { ArrowLeftRight, Download } from 'lucide-react';
+import { statusMeta, priorityMeta } from '../lib/helpers';
+import MultiSelectFilter from './MultiSelectFilter';
 
 const FIELD_LABELS = {
-  dept: 'Departament', sube: 'Şöbə', category: 'Vəzifə Kateqoriyası',
-  comp_cat: 'Səriştə Kateqoriyası', vendor: 'Vendor', status: 'Status',
-  priority: 'Prioritet', budget_status: 'Büdcə Statusu',
+  dept: 'Departament', sube: 'Şöbə', position: 'Vəzifə', category: 'Vəzifə Kateqoriyası',
+  skill: 'Təlimin Adı', comp_cat: 'Səriştə Kateqoriyası', vendor: 'Provayder', status: 'Status',
+  priority: 'Prioritet', budget_status: 'Büdcə Statusu', employee_name: 'Ad Soyad', plan_year: 'İl',
 };
-const FIELD_OPTIONS = Object.keys(FIELD_LABELS);
-const SLICER_FIELDS = ['dept', 'sube', 'comp_cat', 'priority', 'status', 'budget_status'];
+const DIMENSION_FIELDS = Object.keys(FIELD_LABELS);
+
+const METRIC_LABELS = {
+  budget: 'Büdcənin cəmi', count: 'Təlim sayı', man_hours: 'Saatın cəmi',
+  avg_budget: 'Orta büdcə', avg_hours: 'Orta saat', completion_rate: 'Tamamlanma faizi',
+  participants: 'İştirakçı sayı (unikal)',
+};
+const METRIC_OPTIONS = Object.keys(METRIC_LABELS);
 
 function displayVal(v) {
   return v === null || v === undefined || v === '' ? '—' : String(v);
 }
 function labelFor(field, v) {
   if (field === 'status') return statusMeta(v).label;
+  if (field === 'priority') return priorityMeta(v).label;
   return v;
+}
+
+function newAgg() {
+  return { count: 0, budgetSum: 0, hoursSum: 0, completedCount: 0, participants: new Set() };
+}
+function addToAgg(agg, t) {
+  agg.count += 1;
+  agg.budgetSum += Number(t.budget) || 0;
+  agg.hoursSum += Number(t.man_hours) || 0;
+  if (t.status === 'Completed') agg.completedCount += 1;
+  if (t.employee_name) agg.participants.add(t.employee_name);
 }
 
 export default function AnalysisView({ trainings }) {
   const [rowField, setRowField] = useState('dept');
   const [colField, setColField] = useState('status');
   const [metric, setMetric] = useState('budget');
-  const [slicers, setSlicers] = useState({});
+  const [catFilters, setCatFilters] = useState({});
   const [showPct, setShowPct] = useState(false);
 
   function swapFields() {
@@ -31,70 +50,92 @@ export default function AnalysisView({ trainings }) {
     setColField(rowField);
   }
 
+  const uniqueValsByField = useMemo(() => {
+    const map = {};
+    DIMENSION_FIELDS.forEach((f) => { map[f] = [...new Set(trainings.map((t) => displayVal(t[f])))].filter((v) => v !== '—').sort(); });
+    return map;
+  }, [trainings]);
+
   const sliced = useMemo(() => {
     return trainings.filter((t) => {
-      for (const f of SLICER_FIELDS) {
-        const val = slicers[f];
-        if (val && val !== 'all' && displayVal(t[f]) !== val) return false;
+      for (const f of DIMENSION_FIELDS) {
+        const sel = catFilters[f];
+        if (sel && displayVal(t[f]) !== '—' && !sel.has(displayVal(t[f]))) return false;
       }
       return true;
     });
-  }, [trainings, slicers]);
+  }, [trainings, catFilters]);
 
-  const { rowKeys, colKeys, matrix, rowTotals, colTotals, grandTotal, maxCell } = useMemo(() => {
+  function metricValue(agg) {
+    if (!agg) return 0;
+    switch (metric) {
+      case 'count': return agg.count;
+      case 'budget': return agg.budgetSum;
+      case 'man_hours': return agg.hoursSum;
+      case 'avg_budget': return agg.count ? agg.budgetSum / agg.count : 0;
+      case 'avg_hours': return agg.count ? agg.hoursSum / agg.count : 0;
+      case 'completion_rate': return agg.count ? (agg.completedCount / agg.count) * 100 : 0;
+      case 'participants': return agg.participants.size;
+      default: return 0;
+    }
+  }
+
+  const { rowKeys, colKeys, cellAgg, rowAgg, colAgg, grandAgg, maxCellVal } = useMemo(() => {
     const rowSet = new Set(), colSet = new Set();
-    const cells = {}, rTotals = {}, cTotals = {};
-    let gTotal = 0, mCell = 0;
+    const cellAgg = {}, rowAgg = {}, colAgg = {};
+    const grandAgg = newAgg();
 
     sliced.forEach((t) => {
       const r = displayVal(t[rowField]);
       const c = displayVal(t[colField]);
       rowSet.add(r); colSet.add(c);
       const key = r + '|||' + c;
-      const val = metric === 'count' ? 1 : (metric === 'budget' ? (t.budget || 0) : (t.man_hours || 0));
-      cells[key] = (cells[key] || 0) + val;
-      rTotals[r] = (rTotals[r] || 0) + val;
-      cTotals[c] = (cTotals[c] || 0) + val;
-      gTotal += val;
-      if (cells[key] > mCell) mCell = cells[key];
+      if (!cellAgg[key]) cellAgg[key] = newAgg();
+      if (!rowAgg[r]) rowAgg[r] = newAgg();
+      if (!colAgg[c]) colAgg[c] = newAgg();
+      addToAgg(cellAgg[key], t);
+      addToAgg(rowAgg[r], t);
+      addToAgg(colAgg[c], t);
+      addToAgg(grandAgg, t);
     });
 
-    const rowKeysArr = [...rowSet].sort((a, b) => (rTotals[b] || 0) - (rTotals[a] || 0));
+    const rowKeysArr = [...rowSet].sort((a, b) => metricValue(rowAgg[b]) - metricValue(rowAgg[a]));
     const colKeysArr = [...colSet].sort();
+    const maxCellVal = Math.max(...Object.values(cellAgg).map((a) => metricValue(a)), 1);
 
-    return { rowKeys: rowKeysArr, colKeys: colKeysArr, matrix: cells, rowTotals: rTotals, colTotals: cTotals, grandTotal: gTotal, maxCell: mCell || 1 };
+    return { rowKeys: rowKeysArr, colKeys: colKeysArr, cellAgg, rowAgg, colAgg, grandAgg, maxCellVal };
   }, [sliced, rowField, colField, metric]);
 
   function fmt(n) {
-    if (metric === 'count') return Math.round(n).toLocaleString('az-AZ');
-    if (metric === 'man_hours') return Math.round(n).toLocaleString('az-AZ') + ' saat';
+    if (metric === 'count' || metric === 'participants') return Math.round(n).toLocaleString('az-AZ');
+    if (metric === 'man_hours' || metric === 'avg_hours') return (Math.round(n * 10) / 10).toLocaleString('az-AZ') + ' saat';
+    if (metric === 'completion_rate') return Math.round(n) + '%';
     return Math.round(n).toLocaleString('az-AZ') + ' ₼';
   }
 
-  function cellDisplay(raw, rowTotal) {
-    if (showPct) {
+  function cellDisplay(agg, rowTotalAgg) {
+    const raw = metricValue(agg);
+    if (showPct && metric !== 'completion_rate' && metric !== 'participants') {
+      const rowTotal = metricValue(rowTotalAgg);
       const pct = rowTotal ? Math.round((raw / rowTotal) * 100) : 0;
       return `${pct}%`;
     }
     return fmt(raw);
   }
 
-  function heatColor(raw) {
+  function heatColor(agg) {
+    const raw = metricValue(agg);
     if (!raw) return 'transparent';
-    const intensity = Math.min(1, raw / maxCell);
+    const intensity = Math.min(1, raw / maxCellVal);
     const alpha = 0.08 + intensity * 0.35;
     return `rgba(37, 99, 235, ${alpha.toFixed(2)})`;
-  }
-
-  function uniqueSlicerVals(field) {
-    return [...new Set(trainings.map((t) => displayVal(t[field])))].sort();
   }
 
   function exportPivot() {
     const rows = rowKeys.map((r) => {
       const row = { [FIELD_LABELS[rowField]]: labelFor(rowField, r) };
-      colKeys.forEach((c) => { row[labelFor(colField, c)] = matrix[r + '|||' + c] || 0; });
-      row['Cəmi'] = rowTotals[r] || 0;
+      colKeys.forEach((c) => { row[labelFor(colField, c)] = metricValue(cellAgg[r + '|||' + c]); });
+      row['Cəmi'] = metricValue(rowAgg[r]);
       return row;
     });
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -103,7 +144,13 @@ export default function AnalysisView({ trainings }) {
     XLSX.writeFile(wb, `analiz-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
-  const activeSlicerCount = Object.values(slicers).filter((v) => v && v !== 'all').length;
+  const activeSlicerCount = DIMENSION_FIELDS.filter((f) => catFilters[f] && catFilters[f].size < uniqueValsByField[f].length).length;
+
+  function clearAllSlicers() {
+    const reset = {};
+    DIMENSION_FIELDS.forEach((f) => { reset[f] = new Set(uniqueValsByField[f]); });
+    setCatFilters(reset);
+  }
 
   return (
     <div style={{ marginTop: 8 }}>
@@ -115,7 +162,7 @@ export default function AnalysisView({ trainings }) {
           <div>
             <div className="filter-label">Sətir sahəsi</div>
             <select value={rowField} onChange={(e) => setRowField(e.target.value)} style={{ minWidth: 180 }}>
-              {FIELD_OPTIONS.map((f) => <option key={f} value={f}>{FIELD_LABELS[f]}</option>)}
+              {DIMENSION_FIELDS.map((f) => <option key={f} value={f}>{FIELD_LABELS[f]}</option>)}
             </select>
           </div>
           <button
@@ -129,15 +176,13 @@ export default function AnalysisView({ trainings }) {
           <div>
             <div className="filter-label">Sütun sahəsi</div>
             <select value={colField} onChange={(e) => setColField(e.target.value)} style={{ minWidth: 180 }}>
-              {FIELD_OPTIONS.map((f) => <option key={f} value={f}>{FIELD_LABELS[f]}</option>)}
+              {DIMENSION_FIELDS.map((f) => <option key={f} value={f}>{FIELD_LABELS[f]}</option>)}
             </select>
           </div>
           <div>
             <div className="filter-label">Dəyər</div>
-            <select value={metric} onChange={(e) => setMetric(e.target.value)} style={{ minWidth: 160 }}>
-              <option value="budget">Büdcənin cəmi</option>
-              <option value="count">Təlim sayı</option>
-              <option value="man_hours">Saatın cəmi</option>
+            <select value={metric} onChange={(e) => setMetric(e.target.value)} style={{ minWidth: 190 }}>
+              {METRIC_OPTIONS.map((m) => <option key={m} value={m}>{METRIC_LABELS[m]}</option>)}
             </select>
           </div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, height: 40, cursor: 'pointer' }}>
@@ -154,31 +199,21 @@ export default function AnalysisView({ trainings }) {
         </div>
 
         <div className="filter-label" style={{ marginBottom: 8 }}>
-          Slicer-lər (əlavə filtrlər) {activeSlicerCount > 0 && <span style={{ color: '#2563eb' }}>· {activeSlicerCount} aktiv</span>}
+          Slicer-lər (əlavə filtrlər) {activeSlicerCount > 0 && <span style={{ color: 'var(--blue)' }}>· {activeSlicerCount} aktiv</span>}
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {SLICER_FIELDS.map((f) => {
-            const active = slicers[f] && slicers[f] !== 'all';
-            return (
-              <select
-                key={f}
-                value={slicers[f] || 'all'}
-                onChange={(e) => setSlicers((s) => ({ ...s, [f]: e.target.value }))}
-                style={{
-                  minWidth: 150, fontSize: 12.5, borderRadius: 999, padding: '7px 14px',
-                  border: active ? '1.5px solid var(--blue)' : '1px solid var(--ink-300)',
-                  background: active ? 'var(--blue-light)' : 'var(--surface)', color: active ? 'var(--blue-dark)' : 'var(--ink-900)', fontWeight: active ? 600 : 400,
-                }}
-              >
-                <option value="all">{FIELD_LABELS[f]}: Hamısı</option>
-                {uniqueSlicerVals(f).map((v) => <option key={v} value={v}>{FIELD_LABELS[f]}: {labelFor(f, v)}</option>)}
-              </select>
-            );
-          })}
+        <div className="slicer-row">
+          {DIMENSION_FIELDS.map((f) => (
+            <MultiSelectFilter
+              key={f}
+              label={FIELD_LABELS[f]}
+              options={uniqueValsByField[f] || []}
+              selected={catFilters[f] || new Set(uniqueValsByField[f])}
+              onChange={(s) => setCatFilters((prev) => ({ ...prev, [f]: s }))}
+              labelFor={(v) => labelFor(f, v)}
+            />
+          ))}
           {activeSlicerCount > 0 && (
-            <button onClick={() => setSlicers({})} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 999, border: '1px solid var(--red-border)', background: 'var(--red-light)', color: 'var(--red)', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>
-              <X size={12} strokeWidth={2.4} /> Təmizlə
-            </button>
+            <button onClick={clearAllSlicers} className="btn btn-outline btn-sm">Hamısını təmizlə</button>
           )}
         </div>
       </div>
@@ -197,20 +232,20 @@ export default function AnalysisView({ trainings }) {
               <tr key={r}>
                 <td style={{ fontWeight: 600 }}>{labelFor(rowField, r)}</td>
                 {colKeys.map((c) => {
-                  const raw = matrix[r + '|||' + c] || 0;
+                  const agg = cellAgg[r + '|||' + c];
                   return (
-                    <td key={c} style={{ background: heatColor(raw) }}>
-                      {cellDisplay(raw, rowTotals[r])}
+                    <td key={c} style={{ background: heatColor(agg) }}>
+                      {cellDisplay(agg, rowAgg[r])}
                     </td>
                   );
                 })}
-                <td style={{ fontWeight: 700 }}>{fmt(rowTotals[r] || 0)}</td>
+                <td style={{ fontWeight: 700 }}>{fmt(metricValue(rowAgg[r]))}</td>
               </tr>
             ))}
             <tr style={{ background: 'var(--ink-50)' }}>
               <td style={{ fontWeight: 800 }}>Cəmi</td>
-              {colKeys.map((c) => <td key={c} style={{ fontWeight: 700 }}>{fmt(colTotals[c] || 0)}</td>)}
-              <td style={{ fontWeight: 800 }}>{fmt(grandTotal)}</td>
+              {colKeys.map((c) => <td key={c} style={{ fontWeight: 700 }}>{fmt(metricValue(colAgg[c]))}</td>)}
+              <td style={{ fontWeight: 800 }}>{fmt(metricValue(grandAgg))}</td>
             </tr>
           </tbody>
         </table>
