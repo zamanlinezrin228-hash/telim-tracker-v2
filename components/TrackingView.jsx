@@ -1,6 +1,6 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
-import { Search, Download, FilterX, Pencil, Trash2, Save } from 'lucide-react';
+import { Search, Download, FilterX, Pencil, Trash2, Save, Columns3, Layers, ArrowUp, ArrowDown, Folder } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import { fmtMoney, statusMeta, priorityMeta } from '../lib/helpers';
 import { TrainingStatusBadge, PriorityBadge, BudgetStatusBadge } from './Badges';
@@ -14,14 +14,102 @@ const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical'];
 const COMP_CAT_OPTIONS = ['Hard Skills', 'Soft Skills'];
 const BUDGET_STATUS_OPTIONS = ['Büdcələnmiş', 'Büdcədən kənar'];
 
-const FILTER_FIELDS = ['dept', 'position', 'skill', 'comp_cat', 'vendor', 'status', 'priority', 'budget_status'];
+const FILTER_FIELDS = ['dept', 'sube', 'position', 'category', 'skill', 'comp_cat', 'vendor', 'status', 'priority', 'budget_status'];
 const FIELD_LABELS = {
-  plan_year: 'İl', dept: 'Departament', position: 'Vəzifə', skill: 'İnkişaf istiqaməti',
-  comp_cat: 'Kateqoriya', vendor: 'Vendor', status: 'Status', priority: 'Prioritet', budget_status: 'Büdcə Statusu',
+  plan_year: 'İl', dept: 'Departament', sube: 'Filial', position: 'Vəzifə', category: 'Vəzifə Kateqoriyası',
+  skill: 'Təlimin Adı', comp_cat: 'Təlim Kateqoriyası', vendor: 'Provayder', status: 'Status',
+  priority: 'Prioritet', start_date: 'Başlama', end_date: 'Bitmə', budget: 'Büdcə', budget_status: 'Büdcə Statusu',
 };
+
+const ALL_COLUMNS = [
+  { key: 'plan_year', label: FIELD_LABELS.plan_year, sticky: true },
+  { key: 'dept', label: FIELD_LABELS.dept },
+  { key: 'sube', label: FIELD_LABELS.sube },
+  { key: 'employee_name', label: 'Ad Soyad' },
+  { key: 'position', label: FIELD_LABELS.position },
+  { key: 'category', label: FIELD_LABELS.category },
+  { key: 'skill', label: FIELD_LABELS.skill },
+  { key: 'comp_cat', label: FIELD_LABELS.comp_cat },
+  { key: 'vendor', label: FIELD_LABELS.vendor },
+  { key: 'status', label: FIELD_LABELS.status },
+  { key: 'priority', label: FIELD_LABELS.priority },
+  { key: 'start_date', label: FIELD_LABELS.start_date },
+  { key: 'end_date', label: FIELD_LABELS.end_date },
+  { key: 'man_hours', label: 'Saat' },
+  { key: 'budget', label: FIELD_LABELS.budget },
+  { key: 'budget_status', label: FIELD_LABELS.budget_status },
+];
+const DEFAULT_HIDDEN = new Set(['sube', 'category', 'man_hours']);
 
 function displayVal(v) {
   return v === null || v === undefined || v === '' ? '—' : String(v);
+}
+
+function sortValue(t, key) {
+  if (key === 'budget' || key === 'man_hours' || key === 'plan_year') return Number(t[key]) || 0;
+  if (key === 'start_date' || key === 'end_date') return t[key] || '';
+  return displayVal(t[key]).toLowerCase();
+}
+
+function ColumnPicker({ columns, visible, onToggle }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    function onDocClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+  return (
+    <div className="slicer" ref={ref}>
+      <button type="button" className="btn btn-outline btn-sm" onClick={() => setOpen((o) => !o)}>
+        <Columns3 size={13} strokeWidth={2.2} /> Sütunlar
+      </button>
+      {open && (
+        <div className="slicer-panel" style={{ width: 220 }}>
+          <div className="slicer-options">
+            {columns.map((c) => (
+              <label key={c.key} className="slicer-option">
+                <input type="checkbox" checked={visible.has(c.key)} onChange={() => onToggle(c.key)} disabled={c.sticky} />
+                <span>{c.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function renderCell(t, key) {
+  switch (key) {
+    case 'plan_year': return t.plan_year || '—';
+    case 'sube': return t.sube || '—';
+    case 'category': return t.category || '—';
+    case 'status': return <TrainingStatusBadge status={t.status} />;
+    case 'priority': return t.priority ? <PriorityBadge priority={t.priority} /> : '—';
+    case 'start_date': return t.start_date || t.start_raw || '—';
+    case 'end_date': return t.end_date || t.end_raw || '—';
+    case 'man_hours': return t.man_hours ?? '—';
+    case 'budget': return fmtMoney(t.budget);
+    case 'budget_status': return t.budget_status ? <BudgetStatusBadge status={t.budget_status} /> : '—';
+    default: return displayVal(t[key]);
+  }
+}
+
+function TrackingRow({ t, visibleColumns, isAdmin, onEdit, onDelete }) {
+  return (
+    <tr>
+      {visibleColumns.map((col) => (
+        <td key={col.key} className={col.sticky ? 'sticky-col' : undefined}>{renderCell(t, col.key)}</td>
+      ))}
+      {isAdmin && (
+        <td style={{ whiteSpace: 'nowrap' }}>
+          <button onClick={() => onEdit(t)} className="btn btn-accent btn-sm" style={{ marginRight: 6 }}><Pencil size={12} strokeWidth={2.2} /> Redaktə</button>
+          <button onClick={() => onDelete(t)} className="btn btn-danger btn-sm"><Trash2 size={12} strokeWidth={2.2} /> Sil</button>
+        </td>
+      )}
+    </tr>
+  );
 }
 
 export default function TrackingView({ trainings, profile, onDataChanged }) {
@@ -32,6 +120,9 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
   const [deleting, setDeleting] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [hiddenCols, setHiddenCols] = useState(DEFAULT_HIDDEN);
+  const [sortCriteria, setSortCriteria] = useState([]);
+  const [groupByDept, setGroupByDept] = useState(false);
 
   const canExport = profile && (profile.role === 'hr' || profile.role === 'ld');
   const isAdmin = profile && profile.role === 'ld';
@@ -87,13 +178,60 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
     setSearch('');
   }
 
+  const sorted = useMemo(() => {
+    if (!sortCriteria.length) return filtered;
+    const copy = [...filtered];
+    copy.sort((a, b) => {
+      for (const { key, dir } of sortCriteria) {
+        const av = sortValue(a, key), bv = sortValue(b, key);
+        if (av < bv) return dir === 'asc' ? -1 : 1;
+        if (av > bv) return dir === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+    return copy;
+  }, [filtered, sortCriteria]);
+
+  function toggleSort(key, shiftKey) {
+    setSortCriteria((prev) => {
+      const existing = prev.find((c) => c.key === key);
+      const rest = prev.filter((c) => c.key !== key);
+      if (!existing) return shiftKey ? [...rest, { key, dir: 'asc' }] : [{ key, dir: 'asc' }];
+      if (existing.dir === 'asc') return shiftKey ? [...rest, { key, dir: 'desc' }] : [{ key, dir: 'desc' }];
+      return shiftKey ? rest : [];
+    });
+  }
+
+  function sortIndicator(key) {
+    const c = sortCriteria.find((c) => c.key === key);
+    if (!c) return null;
+    return c.dir === 'asc' ? <ArrowUp size={11} strokeWidth={2.6} /> : <ArrowDown size={11} strokeWidth={2.6} />;
+  }
+
+  function toggleColumn(key) {
+    setHiddenCols((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
+
+  const visibleColumns = ALL_COLUMNS.filter((c) => !hiddenCols.has(c.key));
+
+  const groupedRows = useMemo(() => {
+    if (!groupByDept) return null;
+    const map = {};
+    sorted.forEach((t) => { (map[t.dept || '—'] = map[t.dept || '—'] || []).push(t); });
+    return Object.entries(map).sort((a, b) => b[1].length - a[1].length);
+  }, [sorted, groupByDept]);
+
   function exportToExcel() {
-    const rows = filtered.map((t) => ({
-      'İl': t.plan_year, 'Departament': t.dept, 'Ad Soyad': t.employee_name, 'Vəzifə': t.position,
-      'İnkişaf istiqaməti': t.skill, 'Kateqoriya': t.comp_cat, 'Vendor': t.vendor,
+    const rows = sorted.map((t) => ({
+      'İl': t.plan_year, 'Departament': t.dept, 'Filial': t.sube, 'Ad Soyad': t.employee_name, 'Vəzifə': t.position,
+      'Vəzifə Kateqoriyası': t.category, 'Təlimin Adı': t.skill, 'Kateqoriya': t.comp_cat, 'Provayder': t.vendor,
       'Status': statusMeta(t.status).label, 'Prioritet': priorityMeta(t.priority).label,
       'Başlama': t.start_date || t.start_raw, 'Bitmə': t.end_date || t.end_raw,
-      'Man Hours': t.man_hours, 'Büdcə': t.budget, 'Büdcə Statusu': t.budget_status,
+      'Saat': t.man_hours, 'Büdcə': t.budget, 'Büdcə Statusu': t.budget_status,
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
@@ -149,14 +287,18 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
               {years.map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <div style={{ fontSize: 13, color: 'var(--ink-500)' }}>
-              {filtered.length} / {trainings.length} nəticə
+              {sorted.length} / {trainings.length} nəticə
               {activeFilterCount > 0 && <span style={{ color: 'var(--blue)', fontWeight: 600 }}> ({activeFilterCount} sütun filtrlənib)</span>}
             </div>
             {activeFilterCount > 0 && (
               <button onClick={clearAllFilters} className="btn btn-outline btn-sm"><FilterX size={13} strokeWidth={2.2} /> Filtrləri təmizlə</button>
             )}
+            <button onClick={() => setGroupByDept((g) => !g)} className={'btn btn-sm ' + (groupByDept ? 'btn-accent' : 'btn-outline')}>
+              <Layers size={13} strokeWidth={2.2} /> Departamentə görə qrupla
+            </button>
+            <ColumnPicker columns={ALL_COLUMNS} visible={new Set(ALL_COLUMNS.map((c) => c.key).filter((k) => !hiddenCols.has(k)))} onToggle={toggleColumn} />
             {canExport && (
               <button onClick={exportToExcel} className="btn btn-success btn-sm"><Download size={13} strokeWidth={2.2} /> Excel-ə ixrac et</button>
             )}
@@ -167,40 +309,36 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
           <table>
             <thead>
               <tr>
-                <th>İl</th>
-                <ColumnFilterHeader label={FIELD_LABELS.dept} values={uniqueValsByField.dept} selected={filters.dept} onChange={(s) => setFieldFilter('dept', s)} />
-                <th>Ad Soyad</th>
-                <ColumnFilterHeader label={FIELD_LABELS.position} values={uniqueValsByField.position} selected={filters.position} onChange={(s) => setFieldFilter('position', s)} />
-                <ColumnFilterHeader label={FIELD_LABELS.skill} values={uniqueValsByField.skill} selected={filters.skill} onChange={(s) => setFieldFilter('skill', s)} />
-                <ColumnFilterHeader label={FIELD_LABELS.comp_cat} values={uniqueValsByField.comp_cat} selected={filters.comp_cat} onChange={(s) => setFieldFilter('comp_cat', s)} />
-                <ColumnFilterHeader label={FIELD_LABELS.vendor} values={uniqueValsByField.vendor} selected={filters.vendor} onChange={(s) => setFieldFilter('vendor', s)} />
-                <ColumnFilterHeader label={FIELD_LABELS.status} values={uniqueValsByField.status} selected={filters.status} onChange={(s) => setFieldFilter('status', s)} />
-                <ColumnFilterHeader label={FIELD_LABELS.priority} values={uniqueValsByField.priority} selected={filters.priority} onChange={(s) => setFieldFilter('priority', s)} />
-                <th>Başlama</th><th>Bitmə</th><th>Büdcə</th>
-                <ColumnFilterHeader label={FIELD_LABELS.budget_status} values={uniqueValsByField.budget_status} selected={filters.budget_status} onChange={(s) => setFieldFilter('budget_status', s)} />
+                {visibleColumns.map((col) => (
+                  FILTER_FIELDS.includes(col.key) ? (
+                    <ColumnFilterHeader
+                      key={col.key} label={col.label} values={uniqueValsByField[col.key]} selected={filters[col.key]}
+                      onChange={(s) => setFieldFilter(col.key, s)}
+                      onSort={(e) => toggleSort(col.key, e.shiftKey)} sortIndicator={sortIndicator(col.key)} sticky={col.sticky}
+                    />
+                  ) : (
+                    <th key={col.key} className={col.sticky ? 'sticky-col' : undefined} onClick={(e) => toggleSort(col.key, e.shiftKey)} style={{ cursor: 'pointer' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>{col.label} {sortIndicator(col.key)}</span>
+                    </th>
+                  )
+                ))}
                 {isAdmin && <th>Əməliyyat</th>}
               </tr>
             </thead>
-            <tbody>
-              {filtered.map((t) => (
-                <tr key={t.id}>
-                  <td>{t.plan_year || '—'}</td>
-                  <td>{t.dept}</td><td>{t.employee_name}</td><td>{t.position}</td><td>{t.skill}</td>
-                  <td>{t.comp_cat}</td><td>{t.vendor}</td>
-                  <td><TrainingStatusBadge status={t.status} /></td>
-                  <td><PriorityBadge priority={t.priority} /></td>
-                  <td>{t.start_date || t.start_raw}</td><td>{t.end_date || t.end_raw}</td>
-                  <td>{fmtMoney(t.budget)}</td>
-                  <td>{t.budget_status ? <BudgetStatusBadge status={t.budget_status} /> : '—'}</td>
-                  {isAdmin && (
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      <button onClick={() => openEdit(t)} className="btn btn-accent btn-sm" style={{ marginRight: 6 }}><Pencil size={12} strokeWidth={2.2} /> Redaktə</button>
-                      <button onClick={() => setDeleting(t)} className="btn btn-danger btn-sm"><Trash2 size={12} strokeWidth={2.2} /> Sil</button>
-                    </td>
-                  )}
+            {groupedRows ? groupedRows.map(([dept, rows]) => (
+              <tbody key={dept}>
+                <tr className="table-group-row">
+                  <td colSpan={visibleColumns.length + (isAdmin ? 1 : 0)}>
+                    <Folder size={13} strokeWidth={2} /> {dept} <span className="req-dept-count">{rows.length}</span>
+                  </td>
                 </tr>
-              ))}
-            </tbody>
+                {rows.map((t) => <TrackingRow key={t.id} t={t} visibleColumns={visibleColumns} isAdmin={isAdmin} onEdit={openEdit} onDelete={setDeleting} />)}
+              </tbody>
+            )) : (
+              <tbody>
+                {sorted.map((t) => <TrackingRow key={t.id} t={t} visibleColumns={visibleColumns} isAdmin={isAdmin} onEdit={openEdit} onDelete={setDeleting} />)}
+              </tbody>
+            )}
           </table>
         </div>
 

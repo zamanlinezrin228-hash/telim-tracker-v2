@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Filter } from 'lucide-react';
 
-export default function ColumnFilterHeader({ label, values, selected, onChange }) {
+export default function ColumnFilterHeader({ label, values, selected, onChange, onSort, sortIndicator, sticky }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [draft, setDraft] = useState(selected);
@@ -35,9 +35,11 @@ export default function ColumnFilterHeader({ label, values, selected, onChange }
   function cancel() { setOpen(false); }
 
   return (
-    <th style={{ position: 'relative' }}>
+    <th style={{ position: 'relative' }} className={sticky ? 'sticky-col' : undefined}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span>{label}</span>
+        <span onClick={(e) => onSort && onSort(e)} style={{ cursor: onSort ? 'pointer' : undefined, display: 'flex', alignItems: 'center', gap: 3 }}>
+          {label} {sortIndicator}
+        </span>
         <button
           onClick={() => setOpen((o) => !o)}
           style={{ display: 'flex', border: 'none', background: 'none', cursor: 'pointer', padding: '2px', color: isFiltered ? 'var(--blue)' : 'var(--ink-400)', lineHeight: 1 }}
