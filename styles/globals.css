@@ -7,11 +7,14 @@
 =================================================================== */
 
 :root {
+  color-scheme: light;
+
   --navy: #0b2545;
   --navy-700: #123a68;
   --blue: #2563eb;
   --blue-dark: #1d4ed8;
   --blue-light: #eff6ff;
+  --blue-border: #dbeafe;
   --teal: #0f766e;
   --green: #059669;
   --green-light: #f0fdf4;
@@ -36,6 +39,7 @@
 
   --bg: #f5f6f9;
   --surface: #ffffff;
+  --surface-raised: #ffffff;
   --border: #e6e9f0;
 
   --radius-sm: 8px;
@@ -51,6 +55,80 @@
   --sidebar-w: 248px;
 }
 
+/* ---------- dark theme ----------
+   Applies when the OS prefers dark AND the viewer hasn't explicitly
+   chosen light, or when the viewer has explicitly chosen dark via the
+   sidebar toggle (data-theme="dark"). Same token names throughout the
+   file, so every component that already reads var(--surface) etc.
+   adapts automatically — nothing else needs to change per-component. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { color-scheme: dark; }
+}
+:root[data-theme="dark"] { color-scheme: dark; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --blue-light: #17233e;
+    --blue-border: #1f3a63;
+    --green-light: #10241c;
+    --green-border: #164a34;
+    --amber-light: #2a2010;
+    --amber-border: #5a4415;
+    --red-light: #2a1315;
+    --red-border: #5c2226;
+    --purple-light: #211a3a;
+
+    --ink-900: #f1f4f9;
+    --ink-700: #c7cfdb;
+    --ink-500: #97a2b5;
+    --ink-400: #7d879b;
+    --ink-300: #4c5568;
+    --ink-200: #333d52;
+    --ink-100: #232b3d;
+    --ink-50: #1b2233;
+
+    --bg: #10141f;
+    --surface: #171d2b;
+    --surface-raised: #1e2536;
+    --border: #2a3247;
+
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+    --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55);
+  }
+}
+:root[data-theme="dark"] {
+  --blue-light: #17233e;
+  --blue-border: #1f3a63;
+  --green-light: #10241c;
+  --green-border: #164a34;
+  --amber-light: #2a2010;
+  --amber-border: #5a4415;
+  --red-light: #2a1315;
+  --red-border: #5c2226;
+  --purple-light: #211a3a;
+
+  --ink-900: #f1f4f9;
+  --ink-700: #c7cfdb;
+  --ink-500: #97a2b5;
+  --ink-400: #7d879b;
+  --ink-300: #4c5568;
+  --ink-200: #333d52;
+  --ink-100: #232b3d;
+  --ink-50: #1b2233;
+
+  --bg: #10141f;
+  --surface: #171d2b;
+  --surface-raised: #1e2536;
+  --border: #2a3247;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
 * { box-sizing: border-box; }
 
 html, body { height: 100%; }
@@ -61,6 +139,7 @@ body {
   font-family: var(--font-sans);
   color: var(--ink-900);
   -webkit-font-smoothing: antialiased;
+  transition: background-color .2s ease, color .2s ease;
 }
 
 a { color: inherit; }
@@ -84,7 +163,7 @@ textarea {
   border: 1px solid var(--ink-300);
   font-size: 13.5px;
   font-family: inherit;
-  background: #fff;
+  background: var(--surface);
   color: var(--ink-900);
   transition: border-color .15s ease, box-shadow .15s ease;
 }
@@ -98,6 +177,20 @@ textarea:focus {
 }
 
 select:disabled, input:disabled { background: var(--ink-50); color: var(--ink-400); cursor: not-allowed; }
+
+/* ---------- accessibility: keyboard focus ---------- */
+
+:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+select:focus-visible, input:focus-visible, textarea:focus-visible { outline: none; }
+.sidebar-link:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: -2px;
+}
+.btn:focus-visible { outline-offset: 2px; }
 
 .row-remove-btn {
   border: none; background: none; color: var(--ink-300); cursor: pointer;
@@ -149,7 +242,7 @@ select:disabled, input:disabled { background: var(--ink-50); color: var(--ink-40
 .btn-purple { background: var(--purple); color: #fff; }
 .btn-purple:hover:not(:disabled) { filter: brightness(1.1); }
 
-.btn-outline { background: #fff; border-color: var(--ink-300); color: var(--ink-700); }
+.btn-outline { background: var(--surface); border-color: var(--ink-300); color: var(--ink-700); }
 .btn-outline:hover:not(:disabled) { border-color: var(--ink-400); background: var(--ink-50); }
 
 .btn-ghost { background: transparent; border-color: transparent; color: var(--blue); padding-left: 4px; padding-right: 4px; }
@@ -239,6 +332,15 @@ select:disabled, input:disabled { background: var(--ink-50); color: var(--ink-40
 .sidebar-user-name { font-size: 13px; font-weight: 700; color: #fff; line-height: 1.3; }
 .sidebar-user-role { font-size: 11px; color: rgba(255,255,255,0.55); }
 
+.theme-toggle {
+  flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.75); display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: background .15s ease, color .15s ease, transform .15s ease;
+}
+.theme-toggle:hover { background: rgba(255,255,255,0.13); color: #fff; }
+.theme-toggle:active { transform: scale(.92); }
+
 @media (max-width: 860px) {
   .app-shell { flex-direction: column; }
   .sidebar {
@@ -301,6 +403,7 @@ select:disabled, input:disabled { background: var(--ink-50); color: var(--ink-40
   display: flex; align-items: center; justify-content: center;
   font-size: 15px; margin-bottom: 12px;
   transition: transform .18s ease;
+  background: color-mix(in srgb, var(--icon-color, var(--blue)) 15%, transparent);
 }
 .stat-card:hover .stat-icon { transform: scale(1.08); }
 .kpi-label, .stat-label { font-size: 12px; font-weight: 600; color: var(--ink-500); margin-bottom: 6px; letter-spacing: .1px; }
@@ -318,7 +421,8 @@ th {
   border-bottom: 1px solid var(--border);
 }
 td { padding: 10px 14px; border-top: 1px solid var(--ink-100); color: var(--ink-900); }
-tbody tr:hover td { background: var(--ink-50); }
+tbody tr:nth-child(even) td { background: var(--ink-50); }
+tbody tr:hover td { background: var(--ink-100); }
 
 /* ---------- badges ---------- */
 
@@ -497,6 +601,7 @@ tbody tr:hover td { background: var(--ink-50); }
   width: 46px; height: 46px; border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
   font-size: 21px; margin-bottom: 16px;
+  background: color-mix(in srgb, var(--icon-color, var(--blue)) 15%, transparent);
 }
 .home-card-title { font-size: 16.5px; font-weight: 800; color: var(--ink-900); margin-bottom: 6px; }
 .home-card-desc { font-size: 13px; color: var(--ink-500); line-height: 1.6; margin-bottom: 16px; flex: 1; }
@@ -553,12 +658,33 @@ tbody tr:hover td { background: var(--ink-50); }
   .toast-host { left: 16px; right: 16px; width: auto; bottom: 16px; }
 }
 
-/* ---------- loading ---------- */
+/* ---------- skeleton loading ---------- */
 
-.loading { display: flex; align-items: center; justify-content: center; height: 100vh; font-size: 14px; color: var(--ink-500); gap: 10px; }
-.spinner {
-  width: 16px; height: 16px; border-radius: 50%;
-  border: 2px solid var(--ink-200); border-top-color: var(--blue);
-  animation: spin .7s linear infinite;
+.skel {
+  position: relative; overflow: hidden; border-radius: var(--radius-md);
+  background: var(--ink-100);
 }
-@keyframes spin { to { transform: rotate(360deg); } }
+.skel::after {
+  content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--surface) 55%, transparent), transparent);
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+
+.skeleton-sidebar {
+  width: var(--sidebar-w); flex-shrink: 0; min-height: 100vh; background: var(--navy); padding: 18px 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.skel-brand { height: 30px; width: 70%; margin-bottom: 14px; background: rgba(255,255,255,0.08); }
+.skel-brand::after { background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent); }
+.skel-nav-item { height: 38px; border-radius: 9px; background: rgba(255,255,255,0.06); }
+.skel-nav-item::after { background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent); }
+.skel-header { height: 84px; margin: 0 0 0; border-radius: 0; }
+.skel-stat-card { height: 98px; }
+.skel-block { height: 260px; margin-top: 20px; }
+
+@media (max-width: 860px) {
+  .skeleton-sidebar { width: 100%; min-height: auto; flex-direction: row; align-items: center; padding: 12px 16px; }
+  .skel-brand { margin-bottom: 0; height: 24px; width: 140px; }
+  .skel-nav-item { display: none; }
+}

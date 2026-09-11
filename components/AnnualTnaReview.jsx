@@ -49,10 +49,10 @@ export default function AnnualTnaReview({ profile, requests, planYear, onDataCha
   const rejectedCount = decided.filter((r) => r.status === 'Rejected').length;
 
   const statCards = [
-    { label: 'Analiz gözləyir', value: pendingCount, Icon: Clock, color: '#d97706', bg: '#fffbeb' },
-    { label: 'Baxılır', value: inReviewCount, Icon: Search, color: '#2563eb', bg: '#eff6ff' },
-    { label: 'Təsdiqlənib', value: approvedCount, Icon: CheckCircle2, color: '#059669', bg: '#f0fdf4' },
-    { label: 'Rədd edilib', value: rejectedCount, Icon: XCircle, color: '#dc2626', bg: '#fef2f2' },
+    { label: 'Analiz gözləyir', value: pendingCount, Icon: Clock, color: '#d97706' },
+    { label: 'Baxılır', value: inReviewCount, Icon: Search, color: '#2563eb' },
+    { label: 'Təsdiqlənib', value: approvedCount, Icon: CheckCircle2, color: '#059669' },
+    { label: 'Rədd edilib', value: rejectedCount, Icon: XCircle, color: '#dc2626' },
   ];
 
   const activeDepts = Object.keys(grouped).sort();
@@ -90,7 +90,7 @@ export default function AnnualTnaReview({ profile, requests, planYear, onDataCha
       <div className="kpi-grid">
         {statCards.map((s, i) => (
           <div className="stat-card stagger-item" key={s.label} style={{ '--i': i }}>
-            <div className="stat-icon" style={{ background: s.bg, color: s.color }}><s.Icon size={16} strokeWidth={2.2} /></div>
+            <div className="stat-icon" style={{ '--icon-color': s.color, color: s.color }}><s.Icon size={16} strokeWidth={2.2} /></div>
             <div className="stat-label">{s.label}</div>
             <div className="stat-value" style={{ color: s.color }}><CountUp value={s.value} /></div>
           </div>

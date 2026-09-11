@@ -51,16 +51,16 @@ export default function RequestsView({ profile, team, requests, planYear, onData
 
   const statCards = isReviewer
     ? [
-        { label: 'Analiz gözləyir', value: pendingCount, Icon: Clock, color: '#d97706', bg: '#fffbeb' },
-        { label: 'Baxılır', value: reviewInReviewCount, Icon: Search, color: '#2563eb', bg: '#eff6ff' },
-        { label: 'Təsdiqlənib', value: reviewApprovedCount, Icon: CheckCircle2, color: '#059669', bg: '#f0fdf4' },
-        { label: 'Rədd edilib', value: reviewRejectedCount, Icon: XCircle, color: '#dc2626', bg: '#fef2f2' },
+        { label: 'Analiz gözləyir', value: pendingCount, Icon: Clock, color: '#d97706' },
+        { label: 'Baxılır', value: reviewInReviewCount, Icon: Search, color: '#2563eb' },
+        { label: 'Təsdiqlənib', value: reviewApprovedCount, Icon: CheckCircle2, color: '#059669' },
+        { label: 'Rədd edilib', value: reviewRejectedCount, Icon: XCircle, color: '#dc2626' },
       ]
     : [
-        { label: 'Mənim sorğularım', value: myRequests.length, Icon: FileText, color: '#2563eb', bg: '#eff6ff' },
-        { label: 'Gözləyir', value: myPendingCount, Icon: Clock, color: '#d97706', bg: '#fffbeb' },
-        { label: 'Təsdiqlənib', value: myApprovedCount, Icon: CheckCircle2, color: '#059669', bg: '#f0fdf4' },
-        { label: 'Rədd edilib', value: myRejectedCount, Icon: XCircle, color: '#dc2626', bg: '#fef2f2' },
+        { label: 'Mənim sorğularım', value: myRequests.length, Icon: FileText, color: '#2563eb' },
+        { label: 'Gözləyir', value: myPendingCount, Icon: Clock, color: '#d97706' },
+        { label: 'Təsdiqlənib', value: myApprovedCount, Icon: CheckCircle2, color: '#059669' },
+        { label: 'Rədd edilib', value: myRejectedCount, Icon: XCircle, color: '#dc2626' },
       ];
 
   async function refresh() {
@@ -134,7 +134,7 @@ export default function RequestsView({ profile, team, requests, planYear, onData
         <div className="kpi-grid">
           {statCards.map((s, i) => (
             <div className="stat-card stagger-item" key={s.label} style={{ '--i': i }}>
-              <div className="stat-icon" style={{ background: s.bg, color: s.color }}><s.Icon size={16} strokeWidth={2.2} /></div>
+              <div className="stat-icon" style={{ '--icon-color': s.color, color: s.color }}><s.Icon size={16} strokeWidth={2.2} /></div>
               <div className="stat-label">{s.label}</div>
               <div className="stat-value" style={{ color: s.color }}><CountUp value={s.value} /></div>
             </div>

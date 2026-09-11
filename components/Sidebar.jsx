@@ -1,5 +1,6 @@
 import { GraduationCap, Home, LayoutDashboard, ClipboardList, FileText, CalendarDays, LogOut } from 'lucide-react';
 import { sb } from '../lib/supabase';
+import ThemeToggle from './ThemeToggle';
 
 const NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard },
@@ -60,10 +61,11 @@ export default function Sidebar({ view, setView, profile, showAnnualTna, badges 
       <div className="sidebar-footer">
         <div className="sidebar-user">
           <div className="sidebar-avatar">{initials(profile?.full_name_az)}</div>
-          <div>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div className="sidebar-user-name">{profile?.full_name_az || ''}</div>
             <div className="sidebar-user-role">{ROLE_LABELS[profile?.role] || profile?.role || ''}</div>
           </div>
+          <ThemeToggle />
         </div>
         <button className="btn btn-outline btn-sm btn-block" onClick={handleLogout}>
           <LogOut size={14} strokeWidth={2} /> Çıxış

@@ -99,7 +99,23 @@ export default function Home() {
     return (
       <>
         <Head><title>Təlim Tracker</title></Head>
-        <div className="loading"><span className="spinner" /> Yüklənir...</div>
+        <div className="app-shell">
+          <div className="skeleton-sidebar">
+            <div className="skel skel-brand" />
+            <div className="skel skel-nav-item" />
+            <div className="skel skel-nav-item" />
+            <div className="skel skel-nav-item" />
+          </div>
+          <div className="app-main">
+            <div className="skel skel-header" />
+            <div className="page">
+              <div className="kpi-grid">
+                {[0, 1, 2, 3].map((i) => <div className="skel skel-stat-card" key={i} />)}
+              </div>
+              <div className="skel skel-block" />
+            </div>
+          </div>
+        </div>
       </>
     );
   }
