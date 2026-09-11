@@ -117,7 +117,7 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
                 style={{
                   flex: 1, padding: '10px 12px', borderRadius: 10, cursor: 'pointer', fontSize: 13.5, fontWeight: 600,
                   border: forWhom === 'self' ? '2px solid var(--navy)' : '1px solid var(--ink-200)',
-                  background: forWhom === 'self' ? 'var(--blue-light)' : '#fff',
+                  background: forWhom === 'self' ? 'var(--blue-light)' : 'var(--surface)',
                 }}
               >
                 Özüm üçün
@@ -127,7 +127,7 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
                 style={{
                   flex: 1, padding: '10px 12px', borderRadius: 10, cursor: 'pointer', fontSize: 13.5, fontWeight: 600,
                   border: forWhom === 'team' ? '2px solid var(--navy)' : '1px solid var(--ink-200)',
-                  background: forWhom === 'team' ? 'var(--blue-light)' : '#fff',
+                  background: forWhom === 'team' ? 'var(--blue-light)' : 'var(--surface)',
                 }}
               >
                 Komandam üçün

@@ -10,7 +10,6 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
       desc: 'Ümumi mənzərə — təlim sayı, büdcə, status və departament üzrə analiz.',
       Icon: LayoutDashboard,
       accent: '#2563eb',
-      bg: '#eff6ff',
       linkLabel: 'Analizə bax',
     },
     {
@@ -19,7 +18,6 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
       desc: 'Bütün təlimlərin təfərrüatlı siyahısı — filtrlə, axtar, Excel-ə ixrac et.',
       Icon: ClipboardList,
       accent: '#059669',
-      bg: '#f0fdf4',
       linkLabel: 'Cədvələ keç',
     },
     {
@@ -30,7 +28,6 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
         : 'Öz təlim ehtiyacın üçün sorğu göndər və statusunu izlə.',
       Icon: FileText,
       accent: '#d97706',
-      bg: '#fffbeb',
       linkLabel: 'Sorğu göndər',
     },
   ];
@@ -46,7 +43,6 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
         : 'Pəncərə hazırda bağlıdır (yalnız L&D test məqsədilə görür).',
       Icon: CalendarDays,
       accent: '#dc2626',
-      bg: '#fef2f2',
       linkLabel: 'Formu doldur',
     });
   }
@@ -62,7 +58,7 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 18, marginTop: 12 }}>
           {cards.map((c, i) => (
             <button key={c.key} className="home-card stagger-item" style={{ '--i': i }} onClick={() => setView(c.key)}>
-              <div className="home-card-icon" style={{ background: c.bg, color: c.accent }}>
+              <div className="home-card-icon" style={{ '--icon-color': c.accent, color: c.accent }}>
                 <c.Icon size={22} strokeWidth={2} />
               </div>
               <div className="home-card-title">{c.title}</div>

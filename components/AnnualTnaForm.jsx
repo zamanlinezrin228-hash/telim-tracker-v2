@@ -14,7 +14,7 @@ const inputStyle = {
   width: '100%', fontSize: 13, border: '1px solid transparent', background: 'transparent',
   padding: '6px 8px', borderRadius: 6, transition: 'border-color 0.15s, background 0.15s',
 };
-function focusIn(e) { e.target.style.border = '1px solid var(--blue)'; e.target.style.background = '#fff'; }
+function focusIn(e) { e.target.style.border = '1px solid var(--blue)'; e.target.style.background = 'var(--surface)'; }
 function focusOut(e) { e.target.style.border = '1px solid transparent'; e.target.style.background = 'transparent'; }
 
 function emptyRow(defaultEmployeeId = '') {
@@ -131,7 +131,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
             </thead>
             <tbody>
               {rows.map((r, idx) => (
-                <tr key={idx} style={{ background: idx % 2 === 0 ? '#fff' : 'var(--ink-50)' }}>
+                <tr key={idx} style={{ background: idx % 2 === 0 ? 'var(--surface)' : 'var(--ink-50)' }}>
                   <td style={{ textAlign: 'center', color: 'var(--ink-300)', fontSize: 12, fontWeight: 600, borderTop: '1px solid var(--ink-100)' }}>{idx + 1}</td>
                   <td style={{ minWidth: 170, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
                     <select value={r.employeeId} onChange={(e) => updateRow(idx, 'employeeId', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>

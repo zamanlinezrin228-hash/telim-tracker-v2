@@ -166,8 +166,8 @@ export default function AnalysisView({ trainings }) {
                 onChange={(e) => setSlicers((s) => ({ ...s, [f]: e.target.value }))}
                 style={{
                   minWidth: 150, fontSize: 12.5, borderRadius: 999, padding: '7px 14px',
-                  border: active ? '1.5px solid #2563eb' : '1px solid #cbd5e1',
-                  background: active ? '#eff6ff' : '#fff', color: active ? '#1d4ed8' : '#1e293b', fontWeight: active ? 600 : 400,
+                  border: active ? '1.5px solid var(--blue)' : '1px solid var(--ink-300)',
+                  background: active ? 'var(--blue-light)' : 'var(--surface)', color: active ? 'var(--blue-dark)' : 'var(--ink-900)', fontWeight: active ? 600 : 400,
                 }}
               >
                 <option value="all">{FIELD_LABELS[f]}: Hamısı</option>
@@ -207,7 +207,7 @@ export default function AnalysisView({ trainings }) {
                 <td style={{ fontWeight: 700 }}>{fmt(rowTotals[r] || 0)}</td>
               </tr>
             ))}
-            <tr style={{ background: '#f8fafc' }}>
+            <tr style={{ background: 'var(--ink-50)' }}>
               <td style={{ fontWeight: 800 }}>Cəmi</td>
               {colKeys.map((c) => <td key={c} style={{ fontWeight: 700 }}>{fmt(colTotals[c] || 0)}</td>)}
               <td style={{ fontWeight: 800 }}>{fmt(grandTotal)}</td>

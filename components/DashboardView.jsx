@@ -7,14 +7,14 @@ import CountUp from "./CountUp";
 const pct = (n) => `${n}%`;
 
 const STATS = [
-  { key: 'total', label: 'Ümumi Təlim', Icon: BookOpen, color: '#2563eb', bg: '#eff6ff' },
-  { key: 'totalBudget', label: 'Ümumi Büdcə', Icon: Wallet, color: '#0f766e', bg: '#f0fdfa', format: fmtMoney },
-  { key: 'totalHours', label: 'Learning Hours', Icon: Timer, color: '#7c3aed', bg: '#f5f3ff' },
-  { key: 'avgBudget', label: 'Ortalama Büdcə', Icon: TrendingUp, color: '#ea580c', bg: '#fff7ed', format: fmtMoney },
-  { key: 'completionPct', label: 'Tamamlanma', Icon: CheckCircle2, color: '#059669', bg: '#f0fdf4', format: pct },
-  { key: 'inProgress', label: 'Davam Edən', Icon: RefreshCw, color: '#2563eb', bg: '#eff6ff' },
-  { key: 'budgetedCount', label: 'Büdcələnmiş', Icon: CircleCheck, color: '#059669', bg: '#f0fdf4' },
-  { key: 'outOfBudgetCount', label: 'Büdcədən Kənar', Icon: CircleX, color: '#dc2626', bg: '#fef2f2' },
+  { key: 'total', label: 'Ümumi Təlim', Icon: BookOpen, color: '#2563eb' },
+  { key: 'totalBudget', label: 'Ümumi Büdcə', Icon: Wallet, color: '#0f766e', format: fmtMoney },
+  { key: 'totalHours', label: 'Learning Hours', Icon: Timer, color: '#7c3aed' },
+  { key: 'avgBudget', label: 'Ortalama Büdcə', Icon: TrendingUp, color: '#ea580c', format: fmtMoney },
+  { key: 'completionPct', label: 'Tamamlanma', Icon: CheckCircle2, color: '#059669', format: pct },
+  { key: 'inProgress', label: 'Davam Edən', Icon: RefreshCw, color: '#2563eb' },
+  { key: 'budgetedCount', label: 'Büdcələnmiş', Icon: CircleCheck, color: '#059669' },
+  { key: 'outOfBudgetCount', label: 'Büdcədən Kənar', Icon: CircleX, color: '#dc2626' },
 ];
 
 export default function DashboardView({ trainings }) {
@@ -86,7 +86,7 @@ export default function DashboardView({ trainings }) {
         <div className="kpi-grid">
           {STATS.map((s, i) => (
             <div className="stat-card stagger-item" key={s.key} style={{ '--i': i }}>
-              <div className="stat-icon" style={{ background: s.bg, color: s.color }}><s.Icon size={16} strokeWidth={2.2} /></div>
+              <div className="stat-icon" style={{ '--icon-color': s.color, color: s.color }}><s.Icon size={16} strokeWidth={2.2} /></div>
               <div className="stat-label">{s.label}</div>
               <div className="stat-value" style={{ color: s.color }}>
                 <CountUp value={statRaw[s.key]} format={s.format} />
