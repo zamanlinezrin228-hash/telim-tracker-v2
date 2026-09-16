@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Plus, Folder, Clock, Search, CheckCircle2, XCircle, FileText, CheckCheck, ListPlus } from 'lucide-react';
 import { sb } from '../lib/supabase';
-import { reqStatusMeta } from '../lib/helpers';
+import { reqStatusMeta, groupByEmployee } from '../lib/helpers';
 import { showToast } from '../lib/toast';
 import { ReqStatusBadge, PriorityBadge } from './Badges';
 import EmptyState from './EmptyState';
@@ -197,21 +197,25 @@ export default function RequestsView({ profile, team, requests, planYear, onData
             <div className="section-head"><div className="section-title">Sahəmin Qərarları ({scopeHistory.length})</div></div>
             {scopeHistory.length ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14, marginBottom: 24 }}>
-                {scopeHistory.map((r, i) => {
-                  const sm = reqStatusMeta(r.status);
-                  return (
-                    <div key={r.id} className="card card-hover stagger-item" style={{ padding: 0, overflow: 'hidden', '--i': i }}>
-                      <div style={{ height: 6, background: sm.color }} />
-                      <div style={{ padding: 14 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{r.employee_name}</div>
-                        <div style={{ fontSize: 13, color: 'var(--ink-700)', marginBottom: 10 }}>{r.training_title}</div>
-                        <ReqStatusBadge status={r.status} />
-                        {r.manager_note && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginTop: 8 }}><b>Manager:</b> {r.manager_note}</div>}
-                        {r.reviewer_note && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginTop: 4 }}><b>L&D:</b> {r.reviewer_note}</div>}
-                      </div>
-                    </div>
-                  );
-                })}
+                {groupByEmployee(scopeHistory).map(([employeeName, items], i) => (
+                  <div key={employeeName} className="card card-hover stagger-item" style={{ padding: 0, overflow: 'hidden', '--i': i }}>
+                    <div style={{ padding: '12px 14px 4px', fontWeight: 700, fontSize: 14 }}>{employeeName}</div>
+                    {items.map((r) => {
+                      const sm = reqStatusMeta(r.status);
+                      return (
+                        <div key={r.id} style={{ borderTop: '1px solid var(--ink-100)' }}>
+                          <div style={{ height: 4, background: sm.color }} />
+                          <div style={{ padding: 12 }}>
+                            <div style={{ fontSize: 13, color: 'var(--ink-700)', marginBottom: 8 }}>{r.training_title}</div>
+                            <ReqStatusBadge status={r.status} />
+                            {r.manager_note && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginTop: 8 }}><b>Manager:</b> {r.manager_note}</div>}
+                            {r.reviewer_note && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginTop: 4 }}><b>L&D:</b> {r.reviewer_note}</div>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="card" style={{ marginBottom: 24 }}><EmptyState>Hələ qərar yoxdur</EmptyState></div>
@@ -299,33 +303,37 @@ export default function RequestsView({ profile, team, requests, planYear, onData
               <>
                 <div className="section-head"><div className="section-title">Qərarlar tarixçəsi ({reviewerDecided.length})</div></div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14, marginBottom: 24 }}>
-                  {reviewerDecided.map((r, i) => {
-                    const sm = reqStatusMeta(r.status);
-                    return (
-                      <div key={r.id} className="card card-hover stagger-item" style={{ padding: 0, overflow: 'hidden', '--i': i }}>
-                        <div style={{ height: 6, background: sm.color }} />
-                        <div style={{ padding: 14 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                            <div>
-                              <div style={{ fontWeight: 700, fontSize: 14 }}>{r.employee_name}</div>
-                              <div style={{ fontSize: 12, color: 'var(--ink-400)' }}>{r.dept}</div>
-                            </div>
-                            <ReqStatusBadge status={r.status} />
-                          </div>
-                          <div style={{ fontSize: 13, color: 'var(--ink-700)', marginBottom: 8 }}>{r.training_title}</div>
-                          {r.reviewer_note && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginBottom: 10 }}><b>L&D qeyd:</b> {r.reviewer_note}</div>}
-                          {r.status === 'Approved' && !r.linked_training_id && (
-                            <button onClick={() => setAddToPlanRequest(r)} className="btn btn-purple btn-sm btn-block"><ListPlus size={13} strokeWidth={2.2} /> Plana Əlavə Et</button>
-                          )}
-                          {r.linked_training_id && (
-                            <div style={{ fontSize: 12, color: 'var(--green)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <CheckCircle2 size={13} strokeWidth={2.4} /> Planda var
-                            </div>
-                          )}
-                        </div>
+                  {groupByEmployee(reviewerDecided).map(([employeeName, items], i) => (
+                    <div key={employeeName} className="card card-hover stagger-item" style={{ padding: 0, overflow: 'hidden', '--i': i }}>
+                      <div style={{ padding: '12px 14px 4px' }}>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>{employeeName}</div>
+                        <div style={{ fontSize: 12, color: 'var(--ink-400)' }}>{items[0].dept}</div>
                       </div>
-                    );
-                  })}
+                      {items.map((r) => {
+                        const sm = reqStatusMeta(r.status);
+                        return (
+                          <div key={r.id} style={{ borderTop: '1px solid var(--ink-100)' }}>
+                            <div style={{ height: 4, background: sm.color }} />
+                            <div style={{ padding: 12 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
+                                <div style={{ fontSize: 13, color: 'var(--ink-700)' }}>{r.training_title}</div>
+                                <ReqStatusBadge status={r.status} />
+                              </div>
+                              {r.reviewer_note && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginBottom: 10 }}><b>L&D qeyd:</b> {r.reviewer_note}</div>}
+                              {r.status === 'Approved' && !r.linked_training_id && (
+                                <button onClick={() => setAddToPlanRequest(r)} className="btn btn-purple btn-sm btn-block"><ListPlus size={13} strokeWidth={2.2} /> Plana Əlavə Et</button>
+                              )}
+                              {r.linked_training_id && (
+                                <div style={{ fontSize: 12, color: 'var(--green)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <CheckCircle2 size={13} strokeWidth={2.4} /> Planda var
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
               </>
             )}
@@ -342,7 +350,7 @@ export default function RequestsView({ profile, team, requests, planYear, onData
         {noteAction && (
           <NoteModal
             title={
-              noteAction.type === 'manager-approve' ? 'Təsdiq qeydiniz (əsaslandırma)' :
+              noteAction.type === 'manager-approve' ? 'Təsdiq qeydiniz (əsaslandirma)' :
               noteAction.type === 'manager-reject' ? 'Rədd səbəbi' :
               noteAction.type === 'ld-approve' ? 'Analiz qeydiniz (vəzifə uyğunluğu, büdcə və s.)' :
               'Rədd səbəbi'

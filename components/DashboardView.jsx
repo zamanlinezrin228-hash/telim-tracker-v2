@@ -1,10 +1,12 @@
 import { useState, useMemo } from 'react';
+import ExcelJS from 'exceljs';
 import {
   BookOpen, Users, CheckCircle2, RefreshCw, Timer, Wallet, TrendingUp, Percent,
   XCircle, AlertTriangle, PauseCircle, CalendarClock, Building2, Trophy, Target,
-  Sparkles, ThumbsUp, ShieldAlert, Award, GraduationCap,
+  Sparkles, ThumbsUp, ShieldAlert, Award, GraduationCap, Download,
 } from 'lucide-react';
 import { fmtMoney, statusMeta } from '../lib/helpers';
+import { styleHeaderRow, downloadWorkbook } from '../lib/excelExport';
 import {
   computeKPIs, departmentBreakdown, monthlyTrend, topBy, topLearners,
   completionFunnel, generateInsights,
@@ -12,6 +14,25 @@ import {
 import AnalysisView from './AnalysisView';
 import CountUp from './CountUp';
 import EmptyState from './EmptyState';
+
+const KPI_EXPORT_ROWS = [
+  ['Ümumi Təlim', (k) => k.total],
+  ['İştirakçılar', (k) => k.participants],
+  ['Tamamlanma Faizi', (k) => `${k.completionRate}%`],
+  ['Davam Edən', (k) => k.inProgress],
+  ['Ümumi Təlim Saatı', (k) => k.totalHours],
+  ['Ümumi Büdcə', (k) => fmtMoney(k.totalBudget)],
+  ['Orta Büdcə / Təlim', (k) => fmtMoney(k.avgBudget)],
+  ['Saat Başına Xərc', (k) => fmtMoney(k.costPerHour)],
+  ['Büdcələnmiş Pay', (k) => `${k.budgetedShare}%`],
+  ['Büdcədən Kənar', (k) => k.outOfBudgetCount],
+  ['Fəal Nisbət', (k) => `${k.onTrackRate}%`],
+  ['Ləğv Nisbəti', (k) => `${k.cancellationRate}%`],
+  ['Risk Altında', (k) => k.atRiskCount],
+  ['Təxirə Salınmış', (k) => k.postponed],
+  ['Planlaşdırılmış', (k) => k.scheduled],
+  ['Aktiv Departament', (k) => k.departments],
+];
 
 const MONTH_LABELS = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'İyn', 'İyl', 'Avq', 'Sen', 'Okt', 'Noy', 'Dek'];
 
@@ -119,6 +140,41 @@ export default function DashboardView({ trainings }) {
   }, [filtered]);
   const maxStatus = Math.max(...statusRows.map((r) => r[1]), 1);
 
+  async function exportDashboard() {
+    const wb = new ExcelJS.Workbook();
+
+    const kpiSheet = wb.addWorksheet('KPI-lər');
+    kpiSheet.columns = [
+      { header: 'Göstərici', key: 'label', width: 30 },
+      { header: 'Dəyər', key: 'value', width: 20 },
+    ];
+    KPI_EXPORT_ROWS.forEach(([label, get]) => kpiSheet.addRow({ label, value: get(kpis) }));
+    if (topDept) kpiSheet.addRow({ label: 'Ən Fəal Departament', value: `${topDept.dept} (${topDept.total} təlim)` });
+    if (bestCompletionDept) kpiSheet.addRow({ label: 'Ən Yüksək Tamamlanma', value: `${bestCompletionDept.dept} (${bestCompletionDept.completionRate}%)` });
+    kpiSheet.addRow({ label: 'Orta Təlim / Departament', value: avgPerDept });
+    styleHeaderRow(kpiSheet);
+
+    const deptSheet = wb.addWorksheet('Departament Reytinqi');
+    deptSheet.columns = [
+      { header: 'Departament', key: 'dept', width: 32 },
+      { header: 'Təlim sayı', key: 'total', width: 12 },
+      { header: 'Tamamlanıb', key: 'completed', width: 12 },
+      { header: 'Ləğv edilib', key: 'canceled', width: 12 },
+      { header: 'Tamamlanma Faizi', key: 'rate', width: 16 },
+      { header: 'Büdcə', key: 'budget', width: 16 },
+      { header: 'Saat', key: 'hours', width: 12 },
+    ];
+    depts.forEach((d) => deptSheet.addRow({
+      dept: d.dept, total: d.total, completed: d.completed, canceled: d.canceled,
+      rate: `${d.completionRate}%`, budget: d.budget, hours: d.hours,
+    }));
+    deptSheet.getColumn('budget').numFmt = '#,##0 "₼"';
+    styleHeaderRow(deptSheet);
+
+    const tarix = new Date().toISOString().slice(0, 10);
+    await downloadWorkbook(wb, `dashboard-hesabati-${tarix}.xlsx`);
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -127,12 +183,17 @@ export default function DashboardView({ trainings }) {
             <h1>Executive Dashboard</h1>
             <p>Şirkətinizin təlim ehtiyacları üzrə icmal və analitika — BI-səviyyəli hesabat mərkəzi.</p>
           </div>
-          <div>
-            <div className="filter-label">İl</div>
-            <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} style={{ minWidth: 140 }}>
-              <option value="all">Bütün illər</option>
-              {years.map((y) => <option key={y} value={y}>{y}</option>)}
-            </select>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+            <div>
+              <div className="filter-label">İl</div>
+              <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} style={{ minWidth: 140 }}>
+                <option value="all">Bütün illər</option>
+                {years.map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+            <button onClick={exportDashboard} className="btn btn-success" style={{ height: 40 }}>
+              <Download size={14} strokeWidth={2.2} /> Excel-ə ixrac et
+            </button>
           </div>
         </div>
       </div>
