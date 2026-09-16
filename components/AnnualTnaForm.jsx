@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
+import { CheckCircle2, Plus, X, Send, Lightbulb } from 'lucide-react';
 import { sb } from '../lib/supabase';
 
 const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical'];
@@ -13,43 +14,83 @@ const inputStyle = {
   width: '100%', fontSize: 13, border: '1px solid transparent', background: 'transparent',
   padding: '6px 8px', borderRadius: 6, transition: 'border-color 0.15s, background 0.15s',
 };
-function focusIn(e) { e.target.style.border = '1px solid #2563eb'; e.target.style.background = '#fff'; }
+function focusIn(e) { e.target.style.border = '1px solid var(--blue)'; e.target.style.background = 'var(--surface)'; }
 function focusOut(e) { e.target.style.border = '1px solid transparent'; e.target.style.background = 'transparent'; }
 
-function normalizeDept(s) {
-  if (!s) return '';
-  return s.toLowerCase()
-    .replace('ə', 'e').replace('ı', 'i').replace('ş', 's').replace('ç', 'c').replace('ö', 'o').replace('ü', 'u').replace('ğ', 'g')
-    .replace(/departamenti|şöbəsi|sobesi|departament/gi, '')
-    .trim();
-}
-
-function emptyRow() {
+function emptyRow(defaultEmployeeId = '') {
   return {
-    employeeId: '', manualName: '', position: '', skill: '', needReason: '',
+    employeeId: defaultEmployeeId, manualName: '', position: '', skill: '', needReason: '',
     priority: 'Medium', importance: '', currentLevel: '', requiredLevel: '',
     start: '', end: '',
   };
 }
 
+// Department names in `profiles`/`trainings` (e.g. "Hüquq Şöbəsi") are full
+// Azerbaijani names that contain the competency library's short dept_root
+// (e.g. "hüquq") as a substring — hence the bidirectional includes() check.
+// A few real departments don't textually contain their root at all (e.g. the
+// HSE department is recorded as the abbreviation "SƏTƏM"), so those get a
+// manual synonym fallback instead of a fuzzier text match.
+const DEPT_SYNONYMS = [
+  { pattern: 'sətəm', root: 'hse' },
+];
+
+function normalizeDept(s) {
+  return (s || '').toLocaleLowerCase('az').trim();
+}
+
+// Library rows carry their outline numbering in the text (e.g. "1.1 Təhlükəsizlik
+// Strategiyası"); strip it so suggestions read as plain skill/competency names.
+function stripNumbering(s) {
+  return (s || '').replace(/^[\d]+(\.[\d]+)*\s*/, '').trim();
+}
+
+function suggestionsForDept(library, deptName) {
+  const d = normalizeDept(deptName);
+  if (!d || !library.length) return [];
+
+  const matchedRoots = new Set();
+  library.forEach((row) => {
+    const r = normalizeDept(row.dept_root);
+    if (r && (d.includes(r) || r.includes(d))) matchedRoots.add(row.dept_root);
+  });
+  if (matchedRoots.size === 0) {
+    DEPT_SYNONYMS.forEach((syn) => { if (d.includes(syn.pattern)) matchedRoots.add(syn.root); });
+  }
+  if (matchedRoots.size === 0) return [];
+
+  const set = new Set();
+  library.forEach((row) => {
+    if (!matchedRoots.has(row.dept_root)) return;
+    if (row.competency) set.add(stripNumbering(row.competency));
+    if (row.sub_competency) set.add(stripNumbering(row.sub_competency));
+  });
+  return [...set].sort();
+}
+
 export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) {
-  const [rows, setRows] = useState([emptyRow()]);
+  const hasTeam = team && team.length > 0;
+  const self = { id: profile.id, full_name_az: profile.full_name_az || '', dept: profile.dept, sube: profile.sube, position: profile.position };
+  const selectableEmployees = [self, ...team];
+
+  const [rows, setRows] = useState([{ ...emptyRow(profile.id), position: profile.position || '' }]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
   const [library, setLibrary] = useState([]);
 
   useEffect(() => {
-    sb.from('competency_library').select('dept_root, sub_competency').then(({ data }) => {
-      if (data) setLibrary(data);
+    sb.from('competency_library').select('dept_root, category, competency, sub_competency').then(({ data }) => {
+      setLibrary(data || []);
     });
   }, []);
 
-  function suggestionsForDept(dept) {
-    if (!dept || library.length === 0) return [];
-    const key = normalizeDept(dept);
-    const matches = library.filter((l) => key.includes(normalizeDept(l.dept_root)) || normalizeDept(l.dept_root).includes(key.slice(0, 5)));
-    return [...new Set(matches.map((m) => m.sub_competency))].slice(0, 60);
+  function deptForRow(r) {
+    if (r.employeeId) {
+      const m = selectableEmployees.find((t) => t.id === r.employeeId);
+      if (m?.dept) return m.dept;
+    }
+    return profile.dept;
   }
 
   function updateRow(idx, field, value) {
@@ -57,7 +98,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
       const next = [...prev];
       next[idx] = { ...next[idx], [field]: value };
       if (field === 'employeeId' && value) {
-        const m = team.find((t) => t.id === value);
+        const m = selectableEmployees.find((t) => t.id === value);
         if (m) next[idx].position = m.position || '';
       }
       return next;
@@ -81,7 +122,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
     }
 
     const payloads = filled.map((r) => {
-      const member = r.employeeId ? team.find((t) => t.id === r.employeeId) : null;
+      const member = r.employeeId ? selectableEmployees.find((t) => t.id === r.employeeId) : null;
       return {
         requested_by: profile.id,
         employee_name: member ? (member.full_name_az || member.id) : r.manualName.trim(),
@@ -113,12 +154,12 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
     return (
       <div className="page">
         <div className="card" style={{ textAlign: 'center', padding: 40 }}>
-          <div style={{ fontSize: 32, marginBottom: 10 }}>✅</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10, color: 'var(--green)' }}><CheckCircle2 size={38} strokeWidth={1.7} /></div>
           <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Göndərildi</div>
-          <div style={{ fontSize: 13.5, color: '#64748b', marginBottom: 20 }}>
-            {planYear}-ci il üçün komandanızın təlim ehtiyacları L&D-yə göndərildi.
+          <div style={{ fontSize: 13.5, color: 'var(--ink-500)', marginBottom: 20 }}>
+            {planYear}-ci il üçün təlim ehtiyaclarınız L&D-yə göndərildi.
           </div>
-          <button onClick={() => { setDone(false); setRows([emptyRow()]); onSubmitted && onSubmitted(); }} style={{ padding: '10px 20px', borderRadius: 8, border: 'none', background: '#0b2545', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={() => { setDone(false); setRows([{ ...emptyRow(profile.id), position: profile.position || '' }]); onSubmitted && onSubmitted(); }} className="btn btn-primary">
             Bağla
           </button>
         </div>
@@ -129,91 +170,94 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
   return (
     <div className="page">
       <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>İllik TNA — {planYear}</div>
-      <div style={{ fontSize: 13, color: '#64748b', marginBottom: 4 }}>
-        Komandanızın {planYear}-ci il üçün təlim ehtiyaclarını cədvəldə doldurun. Əməkdaşı siyahıdan seçə, ya da əl ilə yaza bilərsiniz.
+      <div className="section-sub" style={{ marginBottom: 10 }}>
+        {hasTeam
+          ? `${planYear}-ci il üçün öz təlim ehtiyacınızı və ya komandanızın ehtiyaclarını cədvəldə doldurun. Əməkdaşı siyahıdan seçə, ya da əl ilə yaza bilərsiniz.`
+          : `${planYear}-ci il üçün öz təlim ehtiyacınızı cədvəldə doldurun.`}
       </div>
-      <div style={{ fontSize: 12.5, color: '#2563eb', marginBottom: 18 }}>
-        💡 &quot;İnkişaf istiqaməti&quot; sahəsində əməkdaş seçdikdən sonra, onun departamentinə uyğun səriştə təklifləri avtomatik görünəcək (istəyə bağlı — özünüz də tamamilə fərqli bir şey yaza bilərsiniz).
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 12.5, color: 'var(--blue)', marginBottom: 18 }}>
+        <Lightbulb size={15} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
+        <span>
+          &quot;İnkişaf istiqaməti&quot; sahəsində əməkdaş seçdikdən sonra, onun departamentinə uyğun səriştə təklifləri avtomatik görünəcək
+          (istəyə bağlı — özünüz də tamamilə fərqli bir şey yaza bilərsiniz).
+        </span>
       </div>
 
-      <div style={{ border: '1px solid #e5e7eb', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', marginBottom: 16 }}>
+      <div style={{ border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-xs)', marginBottom: 16 }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ borderCollapse: 'separate', borderSpacing: 0, minWidth: 1200 }}>
             <thead>
               <tr>
-                <th style={{ width: 36, background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}></th>
+                <th style={{ width: 36 }}></th>
                 {['Əməkdaş', 'Vəzifə', 'İnkişaf istiqaməti *', 'Ehtiyacın yaranma səbəbi *', 'Prioritet', 'Əhəmiyyət', 'Cari', 'Tələb olunan', 'Başlama', 'Bitmə', ''].map((h, i) => (
-                  <th key={i} style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb', fontSize: 11.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.3, padding: '10px 12px', whiteSpace: 'nowrap' }}>
-                    {h}
-                  </th>
+                  <th key={i}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {rows.map((r, idx) => {
-                const member = r.employeeId ? team.find((t) => t.id === r.employeeId) : null;
-                const rowDept = member?.dept || profile.dept;
-                const suggestions = suggestionsForDept(rowDept);
+                const suggestions = suggestionsForDept(library, deptForRow(r));
                 return (
-                <tr key={idx} style={{ background: idx % 2 === 0 ? '#fff' : '#fafbfc' }}>
-                  <td style={{ textAlign: 'center', color: '#cbd5e1', fontSize: 12, fontWeight: 600, borderBottom: '1px solid #f1f5f9' }}>{idx + 1}</td>
-                  <td style={{ minWidth: 170, borderBottom: '1px solid #f1f5f9', padding: '4px 8px' }}>
+                <tr key={idx} style={{ background: idx % 2 === 0 ? 'var(--surface)' : 'var(--ink-50)' }}>
+                  <td style={{ textAlign: 'center', color: 'var(--ink-300)', fontSize: 12, fontWeight: 600, borderTop: '1px solid var(--ink-100)' }}>{idx + 1}</td>
+                  <td style={{ minWidth: 170, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
                     <select value={r.employeeId} onChange={(e) => updateRow(idx, 'employeeId', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
                       <option value="">— Siyahıdan seç —</option>
+                      <option value={self.id}>{self.full_name_az} (Mən)</option>
                       {team.map((m) => <option key={m.id} value={m.id}>{m.full_name_az}</option>)}
                     </select>
                     {!r.employeeId && (
                       <input type="text" placeholder="və ya əl ilə yaz" value={r.manualName} onChange={(e) => updateRow(idx, 'manualName', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={{ ...inputStyle, marginTop: 2 }} />
                     )}
                   </td>
-                  <td style={{ minWidth: 130, borderBottom: '1px solid #f1f5f9', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 130, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
                     <input type="text" value={r.position} onChange={(e) => updateRow(idx, 'position', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
                   </td>
-                  <td style={{ minWidth: 200, borderBottom: '1px solid #f1f5f9', padding: '4px 8px', background: 'rgba(37,99,235,0.03)' }}>
+                  <td style={{ minWidth: 170, borderTop: '1px solid var(--ink-100)', padding: '4px 8px', background: 'rgba(37,99,235,0.03)' }}>
                     <input
-                      type="text" list={`skills-${idx}`} value={r.skill}
-                      onChange={(e) => updateRow(idx, 'skill', e.target.value)}
-                      onFocus={focusIn} onBlur={focusOut}
+                      type="text" value={r.skill} onChange={(e) => updateRow(idx, 'skill', e.target.value)}
+                      onFocus={focusIn} onBlur={focusOut} style={inputStyle}
+                      list={`competency-suggestions-${idx}`} autoComplete="off"
                       placeholder={suggestions.length ? 'Yazın və ya siyahıdan seçin...' : 'Yazın...'}
-                      style={inputStyle}
                     />
-                    <datalist id={`skills-${idx}`}>
+                    <datalist id={`competency-suggestions-${idx}`}>
                       {suggestions.map((s) => <option key={s} value={s} />)}
                     </datalist>
                   </td>
-                  <td style={{ minWidth: 220, borderBottom: '1px solid #f1f5f9', padding: '4px 8px', background: 'rgba(37,99,235,0.03)' }}>
+                  <td style={{ minWidth: 220, borderTop: '1px solid var(--ink-100)', padding: '4px 8px', background: 'rgba(37,99,235,0.03)' }}>
                     <input type="text" value={r.needReason} onChange={(e) => updateRow(idx, 'needReason', e.target.value)} onFocus={focusIn} onBlur={focusOut} placeholder="Niyə bu təlimə ehtiyac var?" style={inputStyle} />
                   </td>
-                  <td style={{ minWidth: 110, borderBottom: '1px solid #f1f5f9', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 110, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
                     <select value={r.priority} onChange={(e) => updateRow(idx, 'priority', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={{ ...inputStyle, color: PRIORITY_COLORS[r.priority], fontWeight: 600 }}>
                       {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
                     </select>
                   </td>
-                  <td style={{ minWidth: 120, borderBottom: '1px solid #f1f5f9', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 120, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
                     <select value={r.importance} onChange={(e) => updateRow(idx, 'importance', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
                       <option value="">—</option>{IMPORTANCE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                   </td>
-                  <td style={{ minWidth: 110, borderBottom: '1px solid #f1f5f9', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 110, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
                     <select value={r.currentLevel} onChange={(e) => updateRow(idx, 'currentLevel', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
                       <option value="">—</option>{LEVEL_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                   </td>
-                  <td style={{ minWidth: 110, borderBottom: '1px solid #f1f5f9', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 110, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
                     <select value={r.requiredLevel} onChange={(e) => updateRow(idx, 'requiredLevel', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
                       <option value="">—</option>{LEVEL_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                   </td>
-                  <td style={{ minWidth: 140, borderBottom: '1px solid #f1f5f9', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 140, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
                     <input type="date" value={r.start} onChange={(e) => updateRow(idx, 'start', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
                   </td>
-                  <td style={{ minWidth: 140, borderBottom: '1px solid #f1f5f9', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 140, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
                     <input type="date" value={r.end} onChange={(e) => updateRow(idx, 'end', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
                   </td>
-                  <td style={{ borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                  <td style={{ borderTop: '1px solid var(--ink-100)', textAlign: 'center' }}>
                     {rows.length > 1 && (
-                      <button onClick={() => removeRow(idx)} style={{ border: 'none', background: 'none', color: '#cbd5e1', cursor: 'pointer', fontSize: 16 }}
-                        onMouseEnter={(e) => e.target.style.color = '#dc2626'} onMouseLeave={(e) => e.target.style.color = '#cbd5e1'} title="Sətri sil">✕</button>
+                      <button onClick={() => removeRow(idx)} className="row-remove-btn" title="Sətri sil">
+                        <X size={15} strokeWidth={2.2} />
+                      </button>
                     )}
                   </td>
                 </tr>
@@ -223,17 +267,17 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
         </div>
         <button
           onClick={addRow}
-          style={{ width: '100%', padding: '12px', border: 'none', borderTop: '1px solid #e5e7eb', background: '#fafbfc', color: '#2563eb', cursor: 'pointer', fontSize: 13, fontWeight: 600, textAlign: 'left', paddingLeft: 20 }}
+          style={{ width: '100%', padding: '12px', border: 'none', borderTop: '1px solid var(--border)', background: 'var(--ink-50)', color: 'var(--blue)', cursor: 'pointer', fontSize: 13, fontWeight: 600, textAlign: 'left', paddingLeft: 20, display: 'flex', alignItems: 'center', gap: 6 }}
         >
-          + Sətir əlavə et
+          <Plus size={14} strokeWidth={2.4} /> Sətir əlavə et
         </button>
       </div>
 
-      {error && <div style={{ color: '#dc2626', fontSize: 13, marginBottom: 14 }}>{error}</div>}
+      {error && <div className="notice notice-error" style={{ marginBottom: 14 }}>{error}</div>}
 
       <div>
-        <button onClick={handleSubmit} disabled={submitting} style={{ padding: '12px 28px', borderRadius: 8, border: 'none', background: '#0b2545', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>
-          {submitting ? 'Göndərilir...' : 'Hamısını Göndər'}
+        <button onClick={handleSubmit} disabled={submitting} className="btn btn-primary">
+          <Send size={14} strokeWidth={2.2} /> {submitting ? 'Göndərilir...' : 'Hamısını Göndər'}
         </button>
       </div>
     </div>
