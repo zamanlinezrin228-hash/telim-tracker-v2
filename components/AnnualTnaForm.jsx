@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CheckCircle2, Plus, X, Send } from 'lucide-react';
 import { sb } from '../lib/supabase';
 
@@ -25,6 +25,49 @@ function emptyRow(defaultEmployeeId = '') {
   };
 }
 
+// Department names in `profiles`/`trainings` (e.g. "Hüquq Şöbəsi") are full
+// Azerbaijani names that contain the competency library's short dept_root
+// (e.g. "hüquq") as a substring — hence the bidirectional includes() check.
+// A few real departments don't textually contain their root at all (e.g. the
+// HSE department is recorded as the abbreviation "SƏTƏM"), so those get a
+// manual synonym fallback instead of a fuzzier text match.
+const DEPT_SYNONYMS = [
+  { pattern: 'sətəm', root: 'hse' },
+];
+
+function normalizeDept(s) {
+  return (s || '').toLocaleLowerCase('az').trim();
+}
+
+// Library rows carry their outline numbering in the text (e.g. "1.1 Təhlükəsizlik
+// Strategiyası"); strip it so suggestions read as plain skill/competency names.
+function stripNumbering(s) {
+  return (s || '').replace(/^[\d]+(\.[\d]+)*\s*/, '').trim();
+}
+
+function suggestionsForDept(library, deptName) {
+  const d = normalizeDept(deptName);
+  if (!d || !library.length) return [];
+
+  const matchedRoots = new Set();
+  library.forEach((row) => {
+    const r = normalizeDept(row.dept_root);
+    if (r && (d.includes(r) || r.includes(d))) matchedRoots.add(row.dept_root);
+  });
+  if (matchedRoots.size === 0) {
+    DEPT_SYNONYMS.forEach((syn) => { if (d.includes(syn.pattern)) matchedRoots.add(syn.root); });
+  }
+  if (matchedRoots.size === 0) return [];
+
+  const set = new Set();
+  library.forEach((row) => {
+    if (!matchedRoots.has(row.dept_root)) return;
+    if (row.competency) set.add(stripNumbering(row.competency));
+    if (row.sub_competency) set.add(stripNumbering(row.sub_competency));
+  });
+  return [...set].sort();
+}
+
 export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) {
   const hasTeam = team && team.length > 0;
   const self = { id: profile.id, full_name_az: profile.full_name_az || '', dept: profile.dept, sube: profile.sube, position: profile.position };
@@ -34,6 +77,21 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
+  const [library, setLibrary] = useState([]);
+
+  useEffect(() => {
+    sb.from('competency_library').select('dept_root, category, competency, sub_competency').then(({ data }) => {
+      setLibrary(data || []);
+    });
+  }, []);
+
+  function deptForRow(r) {
+    if (r.employeeId) {
+      const m = selectableEmployees.find((t) => t.id === r.employeeId);
+      if (m?.dept) return m.dept;
+    }
+    return profile.dept;
+  }
 
   function updateRow(idx, field, value) {
     setRows((prev) => {
@@ -147,7 +205,14 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                     <input type="text" value={r.position} onChange={(e) => updateRow(idx, 'position', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
                   </td>
                   <td style={{ minWidth: 170, borderTop: '1px solid var(--ink-100)', padding: '4px 8px', background: 'rgba(37,99,235,0.03)' }}>
-                    <input type="text" value={r.skill} onChange={(e) => updateRow(idx, 'skill', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
+                    <input
+                      type="text" value={r.skill} onChange={(e) => updateRow(idx, 'skill', e.target.value)}
+                      onFocus={focusIn} onBlur={focusOut} style={inputStyle}
+                      list={`competency-suggestions-${idx}`} autoComplete="off"
+                    />
+                    <datalist id={`competency-suggestions-${idx}`}>
+                      {suggestionsForDept(library, deptForRow(r)).map((s) => <option key={s} value={s} />)}
+                    </datalist>
                   </td>
                   <td style={{ minWidth: 220, borderTop: '1px solid var(--ink-100)', padding: '4px 8px', background: 'rgba(37,99,235,0.03)' }}>
                     <input type="text" value={r.needReason} onChange={(e) => updateRow(idx, 'needReason', e.target.value)} onFocus={focusIn} onBlur={focusOut} placeholder="Niyə bu təlimə ehtiyac var?" style={inputStyle} />
