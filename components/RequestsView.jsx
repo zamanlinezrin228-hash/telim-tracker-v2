@@ -350,7 +350,7 @@ export default function RequestsView({ profile, team, requests, planYear, onData
         {noteAction && (
           <NoteModal
             title={
-              noteAction.type === 'manager-approve' ? 'Təsdiq qeydiniz (əsaslandirma)' :
+              noteAction.type === 'manager-approve' ? 'Təsdiq qeydiniz (əsaslandırma)' :
               noteAction.type === 'manager-reject' ? 'Rədd səbəbi' :
               noteAction.type === 'ld-approve' ? 'Analiz qeydiniz (vəzifə uyğunluğu, büdcə və s.)' :
               'Rədd səbəbi'

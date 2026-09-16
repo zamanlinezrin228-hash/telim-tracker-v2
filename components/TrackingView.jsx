@@ -464,7 +464,7 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
             <div className="modal-card" style={{ width: 380 }}>
               <div className="modal-title">Silinsin?</div>
               <div style={{ fontSize: 13.5, color: 'var(--ink-500)', marginBottom: 20 }}>
-                <b>{deleting.employee_name}</b> — {deleting.skill} qeydi həmişəlik sililnəcək. Bu əməliyyat geri qaytaıralı bilməz.
+                <b>{deleting.employee_name}</b> — {deleting.skill} qeydi həmişəlik silinəcək. Bu əməliyyat geri qaytarıla bilməz.
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
                 <button onClick={() => setDeleting(null)} className="btn btn-outline" style={{ flex: 1 }}>Ləğv et</button>
