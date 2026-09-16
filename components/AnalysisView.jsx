@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { ArrowLeftRight, Download } from 'lucide-react';
 import { statusMeta, priorityMeta } from '../lib/helpers';
+import { styleHeaderRow, downloadWorkbook } from '../lib/excelExport';
 import MultiSelectFilter from './MultiSelectFilter';
 
 const FIELD_LABELS = {
@@ -131,17 +132,35 @@ export default function AnalysisView({ trainings }) {
     return `rgba(37, 99, 235, ${alpha.toFixed(2)})`;
   }
 
-  function exportPivot() {
-    const rows = rowKeys.map((r) => {
-      const row = { [FIELD_LABELS[rowField]]: labelFor(rowField, r) };
-      colKeys.forEach((c) => { row[labelFor(colField, c)] = metricValue(cellAgg[r + '|||' + c]); });
-      row['Cəmi'] = metricValue(rowAgg[r]);
-      return row;
+  async function exportPivot() {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Analiz');
+    const columns = [{ header: FIELD_LABELS[rowField], key: 'rowLabel', width: 26 }];
+    colKeys.forEach((c, i) => { columns.push({ header: labelFor(colField, c), key: `c${i}`, width: 18 }); });
+    columns.push({ header: 'Cəmi', key: 'total', width: 16 });
+    ws.columns = columns;
+
+    rowKeys.forEach((r) => {
+      const rowData = { rowLabel: labelFor(rowField, r) };
+      colKeys.forEach((c, i) => { rowData[`c${i}`] = metricValue(cellAgg[r + '|||' + c]); });
+      rowData.total = metricValue(rowAgg[r]);
+      ws.addRow(rowData);
     });
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Analiz');
-    XLSX.writeFile(wb, `analiz-${new Date().toISOString().slice(0, 10)}.xlsx`);
+
+    const totalRowData = { rowLabel: 'Cəmi' };
+    colKeys.forEach((c, i) => { totalRowData[`c${i}`] = metricValue(colAgg[c]); });
+    totalRowData.total = metricValue(grandAgg);
+    const totalRow = ws.addRow(totalRowData);
+    totalRow.font = { bold: true };
+
+    const numFmt = metric === 'budget' || metric === 'avg_budget' ? '#,##0 "₼"'
+      : metric === 'completion_rate' ? '0"%"'
+      : metric === 'man_hours' || metric === 'avg_hours' ? '#,##0.0'
+      : '#,##0';
+    columns.forEach((col) => { if (col.key !== 'rowLabel') ws.getColumn(col.key).numFmt = numFmt; });
+
+    styleHeaderRow(ws);
+    await downloadWorkbook(wb, `analiz-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   const activeSlicerCount = DIMENSION_FIELDS.filter((f) => catFilters[f] && catFilters[f].size < uniqueValsByField[f].length).length;

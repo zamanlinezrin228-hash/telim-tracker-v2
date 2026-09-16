@@ -14,58 +14,78 @@ const inputStyle = {
   width: '100%', fontSize: 13, border: '1px solid transparent', background: 'transparent',
   padding: '6px 8px', borderRadius: 6, transition: 'border-color 0.15s, background 0.15s',
 };
+const miniInputStyle = { ...inputStyle, fontSize: 11.5, padding: '4px 6px' };
 function focusIn(e) { e.target.style.border = '1px solid var(--blue)'; e.target.style.background = 'var(--surface)'; }
 function focusOut(e) { e.target.style.border = '1px solid transparent'; e.target.style.background = 'transparent'; }
 
 function emptyRow(defaultEmployeeId = '') {
   return {
-    employeeId: defaultEmployeeId, manualName: '', position: '', skill: '', needReason: '',
+    employeeId: defaultEmployeeId, manualName: '', position: '', category: '', competency: '', skill: '', needReason: '',
     priority: 'Medium', importance: '', currentLevel: '', requiredLevel: '',
     start: '', end: '',
   };
 }
 
-// Department names in `profiles`/`trainings` (e.g. "Hüquq Şöbəsi") are full
-// Azerbaijani names that contain the competency library's short dept_root
-// (e.g. "hüquq") as a substring — hence the bidirectional includes() check.
-// A few real departments don't textually contain their root at all (e.g. the
-// HSE department is recorded as the abbreviation "SƏTƏM"), so those get a
-// manual synonym fallback instead of a fuzzier text match.
-const DEPT_SYNONYMS = [
-  { pattern: 'sətəm', root: 'hse' },
-];
-
-function normalizeDept(s) {
-  return (s || '').toLocaleLowerCase('az').trim();
+// The competency_library rows carry real dept/position names, entered inconsistently
+// (mixed Az/En, "Departamenti" vs "Department" vs bare names, occasional typos).
+// normalize() handles case (Azerbaijani-aware, so İ -> i correctly) and punctuation;
+// textMatch() is exact-or-substring in either direction, which is strict enough not
+// to conflate unrelated positions/departments. deptMatch() additionally strips a
+// handful of common noise words (departamenti/department/şöbəsi/idarəedilməsi/...)
+// so e.g. "İnzibati Şöbə" (profiles) still matches "İnzibati İşlər Departamenti"
+// (library) even though neither is a literal substring of the other.
+function normalize(s) {
+  return (s || '')
+    .toLocaleLowerCase('az')
+    .replace(/[().,/&\-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
-// Library rows carry their outline numbering in the text (e.g. "1.1 Təhlükəsizlik
-// Strategiyası"); strip it so suggestions read as plain skill/competency names.
-function stripNumbering(s) {
-  return (s || '').replace(/^[\d]+(\.[\d]+)*\s*/, '').trim();
+const DEPT_NOISE_WORDS = ['departamenti', 'department', 'şöbəsi', 'regional', 'idarəedilməsi', 'zəncirinin', 'işlər', 'ltd', 'mmc'];
+function coreDept(s) {
+  let n = ' ' + normalize(s) + ' ';
+  DEPT_NOISE_WORDS.forEach((w) => { n = n.split(' ' + w + ' ').join(' '); });
+  return n.replace(/\s+/g, ' ').trim();
 }
 
-function suggestionsForDept(library, deptName) {
-  const d = normalizeDept(deptName);
-  if (!d || !library.length) return [];
+function textMatch(a, b) {
+  const na = normalize(a), nb = normalize(b);
+  if (!na || !nb) return false;
+  return na === nb || na.includes(nb) || nb.includes(na);
+}
 
-  const matchedRoots = new Set();
-  library.forEach((row) => {
-    const r = normalizeDept(row.dept_root);
-    if (r && (d.includes(r) || r.includes(d))) matchedRoots.add(row.dept_root);
-  });
-  if (matchedRoots.size === 0) {
-    DEPT_SYNONYMS.forEach((syn) => { if (d.includes(syn.pattern)) matchedRoots.add(syn.root); });
+// A handful of departments are named in different languages between the two
+// tables (e.g. profiles has "İnformasiya texnologiyaları şöbəsi", the library
+// has "ERP / IT & Digital") with no shared substring at all — bridged here.
+const DEPT_SYNONYM_PAIRS = [['informasiya', 'erp'], ['informasiya', 'digital'], ['texnologiya', 'erp'], ['texnologiya', 'digital']];
+
+function deptMatch(a, b) {
+  if (textMatch(a, b)) return true;
+  const ca = coreDept(a), cb = coreDept(b);
+  if (ca && cb && (ca === cb || ca.includes(cb) || cb.includes(ca))) return true;
+  const na = normalize(a), nb = normalize(b);
+  if (!na || !nb) return false;
+  return DEPT_SYNONYM_PAIRS.some(([x, y]) => (na.includes(x) && nb.includes(y)) || (na.includes(y) && nb.includes(x)));
+}
+
+// Fuzzy-matches by position first (most specific); if nothing matches on
+// position, falls back to department. Returns the full set of library rows
+// for whichever level matched, or [] if neither matched anything.
+function matchesForRow(library, { dept, position }) {
+  if (position) {
+    const byPosition = library.filter((row) => textMatch(row.position, position));
+    if (byPosition.length) return byPosition;
   }
-  if (matchedRoots.size === 0) return [];
+  if (dept) {
+    const byDept = library.filter((row) => deptMatch(row.dept, dept));
+    if (byDept.length) return byDept;
+  }
+  return [];
+}
 
-  const set = new Set();
-  library.forEach((row) => {
-    if (!matchedRoots.has(row.dept_root)) return;
-    if (row.competency) set.add(stripNumbering(row.competency));
-    if (row.sub_competency) set.add(stripNumbering(row.sub_competency));
-  });
-  return [...set].sort();
+function uniqueSorted(values) {
+  return [...new Set(values.filter(Boolean))].sort();
 }
 
 export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) {
@@ -80,7 +100,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
   const [library, setLibrary] = useState([]);
 
   useEffect(() => {
-    sb.from('competency_library').select('dept_root, category, competency, sub_competency').then(({ data }) => {
+    sb.from('competency_library').select('dept, position, category, competency, sub_competency, criticality, required_level').then(({ data }) => {
       setLibrary(data || []);
     });
   }, []);
@@ -101,6 +121,13 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
         const m = selectableEmployees.find((t) => t.id === value);
         if (m) next[idx].position = m.position || '';
       }
+      // Changing employee/position/category resets the levels below it, since
+      // the previously-picked values may no longer be valid for the new scope.
+      if (field === 'employeeId' || field === 'position') {
+        next[idx].category = ''; next[idx].competency = ''; next[idx].skill = '';
+      }
+      if (field === 'category') { next[idx].competency = ''; next[idx].skill = ''; }
+      if (field === 'competency') { next[idx].skill = ''; }
       return next;
     });
   }
@@ -178,14 +205,14 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 12.5, color: 'var(--blue)', marginBottom: 18 }}>
         <Lightbulb size={15} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
         <span>
-          &quot;İnkişaf istiqaməti&quot; sahəsində əməkdaş seçdikdən sonra, onun departamentinə uyğun səriştə təklifləri avtomatik görünəcək
-          (istəyə bağlı — özünüz də tamamilə fərqli bir şey yaza bilərsiniz).
+          Əməkdaş seçdikdən sonra Kateqoriya → Səriştə → Alt səriştə sahələrində onun vəzifəsinə (yoxdursa departamentinə) uyğun
+          səriştə təklifləri avtomatik görünəcək (istəyə bağlı — özünüz də tamamilə fərqli bir şey yaza bilərsiniz).
         </span>
       </div>
 
       <div style={{ border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-xs)', marginBottom: 16 }}>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ borderCollapse: 'separate', borderSpacing: 0, minWidth: 1200 }}>
+          <table style={{ borderCollapse: 'separate', borderSpacing: 0, minWidth: 1260 }}>
             <thead>
               <tr>
                 <th style={{ width: 36 }}></th>
@@ -196,7 +223,14 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
             </thead>
             <tbody>
               {rows.map((r, idx) => {
-                const suggestions = suggestionsForDept(library, deptForRow(r));
+                const matched = matchesForRow(library, { dept: deptForRow(r), position: r.position });
+                const categoryOptions = uniqueSorted(matched.map((m) => m.category));
+                const scopedByCategory = r.category ? matched.filter((m) => normalize(m.category) === normalize(r.category)) : matched;
+                const competencyOptions = uniqueSorted(scopedByCategory.map((m) => m.competency));
+                const scopedByCompetency = r.competency ? scopedByCategory.filter((m) => normalize(m.competency) === normalize(r.competency)) : scopedByCategory;
+                const subOptions = uniqueSorted(scopedByCompetency.map((m) => m.sub_competency));
+                const matchedSub = matched.find((m) => normalize(m.sub_competency) === normalize(r.skill) && m.sub_competency);
+
                 return (
                 <tr key={idx} style={{ background: idx % 2 === 0 ? 'var(--surface)' : 'var(--ink-50)' }}>
                   <td style={{ textAlign: 'center', color: 'var(--ink-300)', fontSize: 12, fontWeight: 600, borderTop: '1px solid var(--ink-100)' }}>{idx + 1}</td>
@@ -213,16 +247,36 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                   <td style={{ minWidth: 130, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
                     <input type="text" value={r.position} onChange={(e) => updateRow(idx, 'position', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
                   </td>
-                  <td style={{ minWidth: 170, borderTop: '1px solid var(--ink-100)', padding: '4px 8px', background: 'rgba(37,99,235,0.03)' }}>
-                    <input
-                      type="text" value={r.skill} onChange={(e) => updateRow(idx, 'skill', e.target.value)}
-                      onFocus={focusIn} onBlur={focusOut} style={inputStyle}
-                      list={`competency-suggestions-${idx}`} autoComplete="off"
-                      placeholder={suggestions.length ? 'Yazın və ya siyahıdan seçin...' : 'Yazın...'}
-                    />
-                    <datalist id={`competency-suggestions-${idx}`}>
-                      {suggestions.map((s) => <option key={s} value={s} />)}
-                    </datalist>
+                  <td style={{ minWidth: 230, borderTop: '1px solid var(--ink-100)', padding: '4px 8px', background: 'rgba(37,99,235,0.03)' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <input
+                        type="text" value={r.category} onChange={(e) => updateRow(idx, 'category', e.target.value)}
+                        onFocus={focusIn} onBlur={focusOut} style={miniInputStyle}
+                        list={`cat-${idx}`} autoComplete="off" placeholder="Kateqoriya"
+                      />
+                      <datalist id={`cat-${idx}`}>{categoryOptions.map((o) => <option key={o} value={o} />)}</datalist>
+
+                      <input
+                        type="text" value={r.competency} onChange={(e) => updateRow(idx, 'competency', e.target.value)}
+                        onFocus={focusIn} onBlur={focusOut} style={miniInputStyle}
+                        list={`comp-${idx}`} autoComplete="off" placeholder="Səriştə"
+                      />
+                      <datalist id={`comp-${idx}`}>{competencyOptions.map((o) => <option key={o} value={o} />)}</datalist>
+
+                      <input
+                        type="text" value={r.skill} onChange={(e) => updateRow(idx, 'skill', e.target.value)}
+                        onFocus={focusIn} onBlur={focusOut} style={miniInputStyle}
+                        list={`sub-${idx}`} autoComplete="off" placeholder="Alt səriştə *"
+                      />
+                      <datalist id={`sub-${idx}`}>{subOptions.map((o) => <option key={o} value={o} />)}</datalist>
+
+                      {matchedSub && (matchedSub.required_level || matchedSub.criticality) && (
+                        <div style={{ fontSize: 10.5, color: 'var(--ink-400)', lineHeight: 1.35 }}>
+                          {matchedSub.required_level && <div>Tələb olunan səviyyə: {matchedSub.required_level}</div>}
+                          {matchedSub.criticality && <div>Kritiklik: {matchedSub.criticality}</div>}
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td style={{ minWidth: 220, borderTop: '1px solid var(--ink-100)', padding: '4px 8px', background: 'rgba(37,99,235,0.03)' }}>
                     <input type="text" value={r.needReason} onChange={(e) => updateRow(idx, 'needReason', e.target.value)} onFocus={focusIn} onBlur={focusOut} placeholder="Niyə bu təlimə ehtiyac var?" style={inputStyle} />
