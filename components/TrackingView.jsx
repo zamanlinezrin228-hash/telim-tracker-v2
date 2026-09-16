@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { Search, Download, FilterX, Pencil, Trash2, Save, Columns3, Layers, ArrowUp, ArrowDown, Folder } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import { fmtMoney, statusMeta, priorityMeta } from '../lib/helpers';
+import { styleHeaderRow, downloadWorkbook } from '../lib/excelExport';
 import { TrainingStatusBadge, PriorityBadge, BudgetStatusBadge } from './Badges';
 import ColumnFilterHeader from './ColumnFilterHeader';
 import { showToast } from '../lib/toast';
@@ -225,19 +226,40 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
     return Object.entries(map).sort((a, b) => b[1].length - a[1].length);
   }, [sorted, groupByDept]);
 
-  function exportToExcel() {
-    const rows = sorted.map((t) => ({
-      'İl': t.plan_year, 'Departament': t.dept, 'Filial': t.sube, 'Ad Soyad': t.employee_name, 'Vəzifə': t.position,
-      'Vəzifə Kateqoriyası': t.category, 'Təlimin Adı': t.skill, 'Kateqoriya': t.comp_cat, 'Provayder': t.vendor,
-      'Status': statusMeta(t.status).label, 'Prioritet': priorityMeta(t.priority).label,
-      'Başlama': t.start_date || t.start_raw, 'Bitmə': t.end_date || t.end_raw,
-      'Saat': t.man_hours, 'Büdcə': t.budget, 'Büdcə Statusu': t.budget_status,
-    }));
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Təlimlər');
+  async function exportToExcel() {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Təlimlər');
+    ws.columns = [
+      { header: 'İl', key: 'il', width: 8 },
+      { header: 'Departament', key: 'dept', width: 30 },
+      { header: 'Filial', key: 'sube', width: 18 },
+      { header: 'Ad Soyad', key: 'name', width: 22 },
+      { header: 'Vəzifə', key: 'position', width: 22 },
+      { header: 'Vəzifə Kateqoriyası', key: 'category', width: 20 },
+      { header: 'Təlimin Adı', key: 'skill', width: 28 },
+      { header: 'Kateqoriya', key: 'comp_cat', width: 14 },
+      { header: 'Provayder', key: 'vendor', width: 18 },
+      { header: 'Status', key: 'status', width: 22 },
+      { header: 'Prioritet', key: 'priority', width: 12 },
+      { header: 'Başlama', key: 'start', width: 12 },
+      { header: 'Bitmə', key: 'end', width: 12 },
+      { header: 'Saat', key: 'hours', width: 8 },
+      { header: 'Büdcə', key: 'budget', width: 14 },
+      { header: 'Büdcə Statusu', key: 'budget_status', width: 16 },
+    ];
+    sorted.forEach((t) => {
+      ws.addRow({
+        il: t.plan_year, dept: t.dept, sube: t.sube, name: t.employee_name, position: t.position,
+        category: t.category, skill: t.skill, comp_cat: t.comp_cat, vendor: t.vendor,
+        status: statusMeta(t.status).label, priority: priorityMeta(t.priority).label,
+        start: t.start_date || t.start_raw, end: t.end_date || t.end_raw,
+        hours: Number(t.man_hours) || 0, budget: Number(t.budget) || 0, budget_status: t.budget_status,
+      });
+    });
+    ws.getColumn('budget').numFmt = '#,##0 "₼"';
+    styleHeaderRow(ws);
     const tarix = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(wb, `telim-izleme-${tarix}.xlsx`);
+    await downloadWorkbook(wb, `telim-izleme-${tarix}.xlsx`);
   }
 
   function openEdit(row) { setError(''); setEditing({ ...row }); }
@@ -442,7 +464,7 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
             <div className="modal-card" style={{ width: 380 }}>
               <div className="modal-title">Silinsin?</div>
               <div style={{ fontSize: 13.5, color: 'var(--ink-500)', marginBottom: 20 }}>
-                <b>{deleting.employee_name}</b> — {deleting.skill} qeydi həmişəlik silinəcək. Bu əməliyyat geri qaytarıla bilməz.
+                <b>{deleting.employee_name}</b> — {deleting.skill} qeydi həmişəlik sililnəcək. Bu əməliyyat geri qaytaıralı bilməz.
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
                 <button onClick={() => setDeleting(null)} className="btn btn-outline" style={{ flex: 1 }}>Ləğv et</button>
