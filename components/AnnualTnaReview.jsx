@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
-import { Folder, Clock, Search, CheckCircle2, XCircle, CalendarDays, ListPlus } from 'lucide-react';
+import { Folder, Clock, Search, CheckCircle2, XCircle, CalendarDays, ListPlus, ChevronDown, ChevronRight } from 'lucide-react';
 import { sb } from '../lib/supabase';
-import { reqStatusMeta } from '../lib/helpers';
+import { reqStatusMeta, groupByEmployee } from '../lib/helpers';
 import { showToast } from '../lib/toast';
 import { ReqStatusBadge, PriorityBadge } from './Badges';
 import EmptyState from './EmptyState';
@@ -21,6 +21,7 @@ function scrollToDept(dept) {
 export default function AnnualTnaReview({ profile, requests, planYear, onDataChanged }) {
   const [noteAction, setNoteAction] = useState(null);
   const [addToPlanRequest, setAddToPlanRequest] = useState(null);
+  const [expandedDepts, setExpandedDepts] = useState(new Set());
 
   const surveyRequests = useMemo(
     () => requests.filter((r) => r.source === 'Manager Survey'),
@@ -56,6 +57,19 @@ export default function AnnualTnaReview({ profile, requests, planYear, onDataCha
   ];
 
   const activeDepts = Object.keys(grouped).sort();
+
+  function toggleDept(dept) {
+    setExpandedDepts((prev) => {
+      const next = new Set(prev);
+      if (next.has(dept)) next.delete(dept); else next.add(dept);
+      return next;
+    });
+  }
+
+  function jumpToDept(dept) {
+    setExpandedDepts((prev) => new Set(prev).add(dept));
+    setTimeout(() => scrollToDept(dept), 50);
+  }
 
   async function refresh() {
     setNoteAction(null);
@@ -100,71 +114,79 @@ export default function AnnualTnaReview({ profile, requests, planYear, onDataCha
       {activeDepts.length > 1 && (
         <div className="dept-jump-nav">
           {activeDepts.map((dept) => (
-            <button key={dept} className="dept-jump-pill" onClick={() => scrollToDept(dept)}>
+            <button key={dept} className="dept-jump-pill" onClick={() => jumpToDept(dept)}>
               <Folder size={13} strokeWidth={2} /> {dept} <span className="count">{grouped[dept].length}</span>
             </button>
           ))}
         </div>
       )}
 
-      {activeDepts.map((dept, i) => (
-        <div key={dept} id={deptAnchorId(dept)} className="card stagger-item" style={{ marginBottom: 14, '--i': i }}>
-          <div className="req-dept-head"><Folder size={15} strokeWidth={2} /> {dept} <span className="req-dept-count">{grouped[dept].length}</span></div>
-          <div className="req-list">
-            {grouped[dept].map((r) => (
-              <div className="req-card" key={r.id}>
-                <div className="req-card-top">
-                  <div>
-                    <div className="req-card-name">
-                      {r.employee_name}
-                      {r.position && <span className="req-card-position"> · {r.position}</span>}
+      {activeDepts.map((dept, i) => {
+        const isOpen = expandedDepts.has(dept);
+        return (
+          <div key={dept} id={deptAnchorId(dept)} className="card stagger-item" style={{ marginBottom: 14, padding: isOpen ? undefined : '14px 20px', '--i': i }}>
+            <button className="req-dept-head req-dept-head-toggle" onClick={() => toggleDept(dept)}>
+              {isOpen ? <ChevronDown size={15} strokeWidth={2.4} /> : <ChevronRight size={15} strokeWidth={2.4} />}
+              <Folder size={15} strokeWidth={2} /> {dept} <span className="req-dept-count">{grouped[dept].length}</span>
+            </button>
+            {isOpen && (
+              <div className="req-list" style={{ marginTop: 14 }}>
+                {grouped[dept].map((r) => (
+                  <div className="req-card" key={r.id}>
+                    <div className="req-card-top">
+                      <div>
+                        <div className="req-card-name">
+                          {r.employee_name}
+                          {r.position && <span className="req-card-position"> · {r.position}</span>}
+                        </div>
+                        <div className="req-card-training">{r.training_title}</div>
+                      </div>
+                      <div className="req-card-badges">
+                        <PriorityBadge priority={r.priority} />
+                        <ReqStatusBadge status={r.status} />
+                      </div>
                     </div>
-                    <div className="req-card-training">{r.training_title}</div>
-                  </div>
-                  <div className="req-card-badges">
-                    <PriorityBadge priority={r.priority} />
-                    <ReqStatusBadge status={r.status} />
-                  </div>
-                </div>
 
-                {r.reason && (
-                  <div className="req-field-highlight">
-                    <div className="req-field-label">Ehtiyacın yaranma səbəbi</div>
-                    <div className="req-field-value">{r.reason}</div>
+                    {r.reason && (
+                      <div className="req-field-highlight">
+                        <div className="req-field-label">Ehtiyacın yaranma səbəbi</div>
+                        <div className="req-field-value">{r.reason}</div>
+                      </div>
+                    )}
+
+                    <div className="req-field-grid">
+                      {r.importance_level && (
+                        <div><div className="req-field-label">Əhəmiyyət dərəcəsi</div><div className="req-field-value">{r.importance_level}</div></div>
+                      )}
+                      {r.current_skill_level && (
+                        <div><div className="req-field-label">Cari səviyyə</div><div className="req-field-value">{r.current_skill_level}</div></div>
+                      )}
+                      {r.required_skill_level && (
+                        <div><div className="req-field-label">Tələb olunan səviyyə</div><div className="req-field-value">{r.required_skill_level}</div></div>
+                      )}
+                      {(r.preferred_start || r.preferred_end) && (
+                        <div><div className="req-field-label">İstənilən müddət</div><div className="req-field-value">{r.preferred_start || '—'} → {r.preferred_end || '—'}</div></div>
+                      )}
+                    </div>
+
+                    <div className="req-card-footer">
+                      {r.status === 'Pending' && (
+                        <button onClick={() => takeIntoReview(r.id)} className="btn btn-accent btn-sm"><Search size={13} strokeWidth={2.2} /> Analizə götür</button>
+                      )}
+                      {r.status === 'In Review' && (
+                        <>
+                          <button onClick={() => setNoteAction({ type: 'approve', id: r.id })} className="btn btn-success btn-sm"><CheckCircle2 size={13} strokeWidth={2.2} /> Təsdiqlə</button>
+                          <button onClick={() => setNoteAction({ type: 'reject', id: r.id })} className="btn btn-danger btn-sm"><XCircle size={13} strokeWidth={2.2} /> Rədd et</button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                )}
-
-                <div className="req-field-grid">
-                  {r.importance_level && (
-                    <div><div className="req-field-label">Əhəmiyyət dərəcəsi</div><div className="req-field-value">{r.importance_level}</div></div>
-                  )}
-                  {r.current_skill_level && (
-                    <div><div className="req-field-label">Cari səviyyə</div><div className="req-field-value">{r.current_skill_level}</div></div>
-                  )}
-                  {r.required_skill_level && (
-                    <div><div className="req-field-label">Tələb olunan səviyyə</div><div className="req-field-value">{r.required_skill_level}</div></div>
-                  )}
-                  {(r.preferred_start || r.preferred_end) && (
-                    <div><div className="req-field-label">İstənilən müddət</div><div className="req-field-value">{r.preferred_start || '—'} → {r.preferred_end || '—'}</div></div>
-                  )}
-                </div>
-
-                <div className="req-card-footer">
-                  {r.status === 'Pending' && (
-                    <button onClick={() => takeIntoReview(r.id)} className="btn btn-accent btn-sm"><Search size={13} strokeWidth={2.2} /> Analizə götür</button>
-                  )}
-                  {r.status === 'In Review' && (
-                    <>
-                      <button onClick={() => setNoteAction({ type: 'approve', id: r.id })} className="btn btn-success btn-sm"><CheckCircle2 size={13} strokeWidth={2.2} /> Təsdiqlə</button>
-                      <button onClick={() => setNoteAction({ type: 'reject', id: r.id })} className="btn btn-danger btn-sm"><XCircle size={13} strokeWidth={2.2} /> Rədd et</button>
-                    </>
-                  )}
-                </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
       {activeDepts.length === 0 && (
         <div className="card" style={{ marginBottom: 20 }}><EmptyState icon={CheckCircle2}>Aktiv sorğu yoxdur</EmptyState></div>
       )}
@@ -176,31 +198,38 @@ export default function AnnualTnaReview({ profile, requests, planYear, onDataCha
             <div key={dept} className="card stagger-item" style={{ marginBottom: 14, '--i': i }}>
               <div className="req-dept-head"><Folder size={15} strokeWidth={2} /> {dept} <span className="req-dept-count">{decidedGrouped[dept].length}</span></div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14, marginTop: 12 }}>
-                {decidedGrouped[dept].map((r) => {
-                  const statusColor = reqStatusMeta(r.status).color;
-                  return (
-                    <div key={r.id} className="card card-hover" style={{ padding: 0, overflow: 'hidden' }}>
-                      <div style={{ height: 6, background: statusColor }} />
-                      <div style={{ padding: 14 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                          <div style={{ fontWeight: 700, fontSize: 14 }}>{r.employee_name}</div>
-                          <ReqStatusBadge status={r.status} />
-                        </div>
-                        <div style={{ fontSize: 13, color: 'var(--ink-700)', marginBottom: 8 }}>{r.training_title}</div>
-                        {r.reason && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginBottom: 8, lineHeight: 1.5 }}>{r.reason}</div>}
-                        {r.reviewer_note && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginBottom: 10 }}><b>Qeyd:</b> {r.reviewer_note}</div>}
-                        {r.status === 'Approved' && !r.linked_training_id && (
-                          <button onClick={() => setAddToPlanRequest(r)} className="btn btn-purple btn-sm btn-block"><ListPlus size={13} strokeWidth={2.2} /> Plana Əlavə Et</button>
-                        )}
-                        {r.linked_training_id && (
-                          <div style={{ fontSize: 12, color: 'var(--green)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <CheckCircle2 size={13} strokeWidth={2.4} /> Planda var
-                          </div>
-                        )}
-                      </div>
+                {groupByEmployee(decidedGrouped[dept]).map(([employeeName, items]) => (
+                  <div key={employeeName} className="card card-hover" style={{ padding: 0, overflow: 'hidden' }}>
+                    <div style={{ padding: '12px 14px 4px' }}>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>{employeeName}</div>
+                      {items[0].position && <div style={{ fontSize: 11.5, color: 'var(--ink-400)' }}>{items[0].position}</div>}
                     </div>
-                  );
-                })}
+                    {items.map((r) => {
+                      const statusColor = reqStatusMeta(r.status).color;
+                      return (
+                        <div key={r.id} style={{ borderTop: '1px solid var(--ink-100)' }}>
+                          <div style={{ height: 4, background: statusColor }} />
+                          <div style={{ padding: 12 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
+                              <div style={{ fontSize: 13, color: 'var(--ink-700)' }}>{r.training_title}</div>
+                              <ReqStatusBadge status={r.status} />
+                            </div>
+                            {r.reason && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginBottom: 8, lineHeight: 1.5 }}>{r.reason}</div>}
+                            {r.reviewer_note && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginBottom: 10 }}><b>Qeyd:</b> {r.reviewer_note}</div>}
+                            {r.status === 'Approved' && !r.linked_training_id && (
+                              <button onClick={() => setAddToPlanRequest(r)} className="btn btn-purple btn-sm btn-block"><ListPlus size={13} strokeWidth={2.2} /> Plana Əlavə Et</button>
+                            )}
+                            {r.linked_training_id && (
+                              <div style={{ fontSize: 12, color: 'var(--green)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <CheckCircle2 size={13} strokeWidth={2.4} /> Planda var
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
             </div>
           ))}
