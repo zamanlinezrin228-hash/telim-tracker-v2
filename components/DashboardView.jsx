@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs';
 import {
   BookOpen, Users, CheckCircle2, RefreshCw, Timer, Wallet, TrendingUp, Percent,
   XCircle, AlertTriangle, PauseCircle, CalendarClock, Building2, Trophy, Target,
-  Sparkles, ThumbsUp, ShieldAlert, Award, GraduationCap, Download,
+  Sparkles, ThumbsUp, ShieldAlert, Award, GraduationCap, Download, Printer,
 } from 'lucide-react';
 import { fmtMoney, statusMeta } from '../lib/helpers';
 import { styleHeaderRow, downloadWorkbook } from '../lib/excelExport';
@@ -175,6 +175,10 @@ export default function DashboardView({ trainings }) {
     await downloadWorkbook(wb, `dashboard-hesabati-${tarix}.xlsx`);
   }
 
+  function exportPdf() {
+    window.print();
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -183,7 +187,7 @@ export default function DashboardView({ trainings }) {
             <h1>Executive Dashboard</h1>
             <p>Şirkətinizin təlim ehtiyacları üzrə icmal və analitika — BI-səviyyəli hesabat mərkəzi.</p>
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+          <div className="no-print" style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
             <div>
               <div className="filter-label">İl</div>
               <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} style={{ minWidth: 140 }}>
@@ -191,10 +195,16 @@ export default function DashboardView({ trainings }) {
                 {years.map((y) => <option key={y} value={y}>{y}</option>)}
               </select>
             </div>
+            <button onClick={exportPdf} className="btn btn-outline" style={{ height: 40 }}>
+              <Printer size={14} strokeWidth={2.2} /> PDF-ə ixrac et
+            </button>
             <button onClick={exportDashboard} className="btn btn-success" style={{ height: 40 }}>
               <Download size={14} strokeWidth={2.2} /> Excel-ə ixrac et
             </button>
           </div>
+        </div>
+        <div className="print-only-block" style={{ fontSize: 11.5, color: 'var(--ink-500)', marginTop: 4 }}>
+          Hazırlanma tarixi: {new Date().toLocaleDateString('az-AZ')} {selectedYear !== 'all' ? `· İl: ${selectedYear}` : ''}
         </div>
       </div>
 

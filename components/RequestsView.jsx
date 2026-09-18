@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Folder, Clock, Search, CheckCircle2, XCircle, FileText, CheckCheck, ListPlus } from 'lucide-react';
+import { Plus, Folder, Clock, Search, CheckCircle2, XCircle, FileText, CheckCheck, ListPlus, RotateCcw, Pencil } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import { reqStatusMeta, groupByEmployee } from '../lib/helpers';
 import { showToast } from '../lib/toast';
@@ -8,12 +8,14 @@ import EmptyState from './EmptyState';
 import RequestFormModal from './RequestFormModal';
 import NoteModal from './NoteModal';
 import AddToPlanModal from './AddToPlanModal';
+import ResubmitModal from './ResubmitModal';
 import CountUp from './CountUp';
 
 export default function RequestsView({ profile, team, requests, planYear, onDataChanged }) {
   const [showForm, setShowForm] = useState(false);
   const [noteAction, setNoteAction] = useState(null);
   const [addToPlanRequest, setAddToPlanRequest] = useState(null);
+  const [resubmitRequest, setResubmitRequest] = useState(null);
 
   const role = profile.role;
   const hasTeam = team && team.length > 0;
@@ -38,7 +40,7 @@ export default function RequestsView({ profile, team, requests, planYear, onData
   const reviewerActive = isReviewer
     ? Object.fromEntries(Object.entries(reviewerGrouped).map(([d, list]) => [d, list.filter((r) => r.status === 'Pending' || r.status === 'In Review')]).filter(([, list]) => list.length))
     : {};
-  const reviewerDecided = isReviewer ? requests.filter((r) => (r.status === 'Approved' || r.status === 'Rejected') && r.source !== 'Manager Survey') : [];
+  const reviewerDecided = isReviewer ? requests.filter((r) => (r.status === 'Approved' || r.status === 'Rejected' || r.status === 'Needs Revision') && r.source !== 'Manager Survey') : [];
   const pendingCount = isReviewer ? requests.filter((r) => r.status === 'Pending').length : 0;
 
   const reviewInReviewCount = isReviewer ? Object.values(reviewerActive).flat().filter((r) => r.status === 'In Review').length : 0;
@@ -67,6 +69,7 @@ export default function RequestsView({ profile, team, requests, planYear, onData
     setShowForm(false);
     setNoteAction(null);
     setAddToPlanRequest(null);
+    setResubmitRequest(null);
     await onDataChanged();
   }
 
@@ -93,12 +96,14 @@ export default function RequestsView({ profile, team, requests, planYear, onData
   }
 
   function RequestTable({ list, showNotes }) {
+    const colCount = showNotes ? 7 : 5;
     return (
       <table>
         <thead>
           <tr>
             <th>Təlim</th><th>Prioritet</th><th>Status</th><th>Göndərilib</th>
             {showNotes && <><th>Manager qeydi</th><th>L&D qeydi</th></>}
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -109,9 +114,16 @@ export default function RequestsView({ profile, team, requests, planYear, onData
               <td><ReqStatusBadge status={r.status} /></td>
               <td>{new Date(r.created_at).toLocaleDateString('az-AZ')}</td>
               {showNotes && (<><td style={{ fontSize: 12.5 }}>{r.manager_note || '—'}</td><td style={{ fontSize: 12.5 }}>{r.reviewer_note || '—'}</td></>)}
+              <td>
+                {r.status === 'Needs Revision' && (
+                  <button onClick={() => setResubmitRequest(r)} className="btn btn-warning btn-sm">
+                    <Pencil size={12} strokeWidth={2.2} /> Redaktə et
+                  </button>
+                )}
+              </td>
             </tr>
           )) : (
-            <tr><td colSpan={showNotes ? 6 : 4}><EmptyState icon={FileText}>Hələ sorğu yoxdur</EmptyState></td></tr>
+            <tr><td colSpan={colCount}><EmptyState icon={FileText}>Hələ sorğu yoxdur</EmptyState></td></tr>
           )}
         </tbody>
       </table>
@@ -286,6 +298,7 @@ export default function RequestsView({ profile, team, requests, planYear, onData
                         {r.status === 'In Review' && (
                           <>
                             <button onClick={() => setNoteAction({ type: 'ld-approve', id: r.id })} className="btn btn-success btn-sm"><CheckCircle2 size={13} strokeWidth={2.2} /> Təsdiqlə</button>
+                            <button onClick={() => setNoteAction({ type: 'ld-revise', id: r.id })} className="btn btn-warning btn-sm"><RotateCcw size={13} strokeWidth={2.2} /> Geri göndər</button>
                             <button onClick={() => setNoteAction({ type: 'ld-reject', id: r.id })} className="btn btn-danger btn-sm"><XCircle size={13} strokeWidth={2.2} /> Rədd et</button>
                           </>
                         )}
@@ -353,16 +366,19 @@ export default function RequestsView({ profile, team, requests, planYear, onData
               noteAction.type === 'manager-approve' ? 'Təsdiq qeydiniz (əsaslandırma)' :
               noteAction.type === 'manager-reject' ? 'Rədd səbəbi' :
               noteAction.type === 'ld-approve' ? 'Analiz qeydiniz (vəzifə uyğunluğu, büdcə və s.)' :
+              noteAction.type === 'ld-revise' ? 'Nəyin düzəldilməli olduğunu izah edin' :
               'Rədd səbəbi'
             }
-            placeholder="Qeydinizi yazın (istəyə bağlı)..."
-            confirmLabel={noteAction.type.includes('approve') ? 'Təsdiqlə' : 'Rədd et'}
-            confirmVariant={noteAction.type.includes('approve') ? 'success' : 'danger'}
+            placeholder={noteAction.type === 'ld-revise' ? 'Məsələn: təlimin adını daha dəqiq yazın, səbəbi əlavə edin...' : 'Qeydinizi yazın (istəyə bağlı)...'}
+            confirmLabel={noteAction.type.includes('approve') ? 'Təsdiqlə' : noteAction.type === 'ld-revise' ? 'Geri göndər' : 'Rədd et'}
+            confirmVariant={noteAction.type.includes('approve') ? 'success' : noteAction.type === 'ld-revise' ? 'warning' : 'danger'}
+            required={noteAction.type === 'ld-revise'}
             onCancel={() => setNoteAction(null)}
             onConfirm={async (note) => {
               if (noteAction.type === 'manager-approve') await managerDecide(noteAction.id, 'Pending', note);
               if (noteAction.type === 'manager-reject') await managerDecide(noteAction.id, 'Rejected', note);
               if (noteAction.type === 'ld-approve') await ldDecide(noteAction.id, 'Approved', note);
+              if (noteAction.type === 'ld-revise') await ldDecide(noteAction.id, 'Needs Revision', note);
               if (noteAction.type === 'ld-reject') await ldDecide(noteAction.id, 'Rejected', note);
             }}
           />
@@ -370,6 +386,10 @@ export default function RequestsView({ profile, team, requests, planYear, onData
 
         {addToPlanRequest && (
           <AddToPlanModal request={addToPlanRequest} planYear={planYear} onClose={() => setAddToPlanRequest(null)} onSubmitted={refresh} />
+        )}
+
+        {resubmitRequest && (
+          <ResubmitModal request={resubmitRequest} onClose={() => setResubmitRequest(null)} onSubmitted={refresh} />
         )}
       </div>
     </div>

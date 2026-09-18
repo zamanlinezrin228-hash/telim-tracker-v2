@@ -11,6 +11,7 @@ import TrackingView from '../components/TrackingView';
 import RequestsView from '../components/RequestsView';
 import AnnualTnaForm from '../components/AnnualTnaForm';
 import AnnualTnaReview from '../components/AnnualTnaReview';
+import IdpView from '../components/IdpView';
 import ToastHost from '../components/ToastHost';
 
 const NOTIFY_POLL_MS = 60000;
@@ -161,6 +162,9 @@ export default function Home() {
                   </div>
                 )}
               </div>
+            )}
+            {view === 'idp' && (profile.role === 'ld' || profile.role === 'hr') && (
+              <IdpView requests={requests} trainings={trainings} />
             )}
           </div>
         </div>

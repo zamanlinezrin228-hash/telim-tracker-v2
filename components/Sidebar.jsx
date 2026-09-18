@@ -1,4 +1,4 @@
-import { GraduationCap, Home, LayoutDashboard, ClipboardList, FileText, CalendarDays, LogOut } from 'lucide-react';
+import { GraduationCap, Home, LayoutDashboard, ClipboardList, FileText, CalendarDays, UserSquare2, LogOut } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import ThemeToggle from './ThemeToggle';
 
@@ -22,9 +22,12 @@ export default function Sidebar({ view, setView, profile, showAnnualTna, badges 
     window.location.reload();
   }
 
-  const items = showAnnualTna
-    ? [...NAV_ITEMS, { key: 'annual-tna', label: 'İllik TNA', Icon: CalendarDays }]
-    : NAV_ITEMS;
+  const isReviewer = profile?.role === 'ld' || profile?.role === 'hr';
+  const items = [
+    ...NAV_ITEMS,
+    ...(showAnnualTna ? [{ key: 'annual-tna', label: 'İllik TNA', Icon: CalendarDays }] : []),
+    ...(isReviewer ? [{ key: 'idp', label: 'IDP', Icon: UserSquare2 }] : []),
+  ];
 
   return (
     <aside className="sidebar">

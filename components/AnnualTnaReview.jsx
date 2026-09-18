@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Folder, Clock, Search, CheckCircle2, XCircle, CalendarDays, ListPlus, ChevronDown, ChevronRight } from 'lucide-react';
+import { Folder, Clock, Search, CheckCircle2, XCircle, CalendarDays, ListPlus, ChevronDown, ChevronRight, RotateCcw } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import { reqStatusMeta, groupByEmployee } from '../lib/helpers';
 import { showToast } from '../lib/toast';
@@ -8,6 +8,7 @@ import EmptyState from './EmptyState';
 import NoteModal from './NoteModal';
 import AddToPlanModal from './AddToPlanModal';
 import CountUp from './CountUp';
+import TnaCompletionTracker from './TnaCompletionTracker';
 
 function deptAnchorId(dept) {
   return 'tna-dept-' + dept.replace(/[^a-zA-Z0-9əöüğıçşƏÖÜĞIÇŞ]+/g, '-');
@@ -36,7 +37,7 @@ export default function AnnualTnaReview({ profile, requests, planYear, onDataCha
     return g;
   }, [surveyRequests]);
 
-  const decided = surveyRequests.filter((r) => r.status === 'Approved' || r.status === 'Rejected');
+  const decided = surveyRequests.filter((r) => r.status === 'Approved' || r.status === 'Rejected' || r.status === 'Needs Revision');
 
   const decidedGrouped = useMemo(() => {
     const g = {};
@@ -47,12 +48,14 @@ export default function AnnualTnaReview({ profile, requests, planYear, onDataCha
   const pendingCount = surveyRequests.filter((r) => r.status === 'Pending').length;
   const inReviewCount = surveyRequests.filter((r) => r.status === 'In Review').length;
   const approvedCount = decided.filter((r) => r.status === 'Approved').length;
+  const revisionCount = decided.filter((r) => r.status === 'Needs Revision').length;
   const rejectedCount = decided.filter((r) => r.status === 'Rejected').length;
 
   const statCards = [
     { label: 'Analiz gözləyir', value: pendingCount, Icon: Clock, color: '#d97706' },
     { label: 'Baxılır', value: inReviewCount, Icon: Search, color: '#2563eb' },
     { label: 'Təsdiqlənib', value: approvedCount, Icon: CheckCircle2, color: '#059669' },
+    { label: 'Düzəliş tələb olunur', value: revisionCount, Icon: RotateCcw, color: '#ea580c' },
     { label: 'Rədd edilib', value: rejectedCount, Icon: XCircle, color: '#dc2626' },
   ];
 
@@ -92,11 +95,17 @@ export default function AnnualTnaReview({ profile, requests, planYear, onDataCha
   }
 
   if (surveyRequests.length === 0) {
-    return <div className="card" style={{ marginTop: 20 }}><EmptyState icon={CalendarDays}>Hələ illik TNA sorğusu daxil olmayıb.</EmptyState></div>;
+    return (
+      <div style={{ marginTop: 20 }}>
+        <TnaCompletionTracker profile={profile} requests={requests} planYear={planYear} />
+        <div className="card"><EmptyState icon={CalendarDays}>Hələ illik TNA sorğusu daxil olmayıb.</EmptyState></div>
+      </div>
+    );
   }
 
   return (
     <div style={{ marginTop: 28 }}>
+      <TnaCompletionTracker profile={profile} requests={requests} planYear={planYear} />
       <div style={{ height: 1, background: 'var(--border)', margin: '10px 0 24px' }} />
       <div className="section-title">İllik TNA — Departament üzrə Baxış</div>
       <div className="section-sub">Rəhbərlərin doldurduğu illik cədvəllərdən daxil olan qeydlər</div>
@@ -176,6 +185,7 @@ export default function AnnualTnaReview({ profile, requests, planYear, onDataCha
                       {r.status === 'In Review' && (
                         <>
                           <button onClick={() => setNoteAction({ type: 'approve', id: r.id })} className="btn btn-success btn-sm"><CheckCircle2 size={13} strokeWidth={2.2} /> Təsdiqlə</button>
+                          <button onClick={() => setNoteAction({ type: 'revise', id: r.id })} className="btn btn-warning btn-sm"><RotateCcw size={13} strokeWidth={2.2} /> Geri göndər</button>
                           <button onClick={() => setNoteAction({ type: 'reject', id: r.id })} className="btn btn-danger btn-sm"><XCircle size={13} strokeWidth={2.2} /> Rədd et</button>
                         </>
                       )}
@@ -238,13 +248,15 @@ export default function AnnualTnaReview({ profile, requests, planYear, onDataCha
 
       {noteAction && (
         <NoteModal
-          title={noteAction.type === 'approve' ? 'Analiz qeydiniz' : 'Rədd səbəbi'}
-          placeholder="Qeydinizi yazın (istəyə bağlı)..."
-          confirmLabel={noteAction.type === 'approve' ? 'Təsdiqlə' : 'Rədd et'}
-          confirmVariant={noteAction.type === 'approve' ? 'success' : 'danger'}
+          title={noteAction.type === 'approve' ? 'Analiz qeydiniz' : noteAction.type === 'revise' ? 'Nəyin düzəldilməli olduğunu izah edin' : 'Rədd səbəbi'}
+          placeholder={noteAction.type === 'revise' ? 'Məsələn: təlimin adını daha dəqiq yazın, səbəbi əlavə edin...' : 'Qeydinizi yazın (istəyə bağlı)...'}
+          confirmLabel={noteAction.type === 'approve' ? 'Təsdiqlə' : noteAction.type === 'revise' ? 'Geri göndər' : 'Rədd et'}
+          confirmVariant={noteAction.type === 'approve' ? 'success' : noteAction.type === 'revise' ? 'warning' : 'danger'}
+          required={noteAction.type === 'revise'}
           onCancel={() => setNoteAction(null)}
           onConfirm={async (note) => {
-            await decide(noteAction.id, noteAction.type === 'approve' ? 'Approved' : 'Rejected', note);
+            const targetStatus = noteAction.type === 'approve' ? 'Approved' : noteAction.type === 'revise' ? 'Needs Revision' : 'Rejected';
+            await decide(noteAction.id, targetStatus, note);
           }}
         />
       )}

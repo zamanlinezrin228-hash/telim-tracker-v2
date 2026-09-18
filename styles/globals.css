@@ -242,6 +242,9 @@ select:focus-visible, input:focus-visible, textarea:focus-visible { outline: non
 .btn-purple { background: var(--purple); color: #fff; }
 .btn-purple:hover:not(:disabled) { filter: brightness(1.1); }
 
+.btn-warning { background: var(--amber); color: #fff; }
+.btn-warning:hover:not(:disabled) { filter: brightness(1.1); }
+
 .btn-outline { background: var(--surface); border-color: var(--ink-300); color: var(--ink-700); }
 .btn-outline:hover:not(:disabled) { border-color: var(--ink-400); background: var(--ink-50); }
 
@@ -800,4 +803,45 @@ tbody tr:hover td.sticky-col { background: var(--ink-200); }
 @media (max-width: 640px) {
   .slicer-panel { width: 220px; }
   .funnel-label { width: 96px; }
+}
+
+/* ---------- Individual Development Plan (IDP) document ---------- */
+
+.idp-header-card {
+  display: flex; align-items: center; gap: 16px;
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-700) 100%);
+  color: #fff; border: none;
+}
+.idp-header-icon {
+  width: 56px; height: 56px; border-radius: 14px; flex-shrink: 0;
+  background: rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center;
+}
+.idp-employee-name { font-size: 22px; font-weight: 800; }
+.idp-employee-meta { font-size: 13px; color: rgba(255,255,255,0.85); margin-top: 4px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.idp-meta-dot { opacity: .6; }
+.idp-generated { font-size: 11.5px; color: rgba(255,255,255,0.7); white-space: nowrap; flex-shrink: 0; }
+.idp-req-card:first-child { border-top: none; }
+
+/* ---------- print (window.print() PDF exports: IDP, Dashboard) ---------- */
+
+.print-only-block { display: none; }
+
+@media print {
+  .no-print, .sidebar, .toast-host, .theme-toggle { display: none !important; }
+  .print-only-block { display: block !important; }
+  .app-shell { display: block !important; }
+  .app-main { width: 100% !important; }
+  body { background: #fff !important; }
+  .page { max-width: none !important; padding: 8px !important; }
+  .page-header { padding: 0 0 12px !important; }
+  * {
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .card, .stat-card, .req-card, .insight-card, table, tr { break-inside: avoid; }
+  .stagger-item, .view-enter, .card-hover, .home-card, .stat-card {
+    animation: none !important; transition: none !important; transform: none !important;
+  }
+  .table-wrap { max-height: none !important; overflow: visible !important; }
 }

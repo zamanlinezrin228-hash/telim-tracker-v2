@@ -1,4 +1,4 @@
-import { Clock, Search, CheckCircle2, XCircle, RefreshCw, PauseCircle, CalendarClock, AlertTriangle, ArrowUp, ArrowDown, Minus } from 'lucide-react';
+import { Clock, Search, CheckCircle2, XCircle, RefreshCw, PauseCircle, CalendarClock, AlertTriangle, ArrowUp, ArrowDown, Minus, RotateCcw } from 'lucide-react';
 import { statusMeta, priorityMeta, reqStatusMeta } from '../lib/helpers';
 
 const TRAINING_STATUS_ICONS = {
@@ -13,6 +13,7 @@ const REQ_STATUS_ICONS = {
   'Pending Manager Review': Clock,
   'Pending': Clock,
   'In Review': Search,
+  'Needs Revision': RotateCcw,
   'Approved': CheckCircle2,
   'Rejected': XCircle,
 };
