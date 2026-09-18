@@ -176,7 +176,7 @@ export default function AnalysisView({ trainings }) {
       <div className="section-title">Ətraflı Analiz</div>
       <div className="section-sub" style={{ marginBottom: 18 }}>Sahələri seçib canlı cədvəl analiz qurun</div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card no-print" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 16, alignItems: 'flex-end' }}>
           <div>
             <div className="filter-label">Sətir sahəsi</div>
