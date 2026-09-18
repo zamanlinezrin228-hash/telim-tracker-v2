@@ -1,7 +1,8 @@
-import { LayoutDashboard, ClipboardList, FileText, CalendarDays, ArrowRight } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, FileText, CalendarDays, UserSquare2, ArrowRight } from 'lucide-react';
 
 export default function HomeScreen({ profile, team, setView, tnaWindowOpen, planYear }) {
   const hasTeam = team && team.length > 0;
+  const isReviewer = profile.role === 'ld' || profile.role === 'hr';
 
   const cards = [
     {
@@ -44,6 +45,17 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
       Icon: CalendarDays,
       accent: '#dc2626',
       linkLabel: 'Formu doldur',
+    });
+  }
+
+  if (isReviewer) {
+    cards.push({
+      key: 'idp',
+      title: 'Fərdi İnkişaf Planı (IDP)',
+      desc: 'Bir əməkdaşın bütün təlim sorğularını və nəticələrini vahid, çap edilə bilən sənəddə görün.',
+      Icon: UserSquare2,
+      accent: '#7c3aed',
+      linkLabel: 'Plan yarat',
     });
   }
 
