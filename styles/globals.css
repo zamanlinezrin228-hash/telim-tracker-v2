@@ -242,6 +242,9 @@ select:focus-visible, input:focus-visible, textarea:focus-visible { outline: non
 .btn-purple { background: var(--purple); color: #fff; }
 .btn-purple:hover:not(:disabled) { filter: brightness(1.1); }
 
+.btn-warning { background: var(--amber); color: #fff; }
+.btn-warning:hover:not(:disabled) { filter: brightness(1.1); }
+
 .btn-outline { background: var(--surface); border-color: var(--ink-300); color: var(--ink-700); }
 .btn-outline:hover:not(:disabled) { border-color: var(--ink-400); background: var(--ink-50); }
 
