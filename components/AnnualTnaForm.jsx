@@ -69,19 +69,13 @@ function deptMatch(a, b) {
   return DEPT_SYNONYM_PAIRS.some(([x, y]) => (na.includes(x) && nb.includes(y)) || (na.includes(y) && nb.includes(x)));
 }
 
-// Fuzzy-matches by position first (most specific); if nothing matches on
-// position, falls back to department. Returns the full set of library rows
-// for whichever level matched, or [] if neither matched anything.
-function matchesForRow(library, { dept, position }) {
-  if (position) {
-    const byPosition = library.filter((row) => textMatch(row.position, position));
-    if (byPosition.length) return byPosition;
-  }
-  if (dept) {
-    const byDept = library.filter((row) => deptMatch(row.dept, dept));
-    if (byDept.length) return byDept;
-  }
-  return [];
+// Shows the full breadth of the employee's department — not narrowed to
+// their specific position — so managers can browse every competency
+// recorded for that department, not just the ones tagged to a matching
+// position string in the library.
+function matchesForRow(library, dept) {
+  if (!dept) return [];
+  return library.filter((row) => deptMatch(row.dept, dept));
 }
 
 function uniqueSorted(values) {
@@ -205,8 +199,8 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 12.5, color: 'var(--blue)', marginBottom: 18 }}>
         <Lightbulb size={15} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
         <span>
-          Əməkdaş seçdikdən sonra Kateqoriya → Səriştə → Alt səriştə sahələrində onun vəzifəsinə (yoxdursa departamentinə) uyğun
-          səriştə təklifləri avtomatik görünəcək (istəyə bağlı — özünüz də tamamilə fərqli bir şey yaza bilərsiniz).
+          Əməkdaş seçdikdən sonra Kateqoriya → Səriştə → Alt səriştə sahələrində onun departamentinə aid bütün səriştə
+          siyahısı görünəcək (istəyə bağlı — özünüz də tamamilə fərqli bir şey yaza bilərsiniz).
         </span>
       </div>
 
@@ -223,7 +217,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
             </thead>
             <tbody>
               {rows.map((r, idx) => {
-                const matched = matchesForRow(library, { dept: deptForRow(r), position: r.position });
+                const matched = matchesForRow(library, deptForRow(r));
                 const categoryOptions = uniqueSorted(matched.map((m) => m.category));
                 const scopedByCategory = r.category ? matched.filter((m) => normalize(m.category) === normalize(r.category)) : matched;
                 const competencyOptions = uniqueSorted(scopedByCategory.map((m) => m.competency));
@@ -269,6 +263,10 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                         list={`sub-${idx}`} autoComplete="off" placeholder="Alt səriştə *"
                       />
                       <datalist id={`sub-${idx}`}>{subOptions.map((o) => <option key={o} value={o} />)}</datalist>
+
+                      <div style={{ fontSize: 10, color: 'var(--ink-400)', lineHeight: 1.3 }}>
+                        Aşağıdakı siyahıdan uyğun səriştəni seçə bilərsiniz. Əgər axtardığınız burada yoxdursa, sərbəst şəkildə özünüz yaza bilərsiniz.
+                      </div>
 
                       {matchedSub && (matchedSub.required_level || matchedSub.criticality) && (
                         <div style={{ fontSize: 10.5, color: 'var(--ink-400)', lineHeight: 1.35 }}>
