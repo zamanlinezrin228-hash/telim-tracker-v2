@@ -8,6 +8,7 @@ import EmptyState from './EmptyState';
 import NoteModal from './NoteModal';
 import AddToPlanModal from './AddToPlanModal';
 import CountUp from './CountUp';
+import TnaCompletionTracker from './TnaCompletionTracker';
 
 function deptAnchorId(dept) {
   return 'tna-dept-' + dept.replace(/[^a-zA-Z0-9əöüğıçşƏÖÜĞIÇŞ]+/g, '-');
@@ -94,11 +95,17 @@ export default function AnnualTnaReview({ profile, requests, planYear, onDataCha
   }
 
   if (surveyRequests.length === 0) {
-    return <div className="card" style={{ marginTop: 20 }}><EmptyState icon={CalendarDays}>Hələ illik TNA sorğusu daxil olmayıb.</EmptyState></div>;
+    return (
+      <div style={{ marginTop: 20 }}>
+        <TnaCompletionTracker profile={profile} requests={requests} planYear={planYear} />
+        <div className="card"><EmptyState icon={CalendarDays}>Hələ illik TNA sorğusu daxil olmayıb.</EmptyState></div>
+      </div>
+    );
   }
 
   return (
     <div style={{ marginTop: 28 }}>
+      <TnaCompletionTracker profile={profile} requests={requests} planYear={planYear} />
       <div style={{ height: 1, background: 'var(--border)', margin: '10px 0 24px' }} />
       <div className="section-title">İllik TNA — Departament üzrə Baxış</div>
       <div className="section-sub">Rəhbərlərin doldurduğu illik cədvəllərdən daxil olan qeydlər</div>
