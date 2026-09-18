@@ -173,7 +173,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
 
   if (done) {
     return (
-      <div className="page">
+      <div>
         <div className="card" style={{ textAlign: 'center', padding: 40 }}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10, color: 'var(--green)' }}><CheckCircle2 size={38} strokeWidth={1.7} /></div>
           <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Göndərildi</div>
@@ -189,7 +189,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
   }
 
   return (
-    <div className="page">
+    <div>
       <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>İllik TNA — {planYear}</div>
       <div className="section-sub" style={{ marginBottom: 10 }}>
         {hasTeam
