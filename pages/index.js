@@ -10,7 +10,7 @@ import DashboardView from '../components/DashboardView';
 import TrackingView from '../components/TrackingView';
 import RequestsView from '../components/RequestsView';
 import AnnualTnaForm from '../components/AnnualTnaForm';
-import AnnualTnaReview from '../components/AnnualTnaReview';
+import AnnualTnaHub from '../components/AnnualTnaHub';
 import IdpView from '../components/IdpView';
 import ToastHost from '../components/ToastHost';
 
@@ -153,13 +153,17 @@ export default function Home() {
             )}
             {view === 'annual-tna' && (
               <div>
-                {(appSettings.tna_window_open || profile.role === 'ld') && (
-                  <AnnualTnaForm profile={profile} team={team} planYear={appSettings.tna_plan_year} onSubmitted={handleDataChanged} />
-                )}
-                {(profile.role === 'ld' || profile.role === 'hr') && (
-                  <div className="page" style={{ paddingTop: 0 }}>
-                    <AnnualTnaReview profile={profile} requests={requests} planYear={appSettings.tna_plan_year} onDataChanged={handleDataChanged} />
-                  </div>
+                {isReviewer ? (
+                  <AnnualTnaHub
+                    profile={profile} team={team} requests={requests} planYear={appSettings.tna_plan_year}
+                    tnaWindowOpen={appSettings.tna_window_open} onDataChanged={handleDataChanged}
+                  />
+                ) : (
+                  appSettings.tna_window_open && (
+                    <div className="page">
+                      <AnnualTnaForm profile={profile} team={team} planYear={appSettings.tna_plan_year} onSubmitted={handleDataChanged} />
+                    </div>
+                  )
                 )}
               </div>
             )}

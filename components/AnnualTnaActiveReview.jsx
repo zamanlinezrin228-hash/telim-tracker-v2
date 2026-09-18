@@ -1,14 +1,11 @@
 import { useState, useMemo } from 'react';
-import { Folder, Clock, Search, CheckCircle2, XCircle, CalendarDays, ListPlus, ChevronDown, ChevronRight, RotateCcw } from 'lucide-react';
+import { Folder, Clock, Search, CheckCircle2, XCircle, CalendarDays, ChevronDown, ChevronRight, RotateCcw } from 'lucide-react';
 import { sb } from '../lib/supabase';
-import { reqStatusMeta, groupByEmployee } from '../lib/helpers';
 import { showToast } from '../lib/toast';
 import { ReqStatusBadge, PriorityBadge } from './Badges';
 import EmptyState from './EmptyState';
 import NoteModal from './NoteModal';
-import AddToPlanModal from './AddToPlanModal';
 import CountUp from './CountUp';
-import TnaCompletionTracker from './TnaCompletionTracker';
 
 function deptAnchorId(dept) {
   return 'tna-dept-' + dept.replace(/[^a-zA-Z0-9əöüğıçşƏÖÜĞIÇŞ]+/g, '-');
@@ -19,9 +16,11 @@ function scrollToDept(dept) {
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-export default function AnnualTnaReview({ profile, requests, planYear, onDataChanged }) {
+// "Departament üzrə baxış" tab content — the currently-active (Pending /
+// In Review) Manager Survey requests, grouped by department, with the
+// take-into-review / approve / revise / reject actions.
+export default function AnnualTnaActiveReview({ profile, requests, onDataChanged }) {
   const [noteAction, setNoteAction] = useState(null);
-  const [addToPlanRequest, setAddToPlanRequest] = useState(null);
   const [expandedDepts, setExpandedDepts] = useState(new Set());
 
   const surveyRequests = useMemo(
@@ -38,12 +37,6 @@ export default function AnnualTnaReview({ profile, requests, planYear, onDataCha
   }, [surveyRequests]);
 
   const decided = surveyRequests.filter((r) => r.status === 'Approved' || r.status === 'Rejected' || r.status === 'Needs Revision');
-
-  const decidedGrouped = useMemo(() => {
-    const g = {};
-    decided.forEach((r) => { (g[r.dept] = g[r.dept] || []).push(r); });
-    return g;
-  }, [decided]);
 
   const pendingCount = surveyRequests.filter((r) => r.status === 'Pending').length;
   const inReviewCount = surveyRequests.filter((r) => r.status === 'In Review').length;
@@ -76,7 +69,6 @@ export default function AnnualTnaReview({ profile, requests, planYear, onDataCha
 
   async function refresh() {
     setNoteAction(null);
-    setAddToPlanRequest(null);
     await onDataChanged();
   }
 
@@ -95,18 +87,11 @@ export default function AnnualTnaReview({ profile, requests, planYear, onDataCha
   }
 
   if (surveyRequests.length === 0) {
-    return (
-      <div style={{ marginTop: 20 }}>
-        <TnaCompletionTracker profile={profile} requests={requests} planYear={planYear} />
-        <div className="card"><EmptyState icon={CalendarDays}>Hələ illik TNA sorğusu daxil olmayıb.</EmptyState></div>
-      </div>
-    );
+    return <div className="card"><EmptyState icon={CalendarDays}>Hələ illik TNA sorğusu daxil olmayıb.</EmptyState></div>;
   }
 
   return (
-    <div style={{ marginTop: 28 }}>
-      <TnaCompletionTracker profile={profile} requests={requests} planYear={planYear} />
-      <div style={{ height: 1, background: 'var(--border)', margin: '10px 0 24px' }} />
+    <div>
       <div className="section-title">İllik TNA — Departament üzrə Baxış</div>
       <div className="section-sub">Rəhbərlərin doldurduğu illik cədvəllərdən daxil olan qeydlər</div>
 
@@ -198,52 +183,7 @@ export default function AnnualTnaReview({ profile, requests, planYear, onDataCha
         );
       })}
       {activeDepts.length === 0 && (
-        <div className="card" style={{ marginBottom: 20 }}><EmptyState icon={CheckCircle2}>Aktiv sorğu yoxdur</EmptyState></div>
-      )}
-
-      {decided.length > 0 && (
-        <>
-          <div className="section-head"><div className="section-title">Qərarlar tarixçəsi ({decided.length})</div></div>
-          {Object.keys(decidedGrouped).sort().map((dept, i) => (
-            <div key={dept} className="card stagger-item" style={{ marginBottom: 14, '--i': i }}>
-              <div className="req-dept-head"><Folder size={15} strokeWidth={2} /> {dept} <span className="req-dept-count">{decidedGrouped[dept].length}</span></div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14, marginTop: 12 }}>
-                {groupByEmployee(decidedGrouped[dept]).map(([employeeName, items]) => (
-                  <div key={employeeName} className="card card-hover" style={{ padding: 0, overflow: 'hidden' }}>
-                    <div style={{ padding: '12px 14px 4px' }}>
-                      <div style={{ fontWeight: 700, fontSize: 14 }}>{employeeName}</div>
-                      {items[0].position && <div style={{ fontSize: 11.5, color: 'var(--ink-400)' }}>{items[0].position}</div>}
-                    </div>
-                    {items.map((r) => {
-                      const statusColor = reqStatusMeta(r.status).color;
-                      return (
-                        <div key={r.id} style={{ borderTop: '1px solid var(--ink-100)' }}>
-                          <div style={{ height: 4, background: statusColor }} />
-                          <div style={{ padding: 12 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
-                              <div style={{ fontSize: 13, color: 'var(--ink-700)' }}>{r.training_title}</div>
-                              <ReqStatusBadge status={r.status} />
-                            </div>
-                            {r.reason && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginBottom: 8, lineHeight: 1.5 }}>{r.reason}</div>}
-                            {r.reviewer_note && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginBottom: 10 }}><b>Qeyd:</b> {r.reviewer_note}</div>}
-                            {r.status === 'Approved' && !r.linked_training_id && (
-                              <button onClick={() => setAddToPlanRequest(r)} className="btn btn-purple btn-sm btn-block"><ListPlus size={13} strokeWidth={2.2} /> Plana Əlavə Et</button>
-                            )}
-                            {r.linked_training_id && (
-                              <div style={{ fontSize: 12, color: 'var(--green)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <CheckCircle2 size={13} strokeWidth={2.4} /> Planda var
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </>
+        <div className="card"><EmptyState icon={CheckCircle2}>Aktiv sorğu yoxdur</EmptyState></div>
       )}
 
       {noteAction && (
@@ -259,10 +199,6 @@ export default function AnnualTnaReview({ profile, requests, planYear, onDataCha
             await decide(noteAction.id, targetStatus, note);
           }}
         />
-      )}
-
-      {addToPlanRequest && (
-        <AddToPlanModal request={addToPlanRequest} planYear={planYear} onClose={() => setAddToPlanRequest(null)} onSubmitted={refresh} />
       )}
     </div>
   );
