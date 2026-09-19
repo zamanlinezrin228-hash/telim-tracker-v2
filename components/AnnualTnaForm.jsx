@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { CheckCircle2, Plus, X, Send, Lightbulb } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { CheckCircle2, Plus, X, Send, Lightbulb, UserCheck } from 'lucide-react';
 import { sb } from '../lib/supabase';
 
 const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical'];
@@ -20,6 +20,7 @@ function focusOut(e) { e.target.style.border = '1px solid transparent'; e.target
 
 function emptyRow(defaultEmployeeId = '') {
   return {
+    sourceRequestId: null,
     employeeId: defaultEmployeeId, manualName: '', position: '', category: '', competency: '', skill: '', needReason: '',
     priority: 'Medium', importance: '', currentLevel: '', requiredLevel: '',
     start: '', end: '',
@@ -92,12 +93,52 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
   const [library, setLibrary] = useState([]);
+  const mergedPendingRef = useRef(false);
 
   useEffect(() => {
     sb.from('competency_library').select('dept, position, category, competency, sub_competency, criticality, required_level').then(({ data }) => {
       setLibrary(data || []);
     });
   }, []);
+
+  // A direct report without a team of their own can submit a single Annual
+  // TNA need through their manager (see handleSubmit's no-team branch, which
+  // routes it to 'Pending Manager Review' instead of straight to L&D). Those
+  // rows surface here so the manager can review/edit them alongside their
+  // own entries and forward the whole batch together — merged in once per
+  // mount, since Kateqoriya/Səriştə (the two upper cascade levels) were
+  // never persisted and can't be reconstructed, only the final Alt səriştə.
+  useEffect(() => {
+    if (!hasTeam || mergedPendingRef.current) return;
+    mergedPendingRef.current = true;
+    sb.from('training_requests')
+      .select('*')
+      .eq('reviewing_manager_id', profile.id)
+      .eq('status', 'Pending Manager Review')
+      .eq('source', 'Manager Survey')
+      .then(({ data }) => {
+        if (!data || data.length === 0) return;
+        const mapped = data.map((r) => {
+          const submitter = team.find((t) => t.id === r.requested_by);
+          return {
+            sourceRequestId: r.id,
+            employeeId: submitter ? r.requested_by : '',
+            manualName: submitter ? '' : (r.employee_name || ''),
+            position: r.position || '',
+            category: '', competency: '',
+            skill: r.training_title || '',
+            needReason: r.reason || '',
+            priority: r.priority || 'Medium',
+            importance: r.importance_level || '',
+            currentLevel: r.current_skill_level || '',
+            requiredLevel: r.required_skill_level || '',
+            start: r.preferred_start || '', end: r.preferred_end || '',
+          };
+        });
+        setRows((prev) => [...mapped, ...prev]);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasTeam, profile.id]);
 
   function deptForRow(r) {
     if (r.employeeId) {
@@ -137,16 +178,19 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
       return;
     }
     // Every filled-in row must be complete before submission — only the
-    // date fields (start/end) stay optional.
+    // date fields (start/end) stay optional. Kateqoriya/Səriştə are exempt
+    // for rows an employee already submitted (sourceRequestId set): that
+    // data was only ever UI scaffolding to narrow down Alt səriştə and was
+    // never persisted, so there's nothing to re-validate on the merged row.
     if (filled.some((r) => !r.position.trim())) {
       setError('Doldurulan hər sətirdə "Vəzifə" mütləqdir.');
       return;
     }
-    if (filled.some((r) => !r.category.trim())) {
+    if (filled.some((r) => !r.sourceRequestId && !r.category.trim())) {
       setError('Doldurulan hər sətirdə "Kateqoriya" mütləqdir.');
       return;
     }
-    if (filled.some((r) => !r.competency.trim())) {
+    if (filled.some((r) => !r.sourceRequestId && !r.competency.trim())) {
       setError('Doldurulan hər sətirdə "Səriştə" mütləqdir.');
       return;
     }
@@ -168,10 +212,21 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
       return;
     }
 
-    const payloads = filled.map((r) => {
+    // A manager submitting (for themselves or their team) IS the review
+    // step, so those rows go straight to L&D. A no-team employee submitting
+    // for themselves has no such oversight built into the act of filling
+    // the form, so their row needs to actually go through their manager
+    // first — the same routing RequestFormModal already uses for ad-hoc
+    // self-submissions.
+    const newRowStatus = hasTeam ? 'Pending' : (profile.manager_id ? 'Pending Manager Review' : 'Pending');
+    const newRowReviewingManager = hasTeam ? null : (profile.manager_id || null);
+
+    const newRows = filled.filter((r) => !r.sourceRequestId);
+    const mergedRows = filled.filter((r) => r.sourceRequestId);
+
+    function fieldsFor(r) {
       const member = r.employeeId ? selectableEmployees.find((t) => t.id === r.employeeId) : null;
       return {
-        requested_by: profile.id,
         employee_name: member ? (member.full_name_az || member.id) : r.manualName.trim(),
         dept: member?.dept || profile.dept || '—',
         sube: member?.sube || profile.sube || null,
@@ -184,16 +239,42 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
         required_skill_level: r.requiredLevel || null,
         preferred_start: r.start || null,
         preferred_end: r.end || null,
-        source: 'Manager Survey',
-        status: 'Pending',
-        reviewing_manager_id: null,
       };
-    });
+    }
+
+    const insertPayloads = newRows.map((r) => ({
+      ...fieldsFor(r),
+      requested_by: profile.id,
+      source: 'Manager Survey',
+      status: newRowStatus,
+      reviewing_manager_id: newRowReviewingManager,
+    }));
 
     setSubmitting(true);
-    const { error: err } = await sb.from('training_requests').insert(payloads);
+    const tasks = [];
+    if (insertPayloads.length) {
+      tasks.push(sb.from('training_requests').insert(insertPayloads));
+    }
+    // Employee-submitted rows are UPDATEd in place (never re-inserted) so
+    // requested_by keeps pointing at the original submitter — the manager
+    // including it in their batch is what moves it from 'Pending Manager
+    // Review' to 'Pending', recorded the same way ad-hoc manager approvals
+    // already are (manager_reviewed_by set, manager_note for any comment).
+    mergedRows.forEach((r) => {
+      tasks.push(
+        sb.from('training_requests').update({
+          ...fieldsFor(r),
+          status: 'Pending',
+          manager_reviewed_by: profile.id,
+          updated_at: new Date().toISOString(),
+        }).eq('id', r.sourceRequestId)
+      );
+    });
+
+    const results = await Promise.all(tasks);
     setSubmitting(false);
-    if (err) { setError('Xəta: ' + err.message); return; }
+    const failed = results.find((res) => res.error);
+    if (failed) { setError('Xəta: ' + failed.error.message); return; }
     setDone(true);
   }
 
@@ -255,6 +336,11 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                 <tr key={idx} style={{ background: idx % 2 === 0 ? 'var(--surface)' : 'var(--ink-50)' }}>
                   <td style={{ textAlign: 'center', color: 'var(--ink-300)', fontSize: 12, fontWeight: 600, borderTop: '1px solid var(--ink-100)' }}>{idx + 1}</td>
                   <td style={{ minWidth: 170, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
+                    {r.sourceRequestId && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: 'var(--purple)', marginBottom: 3 }}>
+                        <UserCheck size={11} strokeWidth={2.4} /> Əməkdaş təqdim edib
+                      </div>
+                    )}
                     <select value={r.employeeId} onChange={(e) => updateRow(idx, 'employeeId', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
                       <option value="">— Siyahıdan seç —</option>
                       <option value={self.id}>{self.full_name_az} (Mən)</option>
