@@ -136,9 +136,35 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
       setError('Ən azı bir sətirdə əməkdaş adı və inkişaf istiqaməti doldurun.');
       return;
     }
+    // Every filled-in row must be complete before submission — only the
+    // date fields (start/end) stay optional.
+    if (filled.some((r) => !r.position.trim())) {
+      setError('Doldurulan hər sətirdə "Vəzifə" mütləqdir.');
+      return;
+    }
+    if (filled.some((r) => !r.category.trim())) {
+      setError('Doldurulan hər sətirdə "Kateqoriya" mütləqdir.');
+      return;
+    }
+    if (filled.some((r) => !r.competency.trim())) {
+      setError('Doldurulan hər sətirdə "Səriştə" mütləqdir.');
+      return;
+    }
     const missingReason = filled.some((r) => !r.needReason.trim());
     if (missingReason) {
       setError('Doldurulan hər sətirdə "Ehtiyacın yaranma səbəbi" mütləqdir.');
+      return;
+    }
+    if (filled.some((r) => !r.importance)) {
+      setError('Doldurulan hər sətirdə "Əhəmiyyət" mütləqdir.');
+      return;
+    }
+    if (filled.some((r) => !r.currentLevel)) {
+      setError('Doldurulan hər sətirdə "Cari" səviyyə mütləqdir.');
+      return;
+    }
+    if (filled.some((r) => !r.requiredLevel)) {
+      setError('Doldurulan hər sətirdə "Tələb olunan" səviyyə mütləqdir.');
       return;
     }
 
@@ -210,7 +236,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
             <thead>
               <tr>
                 <th style={{ width: 36 }}></th>
-                {['Əməkdaş', 'Vəzifə', 'İnkişaf istiqaməti *', 'Ehtiyacın yaranma səbəbi *', 'Prioritet', 'Əhəmiyyət', 'Cari', 'Tələb olunan', 'Başlama', 'Bitmə', ''].map((h, i) => (
+                {['Əməkdaş *', 'Vəzifə *', 'İnkişaf istiqaməti *', 'Ehtiyacın yaranma səbəbi *', 'Prioritet', 'Əhəmiyyət *', 'Cari *', 'Tələb olunan *', 'Başlama', 'Bitmə', ''].map((h, i) => (
                   <th key={i}>{h}</th>
                 ))}
               </tr>
@@ -246,14 +272,14 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                       <input
                         type="text" value={r.category} onChange={(e) => updateRow(idx, 'category', e.target.value)}
                         onFocus={focusIn} onBlur={focusOut} style={miniInputStyle}
-                        list={`cat-${idx}`} autoComplete="off" placeholder="Kateqoriya"
+                        list={`cat-${idx}`} autoComplete="off" placeholder="Kateqoriya *"
                       />
                       <datalist id={`cat-${idx}`}>{categoryOptions.map((o) => <option key={o} value={o} />)}</datalist>
 
                       <input
                         type="text" value={r.competency} onChange={(e) => updateRow(idx, 'competency', e.target.value)}
                         onFocus={focusIn} onBlur={focusOut} style={miniInputStyle}
-                        list={`comp-${idx}`} autoComplete="off" placeholder="Səriştə"
+                        list={`comp-${idx}`} autoComplete="off" placeholder="Səriştə *"
                       />
                       <datalist id={`comp-${idx}`}>{competencyOptions.map((o) => <option key={o} value={o} />)}</datalist>
 
