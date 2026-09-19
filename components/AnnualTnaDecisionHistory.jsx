@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Folder, ListPlus, CheckCircle2, History } from 'lucide-react';
 import { reqStatusMeta, groupByEmployee } from '../lib/helpers';
-import { ReqStatusBadge } from './Badges';
+import { ReqStatusBadge, PriorityBadge } from './Badges';
 import EmptyState from './EmptyState';
 import AddToPlanModal from './AddToPlanModal';
 
@@ -59,9 +59,31 @@ export default function AnnualTnaDecisionHistory({ requests, planYear, onDataCha
                       <div style={{ padding: 12 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
                           <div style={{ fontSize: 13, color: 'var(--ink-700)' }}>{r.training_title}</div>
-                          <ReqStatusBadge status={r.status} />
+                          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                            <PriorityBadge priority={r.priority} />
+                            <ReqStatusBadge status={r.status} />
+                          </div>
                         </div>
-                        {r.reason && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginBottom: 8, lineHeight: 1.5 }}>{r.reason}</div>}
+                        {r.reason && (
+                          <div className="req-field-highlight" style={{ marginBottom: 8 }}>
+                            <div className="req-field-label">Ehtiyacın yaranma səbəbi</div>
+                            <div className="req-field-value">{r.reason}</div>
+                          </div>
+                        )}
+                        <div className="req-field-grid" style={{ marginBottom: 8 }}>
+                          {r.importance_level && (
+                            <div><div className="req-field-label">Əhəmiyyət dərəcəsi</div><div className="req-field-value">{r.importance_level}</div></div>
+                          )}
+                          {r.current_skill_level && (
+                            <div><div className="req-field-label">Cari səviyyə</div><div className="req-field-value">{r.current_skill_level}</div></div>
+                          )}
+                          {r.required_skill_level && (
+                            <div><div className="req-field-label">Tələb olunan səviyyə</div><div className="req-field-value">{r.required_skill_level}</div></div>
+                          )}
+                          {(r.preferred_start || r.preferred_end) && (
+                            <div><div className="req-field-label">İstənilən müddət</div><div className="req-field-value">{r.preferred_start || '—'} → {r.preferred_end || '—'}</div></div>
+                          )}
+                        </div>
                         {r.reviewer_note && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginBottom: 10 }}><b>Qeyd:</b> {r.reviewer_note}</div>}
                         {r.status === 'Approved' && !r.linked_training_id && (
                           <button onClick={() => setAddToPlanRequest(r)} className="btn btn-purple btn-sm btn-block"><ListPlus size={13} strokeWidth={2.2} /> Plana Əlavə Et</button>

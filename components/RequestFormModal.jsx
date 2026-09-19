@@ -39,6 +39,7 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
   async function handleSubmit() {
     setError('');
     if (!title.trim()) { setError('Təlimin adını yazın.'); return; }
+    if (!reason.trim()) { setError('Səbəbi yazın.'); return; }
     if (forWhom === 'team' && selectedIds.length === 0) { setError('Ən azı bir komanda üzvü seçin.'); return; }
     if (!compCat) { setError('Səriştə Kateqoriyasını seçin.'); return; }
     if (!importance) { setError('Əhəmiyyət dərəcəsini seçin.'); return; }
@@ -154,7 +155,7 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
         </div>
 
         <div style={{ marginBottom: 12 }}>
-          <label>Səbəb</label>
+          <label>Səbəb *</label>
           <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Qısaca niyə lazımdır" />
         </div>
 
