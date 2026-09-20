@@ -23,6 +23,7 @@ export default function Home() {
   const [profile, setProfile] = useState(null);
   const [team, setTeam] = useState([]);
   const [trainings, setTrainings] = useState([]);
+  const [allTrainings, setAllTrainings] = useState([]);
   const [requests, setRequests] = useState([]);
   const [appSettings, setAppSettings] = useState({ tna_window_open: false, tna_plan_year: new Date().getFullYear() });
   const [view, setView] = useState('home');
@@ -30,6 +31,14 @@ export default function Home() {
   const loadData = useCallback(async () => {
     const { data: tData } = await sb.from('trainings').select('*').order('id');
     setTrainings(tData || []);
+    // The Dashboard shows company-wide KPIs by default for every role, even
+    // though the plain trainings fetch above is RLS-scoped per role (managers
+    // see only their dept/sube, employees only their own rows) so Tracking
+    // stays correctly restricted. get_dashboard_trainings() is a separate
+    // SECURITY DEFINER function that returns every row regardless of caller,
+    // purely for this reporting view — see the reviewed .sql migration.
+    const { data: allTData } = await sb.rpc('get_dashboard_trainings');
+    setAllTrainings(allTData || []);
     const { data: rData } = await sb.from('training_requests').select('*').order('created_at', { ascending: false });
     setRequests(rData || []);
     const { data: sData } = await sb.from('app_settings').select('*').eq('id', 1).single();
@@ -146,7 +155,7 @@ export default function Home() {
             {view === 'home' && (
               <HomeScreen profile={profile} team={team} setView={setView} tnaWindowOpen={appSettings.tna_window_open} planYear={appSettings.tna_plan_year} />
             )}
-            {view === 'dashboard' && <DashboardView trainings={trainings} requests={requests} />}
+            {view === 'dashboard' && <DashboardView trainings={allTrainings} profile={profile} team={team} requests={requests} />}
             {view === 'tracking' && <TrackingView trainings={trainings} profile={profile} onDataChanged={handleDataChanged} />}
             {view === 'requests' && (
               <RequestsView profile={profile} team={team} requests={requests} planYear={appSettings.tna_plan_year} onDataChanged={handleDataChanged} />
