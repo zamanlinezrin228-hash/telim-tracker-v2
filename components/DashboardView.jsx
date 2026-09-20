@@ -101,18 +101,35 @@ function RankList({ items, renderValue, emptyLabel }) {
   );
 }
 
-export default function DashboardView({ trainings }) {
+export default function DashboardView({ trainings, profile, team }) {
   const years = useMemo(() => {
     const set = new Set(trainings.map((t) => t.plan_year).filter(Boolean));
     return [...set].sort((a, b) => b - a);
   }, [trainings]);
 
   const [selectedYear, setSelectedYear] = useState('all');
+  const [scopeMode, setScopeMode] = useState('company');
+
+  // Only a manager with direct reports has a narrower "own dept/şöbə" view to
+  // switch to — same hasTeam check used for this elsewhere (RequestsView.jsx,
+  // AnnualTnaForm.jsx). Everyone else just gets the company-wide dashboard.
+  const hasTeam = team && team.length > 0;
+  const canScopeFilter = profile?.role === 'manager' && hasTeam;
+  // Same dept-vs-sube distinction TrackingView's RLS and RequestsView's
+  // scopeHistory already use for a manager's own visibility scope.
+  const ownScopeLabel = profile?.scope_level === 'sube' ? 'Yalnız öz şöbəm' : 'Yalnız öz departamentim';
+
+  const scoped = useMemo(() => {
+    if (!canScopeFilter || scopeMode !== 'own') return trainings;
+    return trainings.filter((t) => (
+      profile.scope_level === 'sube' ? t.sube === profile.sube : t.dept === profile.dept
+    ));
+  }, [trainings, canScopeFilter, scopeMode, profile]);
 
   const filtered = useMemo(() => {
-    if (selectedYear === 'all') return trainings;
-    return trainings.filter((t) => t.plan_year === Number(selectedYear));
-  }, [trainings, selectedYear]);
+    if (selectedYear === 'all') return scoped;
+    return scoped.filter((t) => t.plan_year === Number(selectedYear));
+  }, [scoped, selectedYear]);
 
   const completedOnly = useMemo(() => filtered.filter((t) => t.status === 'Completed'), [filtered]);
 
@@ -188,6 +205,15 @@ export default function DashboardView({ trainings }) {
             <p>Şirkətinizin təlim ehtiyacları üzrə icmal və analitika — BI-səviyyəli hesabat mərkəzi.</p>
           </div>
           <div className="no-print" style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+            {canScopeFilter && (
+              <div>
+                <div className="filter-label">Əhatə dairəsi</div>
+                <select value={scopeMode} onChange={(e) => setScopeMode(e.target.value)} style={{ minWidth: 200 }}>
+                  <option value="company">Bütün şirkət</option>
+                  <option value="own">{ownScopeLabel}</option>
+                </select>
+              </div>
+            )}
             <div>
               <div className="filter-label">İl</div>
               <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} style={{ minWidth: 140 }}>
