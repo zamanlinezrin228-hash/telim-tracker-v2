@@ -6,17 +6,20 @@ import { computeBudgetStatus } from '../lib/helpers';
 const COMP_CAT_OPTIONS = ['Hard Skills', 'Soft Skills'];
 
 export default function AddToPlanModal({ request, planYear, onClose, onSubmitted }) {
-  const [vendor, setVendor] = useState('');
-  const [manHours, setManHours] = useState(0);
-  const [budget, setBudget] = useState(0);
+  // A manager filling out the Annual TNA row now captures most of this detail
+  // upfront (see AnnualTnaForm.jsx) — pre-fill from it wherever present so
+  // L&D doesn't have to retype it, while still leaving every field editable.
+  const [vendor, setVendor] = useState(request.vendor || '');
+  const [manHours, setManHours] = useState(request.man_hours ?? 0);
+  const [budget, setBudget] = useState(request.budget ?? 0);
   const [usedBudget, setUsedBudget] = useState(0);
   const [category, setCategory] = useState('');
   const [compCat, setCompCat] = useState(request.comp_cat || '');
-  const [transformationArea, setTransformationArea] = useState('');
-  const [learningMethod, setLearningMethod] = useState('');
-  const [activityDuration, setActivityDuration] = useState('');
+  const [transformationArea, setTransformationArea] = useState(request.transformation_area || '');
+  const [learningMethod, setLearningMethod] = useState(request.learning_method || '');
+  const [activityDuration, setActivityDuration] = useState(request.activity_duration || '');
   const [needReason, setNeedReason] = useState(request.reason || '');
-  const [learningGoal, setLearningGoal] = useState('');
+  const [learningGoal, setLearningGoal] = useState(request.learning_goal || '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const budgetStatus = computeBudgetStatus();
