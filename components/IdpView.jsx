@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  UserSquare2, Download, FileText, BookOpen, Wallet, Timer, CheckCircle2, Search, Map,
+  UserSquare2, Download, FileText, BookOpen, Wallet, Timer, CheckCircle2, Search, Map as MapIcon,
 } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import { fmtMoney } from '../lib/helpers';
@@ -216,7 +216,7 @@ export default function IdpView({ requests, trainings }) {
                           <div className="req-card-training">{r.training_title}</div>
                           {mapping && (
                             <div style={{ fontSize: 11, color: 'var(--purple)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <Map size={11} strokeWidth={2.4} /> Kateqoriya: {mapping.category} → Səriştə: {mapping.competency}
+                              <MapIcon size={11} strokeWidth={2.4} /> Kateqoriya: {mapping.category} → Səriştə: {mapping.competency}
                             </div>
                           )}
                           <div style={{ fontSize: 11.5, color: 'var(--ink-400)', marginTop: 2 }}>
@@ -274,7 +274,7 @@ export default function IdpView({ requests, trainings }) {
                           {t.skill}
                           {mapping && (
                             <div style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--purple)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <Map size={10} strokeWidth={2.4} /> Kateqoriya: {mapping.category} → Səriştə: {mapping.competency}
+                              <MapIcon size={10} strokeWidth={2.4} /> Kateqoriya: {mapping.category} → Səriştə: {mapping.competency}
                             </div>
                           )}
                         </td>
