@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { CheckCircle2, Plus, X, Send, Lightbulb, UserCheck } from 'lucide-react';
+import ExcelJS from 'exceljs';
+import { CheckCircle2, Plus, X, Send, Lightbulb, UserCheck, Download } from 'lucide-react';
 import { sb } from '../lib/supabase';
+import { styleGroupedTable, downloadWorkbook } from '../lib/excelExport';
+import { GROUP_BG, GROUP_TEXT } from '../lib/tableGroups';
 
 const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical'];
 const PRIORITY_LABELS = { Low: 'Aşağı', Medium: 'Orta', High: 'Yüksək', Critical: 'Kritik' };
@@ -56,20 +59,11 @@ const HEADER_GROUPS = [
   { label: 'Bitmə', group: 'meta' },
   { label: '', group: 'meta' },
 ];
-const GROUP_BG = {
-  identity: 'var(--ink-50)', competency: 'var(--purple-light)', resource: 'var(--amber-light)',
-  gap: 'var(--green-light)', plan: 'var(--blue-light)', meta: 'var(--ink-50)',
-};
-const GROUP_TEXT = {
-  identity: 'var(--ink-500)', competency: 'var(--purple)', resource: 'var(--amber)',
-  gap: 'var(--green)', plan: 'var(--blue)', meta: 'var(--ink-500)',
-};
-
 const inputStyle = {
-  width: '100%', fontSize: 13, border: '1px solid var(--ink-200)', background: 'var(--surface)',
+  width: '100%', fontSize: 13.5, border: '1px solid var(--ink-200)', background: 'var(--surface)',
   color: 'var(--ink-900)', padding: '7px 9px', borderRadius: 7, transition: 'border-color 0.15s, box-shadow 0.15s',
 };
-const miniInputStyle = { ...inputStyle, fontSize: 11.5, padding: '5px 7px' };
+const miniInputStyle = { ...inputStyle, fontSize: 12.5, padding: '5px 7px' };
 function focusIn(e) { e.target.style.borderColor = 'var(--blue)'; e.target.style.boxShadow = '0 0 0 3px var(--blue-border)'; }
 function focusOut(e) { e.target.style.borderColor = 'var(--ink-200)'; e.target.style.boxShadow = 'none'; }
 
@@ -360,6 +354,61 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
     setDone(true);
   }
 
+  // Mirrors the on-screen table's own column order and group colors (see
+  // HEADER_GROUPS/styleGroupedTable) so the downloaded file looks like the
+  // same table, not a plain flat sheet.
+  const EXCEL_COLUMN_GROUPS = [
+    'identity', 'identity', 'competency', 'competency', 'competency', 'competency', 'competency',
+    'resource', 'resource', 'resource', 'competency', 'gap', 'gap', 'gap', 'plan', 'plan', 'plan',
+    'meta', 'meta', 'meta',
+  ];
+
+  async function exportToExcel() {
+    const filledRows = rows.filter((r) => r.employeeId || r.manualName.trim() || r.skill.trim());
+    if (filledRows.length === 0) return;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('İllik TNA');
+    ws.columns = [
+      { header: 'Əməkdaş', key: 'employee', width: 22 },
+      { header: 'Vəzifə', key: 'position', width: 20 },
+      { header: 'Kateqoriya', key: 'category', width: 20 },
+      { header: 'Səriştə', key: 'competency', width: 24 },
+      { header: 'Alt səriştə (İnkişaf istiqaməti)', key: 'skill', width: 28 },
+      { header: 'Ehtiyacın yaranma səbəbi', key: 'needReason', width: 26 },
+      { header: 'Səriştə kateqoriyası', key: 'compCat', width: 16 },
+      { header: 'Vendor', key: 'vendor', width: 16 },
+      { header: 'Man Hours', key: 'manHours', width: 12 },
+      { header: 'Planlanmış Büdcə', key: 'budget', width: 16 },
+      { header: 'Transformation Capability Area', key: 'transformationArea', width: 20 },
+      { header: 'Əhəmiyyət', key: 'importance', width: 20 },
+      { header: 'Cari', key: 'currentLevel', width: 20 },
+      { header: 'Tələb olunan', key: 'requiredLevel', width: 20 },
+      { header: 'Öyrənmə metodu', key: 'learningMethod', width: 18 },
+      { header: 'Təlim/İnkişaf Aktivliyinin Müddəti', key: 'activityDuration', width: 22 },
+      { header: 'Öyrənmə Məqsədi', key: 'learningGoal', width: 26 },
+      { header: 'Prioritet', key: 'priority', width: 12 },
+      { header: 'Başlama', key: 'start', width: 14 },
+      { header: 'Bitmə', key: 'end', width: 14 },
+    ];
+    filledRows.forEach((r) => {
+      const member = r.employeeId ? selectableEmployees.find((t) => t.id === r.employeeId) : null;
+      ws.addRow({
+        employee: member ? (member.full_name_az || member.id) : r.manualName.trim(),
+        position: r.position, category: r.category, competency: r.competency, skill: r.skill,
+        needReason: r.needReason, compCat: r.compCat, vendor: r.vendor,
+        manHours: r.manHours !== '' ? Number(r.manHours) : null, budget: r.budget !== '' ? Number(r.budget) : null,
+        transformationArea: r.transformationArea, importance: r.importance,
+        currentLevel: r.currentLevel, requiredLevel: r.requiredLevel,
+        learningMethod: r.learningMethod, activityDuration: r.activityDuration, learningGoal: r.learningGoal,
+        priority: PRIORITY_LABELS[r.priority] || r.priority, start: r.start, end: r.end,
+      });
+    });
+    ws.getColumn('budget').numFmt = '#,##0 "₼"';
+    styleGroupedTable(ws, EXCEL_COLUMN_GROUPS);
+    const tarix = new Date().toISOString().slice(0, 10);
+    await downloadWorkbook(wb, `illik-tna-${planYear}-${tarix}.xlsx`);
+  }
+
   if (done) {
     return (
       <div>
@@ -379,7 +428,12 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
 
   return (
     <div>
-      <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>İllik TNA — {planYear}</div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 4, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 20, fontWeight: 800 }}>İllik TNA — {planYear}</div>
+        <button onClick={exportToExcel} className="btn btn-outline btn-sm">
+          <Download size={13} strokeWidth={2.2} /> Excel-ə ixrac et
+        </button>
+      </div>
       <div className="section-sub" style={{ marginBottom: 10 }}>
         {hasTeam
           ? `${planYear}-ci il üçün öz təlim ehtiyacınızı və ya komandanızın ehtiyaclarını cədvəldə doldurun. Əməkdaşı siyahıdan seçə, ya da əl ilə yaza bilərsiniz.`
@@ -393,18 +447,19 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
         </span>
       </div>
 
-      <div className="tna-table" style={{ border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-xs)', marginBottom: 16 }}>
+      <div className="tna-table" style={{ border: '2px solid var(--ink-200)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-xs)', marginBottom: 16 }}>
         <style jsx>{`
-          .tna-table th, .tna-table td { border-right: 1px solid var(--ink-100); }
+          .tna-table th, .tna-table td { border-right: 1.5px solid var(--ink-200); font-size: 13px; }
           .tna-table th:last-child, .tna-table td:last-child { border-right: none; }
+          .tna-table td { border-top-width: 1.5px !important; border-top-color: var(--ink-200) !important; }
         `}</style>
         <div className="table-wrap" style={{ border: 'none', borderRadius: 0 }}>
           <table style={{ borderCollapse: 'separate', borderSpacing: 0, minWidth: 2200 }}>
             <thead>
               <tr>
-                <th className="sticky-col" style={{ width: 42, background: 'var(--ink-50)' }}></th>
+                <th className="sticky-col" style={{ width: 42, background: 'var(--ink-50)', borderBottom: '3px solid var(--ink-300)' }}></th>
                 {HEADER_GROUPS.map((h, i) => (
-                  <th key={i} style={{ background: GROUP_BG[h.group], color: GROUP_TEXT[h.group], borderBottom: `2px solid ${GROUP_TEXT[h.group]}` }}>{h.label}</th>
+                  <th key={i} style={{ background: GROUP_BG[h.group], color: GROUP_TEXT[h.group], fontSize: 11.5, borderBottom: `3px solid ${GROUP_TEXT[h.group]}` }}>{h.label}</th>
                 ))}
               </tr>
             </thead>

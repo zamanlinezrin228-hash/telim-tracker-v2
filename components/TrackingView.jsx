@@ -3,7 +3,8 @@ import ExcelJS from 'exceljs';
 import { Search, Download, FilterX, Pencil, Trash2, Save, Columns3, Layers, ArrowUp, ArrowDown, Folder } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import { fmtMoney, statusMeta, priorityMeta } from '../lib/helpers';
-import { styleHeaderRow, downloadWorkbook } from '../lib/excelExport';
+import { styleGroupedTable, downloadWorkbook } from '../lib/excelExport';
+import { GROUP_BG, GROUP_TEXT } from '../lib/tableGroups';
 import { TrainingStatusBadge, PriorityBadge, BudgetStatusBadge } from './Badges';
 import ColumnFilterHeader from './ColumnFilterHeader';
 import { showToast } from '../lib/toast';
@@ -48,35 +49,38 @@ const FIELD_LABELS = {
 // Excel export and the admin edit modal: base identity columns first, then
 // the full competency/training-need field set in one consistent order
 // everywhere it appears.
+// group matches the same five semantic bands the İllik TNA table uses (see
+// lib/tableGroups.js) so both tables — and both their Excel exports — read
+// as the same color-coded column system.
 const ALL_COLUMNS = [
-  { key: 'plan_year', label: FIELD_LABELS.plan_year, sticky: true },
-  { key: 'dept', label: FIELD_LABELS.dept },
-  { key: 'sube', label: FIELD_LABELS.sube },
-  { key: 'employee_name', label: 'Ad Soyad' },
-  { key: 'position', label: FIELD_LABELS.position },
-  { key: 'category', label: FIELD_LABELS.category },
-  { key: 'comp_cat', label: FIELD_LABELS.comp_cat },
-  { key: 'learning_goal', label: FIELD_LABELS.learning_goal },
-  { key: 'skill', label: FIELD_LABELS.skill },
-  { key: 'vendor', label: FIELD_LABELS.vendor },
-  { key: 'man_hours', label: FIELD_LABELS.man_hours },
-  { key: 'used_budget', label: FIELD_LABELS.used_budget },
-  { key: 'budget', label: FIELD_LABELS.budget },
-  { key: 'status', label: FIELD_LABELS.status },
-  { key: 'start_date', label: FIELD_LABELS.start_date },
-  { key: 'end_date', label: FIELD_LABELS.end_date },
-  { key: 'transformation_area', label: FIELD_LABELS.transformation_area },
-  { key: 'importance_level', label: FIELD_LABELS.importance_level },
-  { key: 'current_skill_level', label: FIELD_LABELS.current_skill_level },
-  { key: 'required_skill_level', label: FIELD_LABELS.required_skill_level },
-  { key: 'learning_method', label: FIELD_LABELS.learning_method },
-  { key: 'activity_duration', label: FIELD_LABELS.activity_duration },
-  { key: 'need_reason', label: FIELD_LABELS.need_reason },
-  { key: 'weighted_gap', label: FIELD_LABELS.weighted_gap },
-  { key: 'cgi', label: FIELD_LABELS.cgi },
-  { key: 'cgi_priority_full', label: FIELD_LABELS.cgi_priority_full },
-  { key: 'priority', label: FIELD_LABELS.priority },
-  { key: 'budget_status', label: FIELD_LABELS.budget_status },
+  { key: 'plan_year', label: FIELD_LABELS.plan_year, sticky: true, group: 'identity' },
+  { key: 'dept', label: FIELD_LABELS.dept, group: 'identity' },
+  { key: 'sube', label: FIELD_LABELS.sube, group: 'identity' },
+  { key: 'employee_name', label: 'Ad Soyad', group: 'identity' },
+  { key: 'position', label: FIELD_LABELS.position, group: 'identity' },
+  { key: 'category', label: FIELD_LABELS.category, group: 'competency' },
+  { key: 'comp_cat', label: FIELD_LABELS.comp_cat, group: 'competency' },
+  { key: 'learning_goal', label: FIELD_LABELS.learning_goal, group: 'plan' },
+  { key: 'skill', label: FIELD_LABELS.skill, group: 'competency' },
+  { key: 'vendor', label: FIELD_LABELS.vendor, group: 'resource' },
+  { key: 'man_hours', label: FIELD_LABELS.man_hours, group: 'resource' },
+  { key: 'used_budget', label: FIELD_LABELS.used_budget, group: 'resource' },
+  { key: 'budget', label: FIELD_LABELS.budget, group: 'resource' },
+  { key: 'status', label: FIELD_LABELS.status, group: 'meta' },
+  { key: 'start_date', label: FIELD_LABELS.start_date, group: 'meta' },
+  { key: 'end_date', label: FIELD_LABELS.end_date, group: 'meta' },
+  { key: 'transformation_area', label: FIELD_LABELS.transformation_area, group: 'competency' },
+  { key: 'importance_level', label: FIELD_LABELS.importance_level, group: 'gap' },
+  { key: 'current_skill_level', label: FIELD_LABELS.current_skill_level, group: 'gap' },
+  { key: 'required_skill_level', label: FIELD_LABELS.required_skill_level, group: 'gap' },
+  { key: 'learning_method', label: FIELD_LABELS.learning_method, group: 'plan' },
+  { key: 'activity_duration', label: FIELD_LABELS.activity_duration, group: 'plan' },
+  { key: 'need_reason', label: FIELD_LABELS.need_reason, group: 'competency' },
+  { key: 'weighted_gap', label: FIELD_LABELS.weighted_gap, group: 'gap' },
+  { key: 'cgi', label: FIELD_LABELS.cgi, group: 'gap' },
+  { key: 'cgi_priority_full', label: FIELD_LABELS.cgi_priority_full, group: 'gap' },
+  { key: 'priority', label: FIELD_LABELS.priority, group: 'meta' },
+  { key: 'budget_status', label: FIELD_LABELS.budget_status, group: 'resource' },
 ];
 // The detailed competency/gap-analysis fields are exposed (filterable via
 // "Sütunlar") but hidden by default so the table stays usable at a glance —
@@ -331,7 +335,7 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
     });
     ws.getColumn('used_budget').numFmt = '#,##0 "₼"';
     ws.getColumn('budget').numFmt = '#,##0 "₼"';
-    styleHeaderRow(ws);
+    styleGroupedTable(ws, ALL_COLUMNS.map((c) => c.group));
     const tarix = new Date().toISOString().slice(0, 10);
     await downloadWorkbook(wb, `telim-izleme-${tarix}.xlsx`);
   }
@@ -401,23 +405,32 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
           </div>
         </div>
 
-        <div className="table-wrap">
+        <div className="table-wrap tracking-table">
+          <style jsx global>{`
+            .tracking-table table { font-size: 13.8px; }
+            .tracking-table th { font-size: 11.5px; }
+            .tracking-table th, .tracking-table td { border-right: 1.5px solid var(--ink-200); }
+            .tracking-table th:last-child, .tracking-table td:last-child { border-right: none; }
+            .tracking-table td { border-top-width: 1.5px; border-top-color: var(--ink-200); }
+          `}</style>
           <table>
             <thead>
               <tr>
-                {visibleColumns.map((col) => (
-                  FILTER_FIELDS.includes(col.key) ? (
+                {visibleColumns.map((col) => {
+                  const headerStyle = { background: GROUP_BG[col.group], color: GROUP_TEXT[col.group], borderBottom: `3px solid ${GROUP_TEXT[col.group]}` };
+                  return FILTER_FIELDS.includes(col.key) ? (
                     <ColumnFilterHeader
                       key={col.key} label={col.label} values={uniqueValsByField[col.key]} selected={filters[col.key]}
                       onChange={(s) => setFieldFilter(col.key, s)}
                       onSort={(e) => toggleSort(col.key, e.shiftKey)} sortIndicator={sortIndicator(col.key)} sticky={col.sticky}
+                      headerStyle={headerStyle}
                     />
                   ) : (
-                    <th key={col.key} className={col.sticky ? 'sticky-col' : undefined} onClick={(e) => toggleSort(col.key, e.shiftKey)} style={{ cursor: 'pointer' }}>
+                    <th key={col.key} className={col.sticky ? 'sticky-col' : undefined} onClick={(e) => toggleSort(col.key, e.shiftKey)} style={{ cursor: 'pointer', ...headerStyle }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>{col.label} {sortIndicator(col.key)}</span>
                     </th>
-                  )
-                ))}
+                  );
+                })}
                 {isAdmin && <th>Əməliyyat</th>}
               </tr>
             </thead>
