@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  UserSquare2, Download, FileText, BookOpen, Wallet, Timer, CheckCircle2, Search,
+  UserSquare2, Download, FileText, BookOpen, Wallet, Timer, CheckCircle2, Search, Map,
 } from 'lucide-react';
+import { sb } from '../lib/supabase';
 import { fmtMoney } from '../lib/helpers';
 import { ReqStatusBadge, PriorityBadge, TrainingStatusBadge } from './Badges';
 import EmptyState from './EmptyState';
@@ -15,9 +16,37 @@ function fmtDate(d) {
   return new Date(d).toLocaleDateString('az-AZ');
 }
 
+function normalizeSkill(s) {
+  return (s || '').toLocaleLowerCase('az').replace(/\s+/g, ' ').trim();
+}
+
 export default function IdpView({ requests, trainings }) {
   const [selectedKey, setSelectedKey] = useState('');
   const [selectedYear, setSelectedYear] = useState('all');
+  const [library, setLibrary] = useState([]);
+
+  useEffect(() => {
+    sb.from('competency_library').select('category, competency, sub_competency').then(({ data }) => {
+      setLibrary(data || []);
+    });
+  }, []);
+
+  // Maps a skill/training_title string to its Kateqoriya → Səriştə, matched
+  // against competency_library.sub_competency. Exact (case/whitespace
+  // -insensitive) match only — if nothing matches, callers just skip the
+  // line rather than showing a wrong/fuzzy guess.
+  const competencyBySkill = useMemo(() => {
+    const map = new Map();
+    library.forEach((row) => {
+      const key = normalizeSkill(row.sub_competency);
+      if (key && !map.has(key)) map.set(key, { category: row.category, competency: row.competency });
+    });
+    return map;
+  }, [library]);
+
+  function competencyMappingFor(skillText) {
+    return competencyBySkill.get(normalizeSkill(skillText)) || null;
+  }
 
   // The IDP picker is scoped to employees who have at least one training
   // request OR logged training on file — that's the population this
@@ -178,11 +207,18 @@ export default function IdpView({ requests, trainings }) {
             {employeeRequests.length ? (
               <div className="card" style={{ marginBottom: 24 }}>
                 <div className="req-list">
-                  {employeeRequests.map((r) => (
+                  {employeeRequests.map((r) => {
+                    const mapping = competencyMappingFor(r.training_title);
+                    return (
                     <div className="req-card idp-req-card" key={r.id}>
                       <div className="req-card-top">
                         <div>
                           <div className="req-card-training">{r.training_title}</div>
+                          {mapping && (
+                            <div style={{ fontSize: 11, color: 'var(--purple)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <Map size={11} strokeWidth={2.4} /> Kateqoriya: {mapping.category} → Səriştə: {mapping.competency}
+                            </div>
+                          )}
                           <div style={{ fontSize: 11.5, color: 'var(--ink-400)', marginTop: 2 }}>
                             {fmtDate(r.created_at)} · {r.source === 'Manager Survey' ? 'İllik TNA' : 'Ad-hoc sorğu'}
                           </div>
@@ -212,7 +248,7 @@ export default function IdpView({ requests, trainings }) {
                         <div className="req-field-note"><div className="req-field-label">L&D qeydi</div><div className="req-field-value">{r.reviewer_note}</div></div>
                       )}
                     </div>
-                  ))}
+                  );})}
                 </div>
               </div>
             ) : (
@@ -229,10 +265,19 @@ export default function IdpView({ requests, trainings }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {employeeTrainings.map((t) => (
+                    {employeeTrainings.map((t) => {
+                      const mapping = competencyMappingFor(t.skill);
+                      return (
                       <tr key={t.id}>
                         <td>{t.plan_year || '—'}</td>
-                        <td style={{ fontWeight: 600 }}>{t.skill}</td>
+                        <td style={{ fontWeight: 600 }}>
+                          {t.skill}
+                          {mapping && (
+                            <div style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--purple)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <Map size={10} strokeWidth={2.4} /> Kateqoriya: {mapping.category} → Səriştə: {mapping.competency}
+                            </div>
+                          )}
+                        </td>
                         <td>{t.vendor || '—'}</td>
                         <td><TrainingStatusBadge status={t.status} /></td>
                         <td>{t.start_date || t.start_raw || '—'}</td>
@@ -240,7 +285,7 @@ export default function IdpView({ requests, trainings }) {
                         <td>{t.man_hours ?? '—'}</td>
                         <td>{fmtMoney(t.budget)}</td>
                       </tr>
-                    ))}
+                      );})}
                   </tbody>
                 </table>
               </div>
