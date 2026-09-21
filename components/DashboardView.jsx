@@ -22,6 +22,8 @@ const KPI_EXPORT_ROWS = [
   ['Davam Edən', (k) => k.inProgress],
   ['Ümumi Təlim Saatı', (k) => k.totalHours],
   ['Ümumi Büdcə', (k) => fmtMoney(k.totalBudget)],
+  ['İstifadə Olunmuş Büdcə', (k) => fmtMoney(k.totalUsedBudget)],
+  ['Büdcə İstifadəsi', (k) => `${k.budgetUtilization}%`],
   ['Orta Büdcə / Təlim', (k) => fmtMoney(k.avgBudget)],
   ['Saat Başına Xərc', (k) => fmtMoney(k.costPerHour)],
   ['Büdcələnmiş Pay', (k) => `${k.budgetedShare}%`],
@@ -46,6 +48,8 @@ const LEARNING_STATS = [
 
 const FINANCIAL_STATS = [
   { key: 'totalBudget', label: 'Ümumi Büdcə', Icon: Wallet, color: '#0f766e', format: fmtMoney },
+  { key: 'totalUsedBudget', label: 'İstifadə Olunmuş Büdcə', Icon: Wallet, color: '#0369a1', format: fmtMoney },
+  { key: 'budgetUtilization', label: 'Büdcə İstifadəsi', Icon: Percent, color: '#7c3aed', format: (n) => `${n}%` },
   { key: 'avgBudget', label: 'Orta Büdcə / Təlim', Icon: TrendingUp, color: '#ea580c', format: fmtMoney },
   { key: 'costPerHour', label: 'Saat Başına Xərc', Icon: Percent, color: '#b45309', format: fmtMoney },
   { key: 'budgetedShare', label: 'Büdcələnmiş Pay', Icon: CheckCircle2, color: '#059669', format: (n) => `${n}%` },
@@ -238,28 +242,28 @@ export default function DashboardView({ trainings, profile, team }) {
         {/* ---------- KPI groups ---------- */}
         <StatGroup title="Learning KPI-lər" stats={LEARNING_STATS} raw={kpis} i0={0} />
         <StatGroup title="Maliyyə KPI-ləri" stats={FINANCIAL_STATS} raw={kpis} i0={5} />
-        <StatGroup title="Fəallıq KPI-ləri" stats={ENGAGEMENT_STATS} raw={kpis} i0={10} />
+        <StatGroup title="Fəallıq KPI-ləri" stats={ENGAGEMENT_STATS} raw={kpis} i0={12} />
 
         <div className="kpi-group-title">İdarəetmə KPI-ləri</div>
         <div className="kpi-grid">
-          <div className="stat-card stagger-item" style={{ '--i': 15 }}>
+          <div className="stat-card stagger-item" style={{ '--i': 17 }}>
             <div className="stat-icon" style={{ '--icon-color': '#0891b2', color: '#0891b2' }}><Building2 size={16} strokeWidth={2.2} /></div>
             <div className="stat-label">Aktiv Departament</div>
             <div className="stat-value" style={{ color: '#0891b2' }}><CountUp value={kpis.departments} /></div>
           </div>
-          <div className="stat-card stagger-item" style={{ '--i': 16 }}>
+          <div className="stat-card stagger-item" style={{ '--i': 18 }}>
             <div className="stat-icon" style={{ '--icon-color': '#2563eb', color: '#2563eb' }}><Trophy size={16} strokeWidth={2.2} /></div>
             <div className="stat-label">Ən Fəal Departament</div>
             <div className="stat-value stat-value-text" style={{ color: '#2563eb' }} title={topDept?.dept}>{topDept ? topDept.dept : '—'}</div>
             {topDept && <div className="stat-sub">{topDept.total} təlim</div>}
           </div>
-          <div className="stat-card stagger-item" style={{ '--i': 17 }}>
+          <div className="stat-card stagger-item" style={{ '--i': 19 }}>
             <div className="stat-icon" style={{ '--icon-color': '#059669', color: '#059669' }}><Award size={16} strokeWidth={2.2} /></div>
             <div className="stat-label">Ən Yüksək Tamamlanma</div>
             <div className="stat-value stat-value-text" style={{ color: '#059669' }} title={bestCompletionDept?.dept}>{bestCompletionDept ? bestCompletionDept.dept : '—'}</div>
             {bestCompletionDept && <div className="stat-sub">{bestCompletionDept.completionRate}%</div>}
           </div>
-          <div className="stat-card stagger-item" style={{ '--i': 18 }}>
+          <div className="stat-card stagger-item" style={{ '--i': 20 }}>
             <div className="stat-icon" style={{ '--icon-color': '#7c3aed', color: '#7c3aed' }}><Target size={16} strokeWidth={2.2} /></div>
             <div className="stat-label">Orta Təlim / Departament</div>
             <div className="stat-value" style={{ color: '#7c3aed' }}><CountUp value={avgPerDept} /></div>

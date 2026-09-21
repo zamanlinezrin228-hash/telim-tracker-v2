@@ -7,13 +7,14 @@ import MultiSelectFilter from './MultiSelectFilter';
 
 const FIELD_LABELS = {
   dept: 'Departament', sube: 'Şöbə', position: 'Vəzifə', category: 'Vəzifə Kateqoriyası',
-  skill: 'Təlimin Adı', comp_cat: 'Səriştə Kateqoriyası', vendor: 'Provayder', status: 'Status',
-  priority: 'Prioritet', budget_status: 'Büdcə Statusu', employee_name: 'Ad Soyad', plan_year: 'İl',
+  skill: 'Təlimin Adı', comp_cat: 'Səriştə Kateqoriyası', transformation_area: 'Transformation Capability Area',
+  vendor: 'Provayder', status: 'Status', priority: 'Prioritet', budget_status: 'Büdcə Statusu',
+  employee_name: 'Ad Soyad', plan_year: 'İl',
 };
 const DIMENSION_FIELDS = Object.keys(FIELD_LABELS);
 
 const METRIC_LABELS = {
-  budget: 'Büdcənin cəmi', count: 'Təlim sayı', man_hours: 'Saatın cəmi',
+  budget: 'Büdcənin cəmi', used_budget: 'İstifadə olunmuş büdcənin cəmi', count: 'Təlim sayı', man_hours: 'Saatın cəmi',
   avg_budget: 'Orta büdcə', avg_hours: 'Orta saat', completion_rate: 'Tamamlanma faizi',
   participants: 'İştirakçı sayı (unikal)',
 };
@@ -29,11 +30,12 @@ function labelFor(field, v) {
 }
 
 function newAgg() {
-  return { count: 0, budgetSum: 0, hoursSum: 0, completedCount: 0, participants: new Set() };
+  return { count: 0, budgetSum: 0, usedBudgetSum: 0, hoursSum: 0, completedCount: 0, participants: new Set() };
 }
 function addToAgg(agg, t) {
   agg.count += 1;
   agg.budgetSum += Number(t.budget) || 0;
+  agg.usedBudgetSum += Number(t.used_budget) || 0;
   agg.hoursSum += Number(t.man_hours) || 0;
   if (t.status === 'Completed') agg.completedCount += 1;
   if (t.employee_name) agg.participants.add(t.employee_name);
@@ -72,6 +74,7 @@ export default function AnalysisView({ trainings }) {
     switch (metric) {
       case 'count': return agg.count;
       case 'budget': return agg.budgetSum;
+      case 'used_budget': return agg.usedBudgetSum;
       case 'man_hours': return agg.hoursSum;
       case 'avg_budget': return agg.count ? agg.budgetSum / agg.count : 0;
       case 'avg_hours': return agg.count ? agg.hoursSum / agg.count : 0;
@@ -153,7 +156,7 @@ export default function AnalysisView({ trainings }) {
     const totalRow = ws.addRow(totalRowData);
     totalRow.font = { bold: true };
 
-    const numFmt = metric === 'budget' || metric === 'avg_budget' ? '#,##0 "₼"'
+    const numFmt = metric === 'budget' || metric === 'used_budget' || metric === 'avg_budget' ? '#,##0 "₼"'
       : metric === 'completion_rate' ? '0"%"'
       : metric === 'man_hours' || metric === 'avg_hours' ? '#,##0.0'
       : '#,##0';
