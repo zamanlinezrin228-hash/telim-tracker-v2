@@ -17,26 +17,43 @@ function fmtDate(d) {
 
 export default function IdpView({ requests, trainings }) {
   const [selectedKey, setSelectedKey] = useState('');
+  const [selectedYear, setSelectedYear] = useState('all');
 
   // The IDP picker is scoped to employees who have at least one training
-  // request on file — that's the population this document is meant for,
-  // not every profile in the directory (many of whom may have no history
-  // to build a plan from yet).
+  // request OR logged training on file — that's the population this
+  // document is meant for, not every profile in the directory (many of
+  // whom may have no history to build a plan from yet). Pulling from both
+  // sources matters: most employees only ever show up in `trainings`
+  // (their actual completed/logged training history), while a much smaller
+  // number have Annual TNA / ad-hoc `training_requests` on file — using
+  // requests alone left most of the company invisible in this picker.
   const employees = useMemo(() => {
     const map = new Map();
-    requests.forEach((r) => {
+    function absorb(r) {
       if (!r.employee_name) return;
       const key = employeeKey(r.employee_name, r.dept);
       if (!map.has(key)) {
-        map.set(key, { key, name: r.employee_name, dept: r.dept, sube: r.sube, position: r.position, latest: r.created_at });
+        map.set(key, { key, name: r.employee_name, dept: r.dept, sube: r.sube, position: r.position, latest: r.created_at || null });
       } else {
         const cur = map.get(key);
         if (!cur.position && r.position) cur.position = r.position;
         if (r.created_at && (!cur.latest || r.created_at > cur.latest)) { cur.latest = r.created_at; if (r.position) cur.position = r.position; }
       }
-    });
+    }
+    requests.forEach(absorb);
+    trainings.forEach(absorb);
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'az'));
-  }, [requests]);
+  }, [requests, trainings]);
+
+  // Same "İl" filter pattern as Dashboard/Tracking. training_requests has
+  // no plan_year column, so its rows are bucketed by the year they were
+  // submitted (created_at) instead.
+  const years = useMemo(() => {
+    const set = new Set();
+    trainings.forEach((t) => { if (t.plan_year) set.add(t.plan_year); });
+    requests.forEach((r) => { if (r.created_at) set.add(new Date(r.created_at).getFullYear()); });
+    return [...set].sort((a, b) => b - a);
+  }, [trainings, requests]);
 
   const employee = employees.find((e) => e.key === selectedKey) || null;
 
@@ -44,15 +61,17 @@ export default function IdpView({ requests, trainings }) {
     if (!employee) return [];
     return requests
       .filter((r) => r.employee_name === employee.name && (r.dept || '') === (employee.dept || ''))
+      .filter((r) => selectedYear === 'all' || new Date(r.created_at).getFullYear() === Number(selectedYear))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  }, [requests, employee]);
+  }, [requests, employee, selectedYear]);
 
   const employeeTrainings = useMemo(() => {
     if (!employee) return [];
     return trainings
       .filter((t) => t.employee_name === employee.name && (t.dept || '') === (employee.dept || ''))
+      .filter((t) => selectedYear === 'all' || t.plan_year === Number(selectedYear))
       .sort((a, b) => new Date(b.start_date || 0) - new Date(a.start_date || 0));
-  }, [trainings, employee]);
+  }, [trainings, employee, selectedYear]);
 
   const stats = useMemo(() => {
     const totalRequests = employeeRequests.length;
@@ -83,6 +102,13 @@ export default function IdpView({ requests, trainings }) {
                 {employees.map((e) => (
                   <option key={e.key} value={e.key}>{e.name} — {e.dept || 'Departament yoxdur'}</option>
                 ))}
+              </select>
+            </div>
+            <div>
+              <div className="filter-label">İl</div>
+              <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} style={{ minWidth: 120 }}>
+                <option value="all">Bütün illər</option>
+                {years.map((y) => <option key={y} value={y}>{y}</option>)}
               </select>
             </div>
             {employee && (
