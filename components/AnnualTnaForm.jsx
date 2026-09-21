@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { CheckCircle2, Plus, X, Send, Lightbulb, UserCheck } from 'lucide-react';
+import ExcelJS from 'exceljs';
+import { CheckCircle2, Plus, X, Send, Lightbulb, UserCheck, Download } from 'lucide-react';
 import { sb } from '../lib/supabase';
+import { styleGroupedTable, downloadWorkbook } from '../lib/excelExport';
+import { GROUP_BG, GROUP_TEXT } from '../lib/tableGroups';
 
 const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical'];
 const PRIORITY_LABELS = { Low: 'Aşağı', Medium: 'Orta', High: 'Yüksək', Critical: 'Kritik' };
@@ -31,13 +34,38 @@ const NEED_REASON_OPTIONS = [
 // fixes the casing inconsistency too.
 const TRANSFORMATION_AREA_OPTIONS = ['Yes', 'No'];
 
+// Column headers are grouped semantically so the header row reads as
+// colored bands (who / need & competency / resourcing / gap analysis /
+// learning-plan detail / scheduling) — makes the wide table scannable
+// without having to read every label.
+const HEADER_GROUPS = [
+  { label: 'Əməkdaş *', group: 'identity' },
+  { label: 'İnkişaf istiqaməti *', group: 'competency' },
+  { label: 'Vəzifə *', group: 'identity' },
+  { label: 'Ehtiyacın yaranma səbəbi *', group: 'competency' },
+  { label: 'Səriştə kateqoriyası', group: 'competency' },
+  { label: 'Vendor', group: 'resource' },
+  { label: 'Man Hours', group: 'resource' },
+  { label: 'Planlanmış Büdcə', group: 'resource' },
+  { label: 'Transformation Capability Area', group: 'competency' },
+  { label: 'Əhəmiyyət *', group: 'gap' },
+  { label: 'Cari *', group: 'gap' },
+  { label: 'Tələb olunan *', group: 'gap' },
+  { label: 'Öyrənmə metodu', group: 'plan' },
+  { label: 'Təlim/İnkişaf Aktivliyinin Müddəti', group: 'plan' },
+  { label: 'Öyrənmə Məqsədi', group: 'plan' },
+  { label: 'Prioritet', group: 'meta' },
+  { label: 'Başlama', group: 'meta' },
+  { label: 'Bitmə', group: 'meta' },
+  { label: '', group: 'meta' },
+];
 const inputStyle = {
-  width: '100%', fontSize: 13, border: '1px solid transparent', background: 'transparent',
-  padding: '6px 8px', borderRadius: 6, transition: 'border-color 0.15s, background 0.15s',
+  width: '100%', fontSize: 13.5, border: '1px solid var(--ink-200)', background: 'var(--surface)',
+  color: 'var(--ink-900)', padding: '7px 9px', borderRadius: 7, transition: 'border-color 0.15s, box-shadow 0.15s',
 };
-const miniInputStyle = { ...inputStyle, fontSize: 11.5, padding: '4px 6px' };
-function focusIn(e) { e.target.style.border = '1px solid var(--blue)'; e.target.style.background = 'var(--surface)'; }
-function focusOut(e) { e.target.style.border = '1px solid transparent'; e.target.style.background = 'transparent'; }
+const miniInputStyle = { ...inputStyle, fontSize: 12.5, padding: '5px 7px' };
+function focusIn(e) { e.target.style.borderColor = 'var(--blue)'; e.target.style.boxShadow = '0 0 0 3px var(--blue-border)'; }
+function focusOut(e) { e.target.style.borderColor = 'var(--ink-200)'; e.target.style.boxShadow = 'none'; }
 
 function emptyRow(defaultEmployeeId = '') {
   return {
@@ -326,6 +354,61 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
     setDone(true);
   }
 
+  // Mirrors the on-screen table's own column order and group colors (see
+  // HEADER_GROUPS/styleGroupedTable) so the downloaded file looks like the
+  // same table, not a plain flat sheet.
+  const EXCEL_COLUMN_GROUPS = [
+    'identity', 'identity', 'competency', 'competency', 'competency', 'competency', 'competency',
+    'resource', 'resource', 'resource', 'competency', 'gap', 'gap', 'gap', 'plan', 'plan', 'plan',
+    'meta', 'meta', 'meta',
+  ];
+
+  async function exportToExcel() {
+    const filledRows = rows.filter((r) => r.employeeId || r.manualName.trim() || r.skill.trim());
+    if (filledRows.length === 0) return;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('İllik TNA');
+    ws.columns = [
+      { header: 'Əməkdaş', key: 'employee', width: 22 },
+      { header: 'Vəzifə', key: 'position', width: 20 },
+      { header: 'Kateqoriya', key: 'category', width: 20 },
+      { header: 'Səriştə', key: 'competency', width: 24 },
+      { header: 'Alt səriştə (İnkişaf istiqaməti)', key: 'skill', width: 28 },
+      { header: 'Ehtiyacın yaranma səbəbi', key: 'needReason', width: 26 },
+      { header: 'Səriştə kateqoriyası', key: 'compCat', width: 16 },
+      { header: 'Vendor', key: 'vendor', width: 16 },
+      { header: 'Man Hours', key: 'manHours', width: 12 },
+      { header: 'Planlanmış Büdcə', key: 'budget', width: 16 },
+      { header: 'Transformation Capability Area', key: 'transformationArea', width: 20 },
+      { header: 'Əhəmiyyət', key: 'importance', width: 20 },
+      { header: 'Cari', key: 'currentLevel', width: 20 },
+      { header: 'Tələb olunan', key: 'requiredLevel', width: 20 },
+      { header: 'Öyrənmə metodu', key: 'learningMethod', width: 18 },
+      { header: 'Təlim/İnkişaf Aktivliyinin Müddəti', key: 'activityDuration', width: 22 },
+      { header: 'Öyrənmə Məqsədi', key: 'learningGoal', width: 26 },
+      { header: 'Prioritet', key: 'priority', width: 12 },
+      { header: 'Başlama', key: 'start', width: 14 },
+      { header: 'Bitmə', key: 'end', width: 14 },
+    ];
+    filledRows.forEach((r) => {
+      const member = r.employeeId ? selectableEmployees.find((t) => t.id === r.employeeId) : null;
+      ws.addRow({
+        employee: member ? (member.full_name_az || member.id) : r.manualName.trim(),
+        position: r.position, category: r.category, competency: r.competency, skill: r.skill,
+        needReason: r.needReason, compCat: r.compCat, vendor: r.vendor,
+        manHours: r.manHours !== '' ? Number(r.manHours) : null, budget: r.budget !== '' ? Number(r.budget) : null,
+        transformationArea: r.transformationArea, importance: r.importance,
+        currentLevel: r.currentLevel, requiredLevel: r.requiredLevel,
+        learningMethod: r.learningMethod, activityDuration: r.activityDuration, learningGoal: r.learningGoal,
+        priority: PRIORITY_LABELS[r.priority] || r.priority, start: r.start, end: r.end,
+      });
+    });
+    ws.getColumn('budget').numFmt = '#,##0 "₼"';
+    styleGroupedTable(ws, EXCEL_COLUMN_GROUPS);
+    const tarix = new Date().toISOString().slice(0, 10);
+    await downloadWorkbook(wb, `illik-tna-${planYear}-${tarix}.xlsx`);
+  }
+
   if (done) {
     return (
       <div>
@@ -345,7 +428,12 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
 
   return (
     <div>
-      <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>İllik TNA — {planYear}</div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 4, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 20, fontWeight: 800 }}>İllik TNA — {planYear}</div>
+        <button onClick={exportToExcel} className="btn btn-outline btn-sm">
+          <Download size={13} strokeWidth={2.2} /> Excel-ə ixrac et
+        </button>
+      </div>
       <div className="section-sub" style={{ marginBottom: 10 }}>
         {hasTeam
           ? `${planYear}-ci il üçün öz təlim ehtiyacınızı və ya komandanızın ehtiyaclarını cədvəldə doldurun. Əməkdaşı siyahıdan seçə, ya da əl ilə yaza bilərsiniz.`
@@ -359,20 +447,19 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
         </span>
       </div>
 
-      <div style={{ border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-xs)', marginBottom: 16 }}>
-        <div style={{ overflowX: 'auto' }}>
+      <div className="tna-table" style={{ border: '2px solid var(--ink-200)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-xs)', marginBottom: 16 }}>
+        <style jsx>{`
+          .tna-table th, .tna-table td { border-right: 1.5px solid var(--ink-200); font-size: 13px; }
+          .tna-table th:last-child, .tna-table td:last-child { border-right: none; }
+          .tna-table td { border-top-width: 1.5px !important; border-top-color: var(--ink-200) !important; }
+        `}</style>
+        <div className="table-wrap" style={{ border: 'none', borderRadius: 0 }}>
           <table style={{ borderCollapse: 'separate', borderSpacing: 0, minWidth: 2200 }}>
             <thead>
               <tr>
-                <th style={{ width: 36 }}></th>
-                {[
-                  'Əməkdaş *', 'İnkişaf istiqaməti *', 'Vəzifə *', 'Ehtiyacın yaranma səbəbi *',
-                  'Səriştə kateqoriyası', 'Vendor', 'Man Hours', 'Planlanmış Büdcə',
-                  'Transformation Capability Area', 'Əhəmiyyət *', 'Cari *', 'Tələb olunan *',
-                  'Öyrənmə metodu', 'Təlim/İnkişaf Aktivliyinin Müddəti', 'Öyrənmə Məqsədi',
-                  'Prioritet', 'Başlama', 'Bitmə', '',
-                ].map((h, i) => (
-                  <th key={i}>{h}</th>
+                <th className="sticky-col" style={{ width: 42, background: 'var(--ink-50)', borderBottom: '3px solid var(--ink-300)' }}></th>
+                {HEADER_GROUPS.map((h, i) => (
+                  <th key={i} style={{ background: GROUP_BG[h.group], color: GROUP_TEXT[h.group], fontSize: 11.5, borderBottom: `3px solid ${GROUP_TEXT[h.group]}` }}>{h.label}</th>
                 ))}
               </tr>
             </thead>
@@ -388,8 +475,8 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
 
                 return (
                 <tr key={idx} style={{ background: idx % 2 === 0 ? 'var(--surface)' : 'var(--ink-50)' }}>
-                  <td style={{ textAlign: 'center', color: 'var(--ink-300)', fontSize: 12, fontWeight: 600, borderTop: '1px solid var(--ink-100)' }}>{idx + 1}</td>
-                  <td style={{ minWidth: 170, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
+                  <td className="sticky-col" style={{ width: 42, textAlign: 'center', color: 'var(--ink-300)', fontSize: 12, fontWeight: 600, borderTop: '1px solid var(--ink-100)' }}>{idx + 1}</td>
+                  <td style={{ minWidth: 170, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     {r.sourceRequestId && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: 'var(--purple)', marginBottom: 3 }}>
                         <UserCheck size={11} strokeWidth={2.4} /> Əməkdaş təqdim edib
@@ -404,7 +491,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                       <input type="text" placeholder="və ya əl ilə yaz" value={r.manualName} onChange={(e) => updateRow(idx, 'manualName', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={{ ...inputStyle, marginTop: 2 }} />
                     )}
                   </td>
-                  <td style={{ minWidth: 230, borderTop: '1px solid var(--ink-100)', padding: '4px 8px', background: 'rgba(37,99,235,0.03)' }}>
+                  <td style={{ minWidth: 230, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                       <input
                         type="text" value={r.category} onChange={(e) => updateRow(idx, 'category', e.target.value)}
@@ -439,75 +526,75 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                       )}
                     </div>
                   </td>
-                  <td style={{ minWidth: 130, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 130, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <input type="text" value={r.position} onChange={(e) => updateRow(idx, 'position', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
                   </td>
-                  <td style={{ minWidth: 220, borderTop: '1px solid var(--ink-100)', padding: '4px 8px', background: 'rgba(37,99,235,0.03)' }}>
+                  <td style={{ minWidth: 220, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <select value={r.needReason} onChange={(e) => updateRow(idx, 'needReason', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
                       <option value="">— Seçin —</option>
                       {NEED_REASON_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                   </td>
-                  <td style={{ minWidth: 130, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 130, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <select value={r.compCat} onChange={(e) => updateRow(idx, 'compCat', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
                       <option value="">—</option>
                       {COMP_CAT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                   </td>
-                  <td style={{ minWidth: 130, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 130, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <input type="text" value={r.vendor} onChange={(e) => updateRow(idx, 'vendor', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
                   </td>
-                  <td style={{ minWidth: 100, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 100, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <input type="number" value={r.manHours} onChange={(e) => updateRow(idx, 'manHours', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
                   </td>
-                  <td style={{ minWidth: 130, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 130, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <input type="number" value={r.budget} onChange={(e) => updateRow(idx, 'budget', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
                   </td>
-                  <td style={{ minWidth: 160, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 160, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <select value={r.transformationArea} onChange={(e) => updateRow(idx, 'transformationArea', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
                       <option value="">—</option>
                       {TRANSFORMATION_AREA_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                   </td>
-                  <td style={{ minWidth: 120, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 120, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <select value={r.importance} onChange={(e) => updateRow(idx, 'importance', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
                       <option value="">—</option>{IMPORTANCE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                   </td>
-                  <td style={{ minWidth: 110, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 110, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <select value={r.currentLevel} onChange={(e) => updateRow(idx, 'currentLevel', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
                       <option value="">—</option>{LEVEL_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                   </td>
-                  <td style={{ minWidth: 110, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 110, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <select value={r.requiredLevel} onChange={(e) => updateRow(idx, 'requiredLevel', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
                       <option value="">—</option>{LEVEL_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                   </td>
-                  <td style={{ minWidth: 190, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 190, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <select value={r.learningMethod} onChange={(e) => updateRow(idx, 'learningMethod', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
                       <option value="">—</option>
                       {LEARNING_METHOD_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                   </td>
-                  <td style={{ minWidth: 180, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 180, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <select value={r.activityDuration} onChange={(e) => updateRow(idx, 'activityDuration', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
                       <option value="">—</option>
                       {ACTIVITY_DURATION_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                   </td>
-                  <td style={{ minWidth: 200, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 200, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <input type="text" value={r.learningGoal} onChange={(e) => updateRow(idx, 'learningGoal', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
                   </td>
-                  <td style={{ minWidth: 110, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 110, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <select value={r.priority} onChange={(e) => updateRow(idx, 'priority', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={{ ...inputStyle, color: PRIORITY_COLORS[r.priority], fontWeight: 600 }}>
                       {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
                     </select>
                   </td>
-                  <td style={{ minWidth: 140, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 140, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <input type="date" value={r.start} onChange={(e) => updateRow(idx, 'start', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
                   </td>
-                  <td style={{ minWidth: 140, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
+                  <td style={{ minWidth: 140, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <input type="date" value={r.end} onChange={(e) => updateRow(idx, 'end', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
                   </td>
                   <td style={{ borderTop: '1px solid var(--ink-100)', textAlign: 'center' }}>
