@@ -10,6 +10,26 @@ const IMPORTANCE_OPTIONS = [
 ];
 const LEVEL_OPTIONS = ['1 – Fundamental', '2 – İnkişaf edən', '3 – Yetərli', '4 – İrəli', '5 – Ekspert'];
 const COMP_CAT_OPTIONS = ['Hard Skills', 'Soft Skills'];
+// Extracted from the reference TRAINING MATRIX workbook by frequency
+// analysis (the raw data has some inconsistent number-prefixes for the
+// same label — e.g. "Seminar/Workshop" turns up at 5/7/9 — so each option
+// below is the most-supported numbered variant per distinct label, not a
+// literal copy of every row). need_reason's 8 values had zero ambiguity —
+// every number mapped to exactly one label already.
+const LEARNING_METHOD_OPTIONS = [
+  '1 – Təlim', '3 – İş Yerində Öyrənmə', '6 – E-learning', '8 – Qarışıq Model', '9 – Seminar/Workshop',
+];
+const ACTIVITY_DURATION_OPTIONS = [
+  '1 – Qısa (1–3 gün)', '2 – Orta (1–4 həftə)', '3 – Uzun (1–3 ay)', '4 – İrəli (3–6 ay)', '5 – Strateji (6+ ay)',
+];
+const NEED_REASON_OPTIONS = [
+  '1 – Yeni rol', '2 – Performans boşluğu', '3 – Yeni texnologiya', '4 – Hüquqi tələblər',
+  '5 – Strateji bacarıq', '6 – Karyera/varislik', '7 – Rəy/sorğu əsasında', '8 – Layihə/dəyişiklik',
+];
+// The workbook's Transformation Capability Area column turned out to hold
+// only 'yes'/'Yes' in practice (a flag, not a real category) — a dropdown
+// fixes the casing inconsistency too.
+const TRANSFORMATION_AREA_OPTIONS = ['Yes', 'No'];
 
 const inputStyle = {
   width: '100%', fontSize: 13, border: '1px solid transparent', background: 'transparent',
@@ -423,7 +443,10 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                     <input type="text" value={r.position} onChange={(e) => updateRow(idx, 'position', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
                   </td>
                   <td style={{ minWidth: 220, borderTop: '1px solid var(--ink-100)', padding: '4px 8px', background: 'rgba(37,99,235,0.03)' }}>
-                    <input type="text" value={r.needReason} onChange={(e) => updateRow(idx, 'needReason', e.target.value)} onFocus={focusIn} onBlur={focusOut} placeholder="Niyə bu təlimə ehtiyac var?" style={inputStyle} />
+                    <select value={r.needReason} onChange={(e) => updateRow(idx, 'needReason', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
+                      <option value="">— Seçin —</option>
+                      {NEED_REASON_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </select>
                   </td>
                   <td style={{ minWidth: 130, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
                     <select value={r.compCat} onChange={(e) => updateRow(idx, 'compCat', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
@@ -441,7 +464,10 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                     <input type="number" value={r.budget} onChange={(e) => updateRow(idx, 'budget', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
                   </td>
                   <td style={{ minWidth: 160, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
-                    <input type="text" value={r.transformationArea} onChange={(e) => updateRow(idx, 'transformationArea', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
+                    <select value={r.transformationArea} onChange={(e) => updateRow(idx, 'transformationArea', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
+                      <option value="">—</option>
+                      {TRANSFORMATION_AREA_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </select>
                   </td>
                   <td style={{ minWidth: 120, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
                     <select value={r.importance} onChange={(e) => updateRow(idx, 'importance', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
@@ -458,11 +484,17 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                       <option value="">—</option>{LEVEL_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                   </td>
-                  <td style={{ minWidth: 150, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
-                    <input type="text" value={r.learningMethod} onChange={(e) => updateRow(idx, 'learningMethod', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
+                  <td style={{ minWidth: 190, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
+                    <select value={r.learningMethod} onChange={(e) => updateRow(idx, 'learningMethod', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
+                      <option value="">—</option>
+                      {LEARNING_METHOD_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </select>
                   </td>
-                  <td style={{ minWidth: 170, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
-                    <input type="text" value={r.activityDuration} onChange={(e) => updateRow(idx, 'activityDuration', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
+                  <td style={{ minWidth: 180, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
+                    <select value={r.activityDuration} onChange={(e) => updateRow(idx, 'activityDuration', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
+                      <option value="">—</option>
+                      {ACTIVITY_DURATION_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </select>
                   </td>
                   <td style={{ minWidth: 200, borderTop: '1px solid var(--ink-100)', padding: '4px 8px' }}>
                     <input type="text" value={r.learningGoal} onChange={(e) => updateRow(idx, 'learningGoal', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
