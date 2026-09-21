@@ -3,11 +3,20 @@ import { ListPlus } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import { computeBudgetStatus } from '../lib/helpers';
 
+const COMP_CAT_OPTIONS = ['Hard Skills', 'Soft Skills'];
+
 export default function AddToPlanModal({ request, planYear, onClose, onSubmitted }) {
   const [vendor, setVendor] = useState('');
   const [manHours, setManHours] = useState(0);
   const [budget, setBudget] = useState(0);
+  const [usedBudget, setUsedBudget] = useState(0);
   const [category, setCategory] = useState('');
+  const [compCat, setCompCat] = useState(request.comp_cat || '');
+  const [transformationArea, setTransformationArea] = useState('');
+  const [learningMethod, setLearningMethod] = useState('');
+  const [activityDuration, setActivityDuration] = useState('');
+  const [needReason, setNeedReason] = useState(request.reason || '');
+  const [learningGoal, setLearningGoal] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const budgetStatus = computeBudgetStatus();
@@ -18,8 +27,8 @@ export default function AddToPlanModal({ request, planYear, onClose, onSubmitted
     const trainingPayload = {
       dept: request.dept, sube: request.sube || null, employee_name: request.employee_name,
       position: request.position || null, skill: request.training_title,
-      comp_cat: request.comp_cat || null, vendor: vendor.trim() || null,
-      man_hours: Number(manHours) || 0, budget: Number(budget) || 0,
+      comp_cat: compCat || null, vendor: vendor.trim() || null,
+      man_hours: Number(manHours) || 0, budget: Number(budget) || 0, used_budget: Number(usedBudget) || 0,
       status: 'Scheduled to Commence on Planned Date',
       plan_year: planYear || new Date().getFullYear(),
       start_date: request.preferred_start || null, end_date: request.preferred_end || null,
@@ -27,6 +36,11 @@ export default function AddToPlanModal({ request, planYear, onClose, onSubmitted
       current_skill_level: request.current_skill_level || null,
       required_skill_level: request.required_skill_level || null,
       priority: request.priority, category: category || null, budget_status: budgetStatus,
+      transformation_area: transformationArea.trim() || null,
+      learning_method: learningMethod.trim() || null,
+      activity_duration: activityDuration.trim() || null,
+      need_reason: needReason.trim() || null,
+      learning_goal: learningGoal.trim() || null,
     };
     const { data, error: err } = await sb.from('trainings').insert(trainingPayload).select().single();
     if (err) { setError('Xəta: ' + err.message); setSaving(false); return; }
@@ -37,7 +51,7 @@ export default function AddToPlanModal({ request, planYear, onClose, onSubmitted
 
   return (
     <div className="modal-overlay">
-      <div className="modal-card" style={{ width: 460 }}>
+      <div className="modal-card" style={{ width: 540, maxHeight: '90vh', overflow: 'auto' }}>
         <div className="modal-title" style={{ marginBottom: 6 }}>İllik Plana (TNA) Əlavə Et</div>
         <div className="section-sub" style={{ marginBottom: 16 }}>
           {request.employee_name} — {request.dept}{request.sube ? ' / ' + request.sube : ''} — <b>{request.training_title}</b>
@@ -61,23 +75,58 @@ export default function AddToPlanModal({ request, planYear, onClose, onSubmitted
             <input type="number" value={manHours} onChange={(e) => setManHours(e.target.value)} />
           </div>
           <div style={{ flex: 1 }}>
-            <label>Büdcə (₼)</label>
+            <label>Planlanmış Büdcə (₼)</label>
             <input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} />
           </div>
+          <div style={{ flex: 1 }}>
+            <label>İstifadə olunmuş Büdcə (₼)</label>
+            <input type="number" value={usedBudget} onChange={(e) => setUsedBudget(e.target.value)} />
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+          <div style={{ flex: 1 }}>
+            <label>Vəzifə Kateqoriyası</label>
+            <select value={category} onChange={(e) => setCategory(e.target.value)}>
+              <option value="">— Seçilməyib —</option>
+              <option value="Support Staff">Support Staff</option>
+              <option value="Junior Specialist">Junior Specialist</option>
+              <option value="Specialist">Specialist</option>
+              <option value="Senior Specialist">Senior Specialist</option>
+              <option value="Leading Specialist">Leading Specialist</option>
+              <option value="Manager">Manager</option>
+              <option value="Middle Manager">Middle Manager</option>
+              <option value="Senior Manager">Senior Manager</option>
+            </select>
+          </div>
+          <div style={{ flex: 1 }}>
+            <label>Səriştə kateqoriyası (bacarıq/bilik/səriştə)</label>
+            <select value={compCat} onChange={(e) => setCompCat(e.target.value)}>
+              <option value="">— Seçilməyib —</option>
+              {COMP_CAT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+        </div>
+        <div style={{ marginBottom: 10 }}>
+          <label>Transformation Capability Area</label>
+          <input type="text" value={transformationArea} onChange={(e) => setTransformationArea(e.target.value)} />
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+          <div style={{ flex: 1 }}>
+            <label>Öyrənmə metodu</label>
+            <input type="text" value={learningMethod} onChange={(e) => setLearningMethod(e.target.value)} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label>Təlim/İnkişaf Aktivliyinin Müddəti</label>
+            <input type="text" value={activityDuration} onChange={(e) => setActivityDuration(e.target.value)} />
+          </div>
+        </div>
+        <div style={{ marginBottom: 10 }}>
+          <label>Təlim və inkişaf ehtiyacının yaranma səbəbi</label>
+          <textarea rows={2} value={needReason} onChange={(e) => setNeedReason(e.target.value)} />
         </div>
         <div style={{ marginBottom: 14 }}>
-          <label>Vəzifə Kateqoriyası</label>
-          <select value={category} onChange={(e) => setCategory(e.target.value)}>
-            <option value="">— Seçilməyib —</option>
-            <option value="Support Staff">Support Staff</option>
-            <option value="Junior Specialist">Junior Specialist</option>
-            <option value="Specialist">Specialist</option>
-            <option value="Senior Specialist">Senior Specialist</option>
-            <option value="Leading Specialist">Leading Specialist</option>
-            <option value="Manager">Manager</option>
-            <option value="Middle Manager">Middle Manager</option>
-            <option value="Senior Manager">Senior Manager</option>
-          </select>
+          <label>Öyrənmə Məqsədi</label>
+          <textarea rows={2} value={learningGoal} onChange={(e) => setLearningGoal(e.target.value)} />
         </div>
         {error && <div className="notice notice-error" style={{ marginBottom: 10 }}>{error}</div>}
         <div style={{ display: 'flex', gap: 10 }}>

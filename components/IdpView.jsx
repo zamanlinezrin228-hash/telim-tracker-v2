@@ -272,9 +272,14 @@ export default function IdpView({ requests, trainings }) {
                         <td>{t.plan_year || '—'}</td>
                         <td style={{ fontWeight: 600 }}>
                           {t.skill}
+                          {t.learning_goal && (
+                            <div style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--ink-500)', marginTop: 3 }}>
+                              <b>Öyrənmə Məqsədi:</b> {t.learning_goal}
+                            </div>
+                          )}
                           {mapping && (
-                            <div style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--purple)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <MapIcon size={10} strokeWidth={2.4} /> Kateqoriya: {mapping.category} → Səriştə: {mapping.competency}
+                            <div style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--purple)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <MapIcon size={10} strokeWidth={2.4} /> Səriştə: {mapping.competency}
                             </div>
                           )}
                         </td>
