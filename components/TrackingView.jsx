@@ -14,14 +14,40 @@ const STATUS_OPTIONS = [
 const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical'];
 const COMP_CAT_OPTIONS = ['Hard Skills', 'Soft Skills'];
 const BUDGET_STATUS_OPTIONS = ['Büdcələnmiş', 'Büdcədən kənar'];
+// Same canonical option sets RequestFormModal.jsx already established for
+// these fields (its fuller descriptive labels match the reference TNA
+// workbook's own clean values exactly) — reused here rather than redefined,
+// so the same "3 – Yetərli (müstəqil icra)" string is valid everywhere.
+const IMPORTANCE_OPTIONS = [
+  '1 – Aşağı (minimal təsir)', '2 – Orta (əsas işə təsir edir)',
+  '3 – Yüksək (vacib nəticələrə təsir edir)', '4 – Kritik (ciddi risk yaradır)',
+  '5 – Strateji (gələcək uğur üçün həlledici)',
+];
+const LEVEL_OPTIONS = [
+  '1 – Fundamental (əsas biliklər)', '2 – İnkişaf etməkdə olan (məhdud tətbiq)',
+  '3 – Yetərli (müstəqil icra)', '4 – İrəli səviyyə (mürəkkəb problemləri həll edir)',
+  '5 – Ekspert (standart yaradır)',
+];
 
 const FILTER_FIELDS = ['dept', 'sube', 'position', 'category', 'skill', 'comp_cat', 'vendor', 'status', 'priority', 'budget_status'];
 const FIELD_LABELS = {
   plan_year: 'İl', dept: 'Departament', sube: 'Filial', position: 'Vəzifə', category: 'Vəzifə Kateqoriyası',
-  skill: 'Təlimin Adı', comp_cat: 'Təlim Kateqoriyası', vendor: 'Provayder', status: 'Status',
-  priority: 'Prioritet', start_date: 'Başlama', end_date: 'Bitmə', budget: 'Büdcə', budget_status: 'Büdcə Statusu',
+  comp_cat: 'Səriştə kateqoriyası (bacarıq/bilik/səriştə)', learning_goal: 'Öyrənmə Məqsədi',
+  skill: 'Spesifik təlim ehtiyacı', vendor: 'Vendor', man_hours: 'Müddət (Man Hours)',
+  used_budget: 'İstifadə olunmuş Büdcə', budget: 'Planlanmış Büdcə', status: 'Status',
+  start_date: 'Planlaşdırılan Başlama Tarixi', end_date: 'Planlaşdırılan Bitmə Tarixi',
+  transformation_area: 'Transformation Capability Area', importance_level: 'Müvafiq Səriştənin Əhəmiyyətlilik dərəcəsi',
+  current_skill_level: 'Mövcud Bacarıq Səviyyəsi', required_skill_level: 'Tələb Olunan Bacarıq Səviyyəsi',
+  learning_method: 'Öyrənmə metodu', activity_duration: 'Təlim/İnkişaf Aktivliyinin Müddəti',
+  need_reason: 'Təlim və inkişaf ehtiyacının yaranma səbəbi', weighted_gap: 'WG (Weighted Gap)',
+  cgi: 'CGI (Competency Gap Index)', cgi_priority_full: 'Competency GAP Index (Priority)',
+  priority: 'Prioritet', budget_status: 'Büdcə Statusu',
 };
 
+// Order matches the exact sequence requested for the Tracking table, its
+// Excel export and the admin edit modal: base identity columns first, then
+// the full competency/training-need field set in one consistent order
+// everywhere it appears.
 const ALL_COLUMNS = [
   { key: 'plan_year', label: FIELD_LABELS.plan_year, sticky: true },
   { key: 'dept', label: FIELD_LABELS.dept },
@@ -29,25 +55,47 @@ const ALL_COLUMNS = [
   { key: 'employee_name', label: 'Ad Soyad' },
   { key: 'position', label: FIELD_LABELS.position },
   { key: 'category', label: FIELD_LABELS.category },
-  { key: 'skill', label: FIELD_LABELS.skill },
   { key: 'comp_cat', label: FIELD_LABELS.comp_cat },
+  { key: 'learning_goal', label: FIELD_LABELS.learning_goal },
+  { key: 'skill', label: FIELD_LABELS.skill },
   { key: 'vendor', label: FIELD_LABELS.vendor },
+  { key: 'man_hours', label: FIELD_LABELS.man_hours },
+  { key: 'used_budget', label: FIELD_LABELS.used_budget },
+  { key: 'budget', label: FIELD_LABELS.budget },
   { key: 'status', label: FIELD_LABELS.status },
-  { key: 'priority', label: FIELD_LABELS.priority },
   { key: 'start_date', label: FIELD_LABELS.start_date },
   { key: 'end_date', label: FIELD_LABELS.end_date },
-  { key: 'man_hours', label: 'Saat' },
-  { key: 'budget', label: FIELD_LABELS.budget },
+  { key: 'transformation_area', label: FIELD_LABELS.transformation_area },
+  { key: 'importance_level', label: FIELD_LABELS.importance_level },
+  { key: 'current_skill_level', label: FIELD_LABELS.current_skill_level },
+  { key: 'required_skill_level', label: FIELD_LABELS.required_skill_level },
+  { key: 'learning_method', label: FIELD_LABELS.learning_method },
+  { key: 'activity_duration', label: FIELD_LABELS.activity_duration },
+  { key: 'need_reason', label: FIELD_LABELS.need_reason },
+  { key: 'weighted_gap', label: FIELD_LABELS.weighted_gap },
+  { key: 'cgi', label: FIELD_LABELS.cgi },
+  { key: 'cgi_priority_full', label: FIELD_LABELS.cgi_priority_full },
+  { key: 'priority', label: FIELD_LABELS.priority },
   { key: 'budget_status', label: FIELD_LABELS.budget_status },
 ];
-const DEFAULT_HIDDEN = new Set(['sube', 'category', 'man_hours']);
+// The detailed competency/gap-analysis fields are exposed (filterable via
+// "Sütunlar") but hidden by default so the table stays usable at a glance —
+// judgment call, since showing all 28 columns simultaneously by default
+// would be unreadable.
+const DEFAULT_HIDDEN = new Set([
+  'sube', 'category', 'learning_goal', 'used_budget', 'transformation_area',
+  'importance_level', 'current_skill_level', 'required_skill_level',
+  'learning_method', 'activity_duration', 'need_reason',
+  'weighted_gap', 'cgi', 'cgi_priority_full',
+]);
 
 function displayVal(v) {
   return v === null || v === undefined || v === '' ? '—' : String(v);
 }
 
+const NUMERIC_KEYS = new Set(['budget', 'used_budget', 'man_hours', 'plan_year', 'weighted_gap', 'cgi']);
 function sortValue(t, key) {
-  if (key === 'budget' || key === 'man_hours' || key === 'plan_year') return Number(t[key]) || 0;
+  if (NUMERIC_KEYS.has(key)) return Number(t[key]) || 0;
   if (key === 'start_date' || key === 'end_date') return t[key] || '';
   return displayVal(t[key]).toLowerCase();
 }
@@ -91,8 +139,16 @@ function renderCell(t, key) {
     case 'start_date': return t.start_date || t.start_raw || '—';
     case 'end_date': return t.end_date || t.end_raw || '—';
     case 'man_hours': return t.man_hours ?? '—';
+    case 'used_budget': return fmtMoney(t.used_budget);
     case 'budget': return fmtMoney(t.budget);
     case 'budget_status': return t.budget_status ? <BudgetStatusBadge status={t.budget_status} /> : '—';
+    case 'weighted_gap': return t.weighted_gap ?? '—';
+    case 'cgi': return t.cgi ?? '—';
+    case 'learning_goal': case 'need_reason': case 'cgi_priority_full': {
+      const v = t[key];
+      if (!v) return '—';
+      return <span title={v}>{v.length > 60 ? v.slice(0, 60) + '…' : v}</span>;
+    }
     default: return displayVal(t[key]);
   }
 }
@@ -236,26 +292,44 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
       { header: 'Ad Soyad', key: 'name', width: 22 },
       { header: 'Vəzifə', key: 'position', width: 22 },
       { header: 'Vəzifə Kateqoriyası', key: 'category', width: 20 },
-      { header: 'Təlimin Adı', key: 'skill', width: 28 },
-      { header: 'Kateqoriya', key: 'comp_cat', width: 14 },
-      { header: 'Provayder', key: 'vendor', width: 18 },
-      { header: 'Status', key: 'status', width: 22 },
-      { header: 'Prioritet', key: 'priority', width: 12 },
-      { header: 'Başlama', key: 'start', width: 12 },
-      { header: 'Bitmə', key: 'end', width: 12 },
-      { header: 'Saat', key: 'hours', width: 8 },
-      { header: 'Büdcə', key: 'budget', width: 14 },
-      { header: 'Büdcə Statusu', key: 'budget_status', width: 16 },
+      { header: FIELD_LABELS.comp_cat, key: 'comp_cat', width: 20 },
+      { header: FIELD_LABELS.learning_goal, key: 'learning_goal', width: 32 },
+      { header: FIELD_LABELS.skill, key: 'skill', width: 28 },
+      { header: FIELD_LABELS.vendor, key: 'vendor', width: 18 },
+      { header: FIELD_LABELS.man_hours, key: 'man_hours', width: 12 },
+      { header: FIELD_LABELS.used_budget, key: 'used_budget', width: 16 },
+      { header: FIELD_LABELS.budget, key: 'budget', width: 16 },
+      { header: FIELD_LABELS.status, key: 'status', width: 22 },
+      { header: FIELD_LABELS.start_date, key: 'start_date', width: 14 },
+      { header: FIELD_LABELS.end_date, key: 'end_date', width: 14 },
+      { header: FIELD_LABELS.transformation_area, key: 'transformation_area', width: 24 },
+      { header: FIELD_LABELS.importance_level, key: 'importance_level', width: 24 },
+      { header: FIELD_LABELS.current_skill_level, key: 'current_skill_level', width: 24 },
+      { header: FIELD_LABELS.required_skill_level, key: 'required_skill_level', width: 24 },
+      { header: FIELD_LABELS.learning_method, key: 'learning_method', width: 20 },
+      { header: FIELD_LABELS.activity_duration, key: 'activity_duration', width: 20 },
+      { header: FIELD_LABELS.need_reason, key: 'need_reason', width: 28 },
+      { header: FIELD_LABELS.weighted_gap, key: 'weighted_gap', width: 12 },
+      { header: FIELD_LABELS.cgi, key: 'cgi', width: 12 },
+      { header: FIELD_LABELS.cgi_priority_full, key: 'cgi_priority_full', width: 30 },
+      { header: FIELD_LABELS.priority, key: 'priority', width: 12 },
+      { header: FIELD_LABELS.budget_status, key: 'budget_status', width: 16 },
     ];
     sorted.forEach((t) => {
       ws.addRow({
         il: t.plan_year, dept: t.dept, sube: t.sube, name: t.employee_name, position: t.position,
-        category: t.category, skill: t.skill, comp_cat: t.comp_cat, vendor: t.vendor,
-        status: statusMeta(t.status).label, priority: priorityMeta(t.priority).label,
-        start: t.start_date || t.start_raw, end: t.end_date || t.end_raw,
-        hours: Number(t.man_hours) || 0, budget: Number(t.budget) || 0, budget_status: t.budget_status,
+        category: t.category, comp_cat: t.comp_cat, learning_goal: t.learning_goal, skill: t.skill,
+        vendor: t.vendor, man_hours: Number(t.man_hours) || 0, used_budget: Number(t.used_budget) || 0,
+        budget: Number(t.budget) || 0, status: statusMeta(t.status).label,
+        start_date: t.start_date || t.start_raw, end_date: t.end_date || t.end_raw,
+        transformation_area: t.transformation_area, importance_level: t.importance_level,
+        current_skill_level: t.current_skill_level, required_skill_level: t.required_skill_level,
+        learning_method: t.learning_method, activity_duration: t.activity_duration, need_reason: t.need_reason,
+        weighted_gap: t.weighted_gap, cgi: t.cgi, cgi_priority_full: t.cgi_priority_full,
+        priority: priorityMeta(t.priority).label, budget_status: t.budget_status,
       });
     });
+    ws.getColumn('used_budget').numFmt = '#,##0 "₼"';
     ws.getColumn('budget').numFmt = '#,##0 "₼"';
     styleHeaderRow(ws);
     const tarix = new Date().toISOString().slice(0, 10);
@@ -366,7 +440,7 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
 
         {editing && (
           <div className="modal-overlay">
-            <div className="modal-card" style={{ width: 520 }}>
+            <div className="modal-card" style={{ width: 640, maxHeight: '90vh', overflow: 'auto' }}>
               <div className="modal-title">Qeydi Redaktə Et</div>
               <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                 <div style={{ flex: 1 }}>
@@ -390,23 +464,86 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
                 <label>Vəzifə</label>
                 <input type="text" value={editing.position || ''} onChange={(e) => upd('position', e.target.value)} />
               </div>
+
+              <div className="filter-label" style={{ margin: '4px 0 10px' }}>Səriştə və təlim ehtiyacı</div>
               <div style={{ marginBottom: 10 }}>
-                <label>Təlim / İnkişaf istiqaməti</label>
+                <label>{FIELD_LABELS.comp_cat}</label>
+                <select value={editing.comp_cat || ''} onChange={(e) => upd('comp_cat', e.target.value)}>
+                  <option value="">—</option>
+                  {COMP_CAT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <div style={{ marginBottom: 10 }}>
+                <label>{FIELD_LABELS.learning_goal}</label>
+                <textarea rows={2} value={editing.learning_goal || ''} onChange={(e) => upd('learning_goal', e.target.value)} />
+              </div>
+              <div style={{ marginBottom: 10 }}>
+                <label>{FIELD_LABELS.skill}</label>
                 <input type="text" value={editing.skill || ''} onChange={(e) => upd('skill', e.target.value)} />
               </div>
               <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                 <div style={{ flex: 1 }}>
-                  <label>Səriştə Kateqoriyası</label>
-                  <select value={editing.comp_cat || ''} onChange={(e) => upd('comp_cat', e.target.value)}>
-                    <option value="">—</option>
-                    {COMP_CAT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-                  </select>
+                  <label>{FIELD_LABELS.transformation_area}</label>
+                  <input type="text" value={editing.transformation_area || ''} onChange={(e) => upd('transformation_area', e.target.value)} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label>Vendor</label>
+                  <label>{FIELD_LABELS.vendor}</label>
                   <input type="text" value={editing.vendor || ''} onChange={(e) => upd('vendor', e.target.value)} />
                 </div>
               </div>
+              <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <label>{FIELD_LABELS.importance_level}</label>
+                  <select value={editing.importance_level || ''} onChange={(e) => upd('importance_level', e.target.value)}>
+                    <option value="">—</option>
+                    {IMPORTANCE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label>{FIELD_LABELS.current_skill_level}</label>
+                  <select value={editing.current_skill_level || ''} onChange={(e) => upd('current_skill_level', e.target.value)}>
+                    <option value="">—</option>
+                    {LEVEL_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label>{FIELD_LABELS.required_skill_level}</label>
+                  <select value={editing.required_skill_level || ''} onChange={(e) => upd('required_skill_level', e.target.value)}>
+                    <option value="">—</option>
+                    {LEVEL_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <label>{FIELD_LABELS.learning_method}</label>
+                  <input type="text" value={editing.learning_method || ''} onChange={(e) => upd('learning_method', e.target.value)} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label>{FIELD_LABELS.activity_duration}</label>
+                  <input type="text" value={editing.activity_duration || ''} onChange={(e) => upd('activity_duration', e.target.value)} />
+                </div>
+              </div>
+              <div style={{ marginBottom: 10 }}>
+                <label>{FIELD_LABELS.need_reason}</label>
+                <textarea rows={2} value={editing.need_reason || ''} onChange={(e) => upd('need_reason', e.target.value)} />
+              </div>
+              <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+                <div style={{ flex: 1 }}>
+                  <label>{FIELD_LABELS.weighted_gap}</label>
+                  <input type="number" value={editing.weighted_gap ?? ''} onChange={(e) => upd('weighted_gap', Number(e.target.value))} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label>{FIELD_LABELS.cgi}</label>
+                  <input type="number" step="0.01" value={editing.cgi ?? ''} onChange={(e) => upd('cgi', Number(e.target.value))} />
+                </div>
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label>{FIELD_LABELS.cgi_priority_full}</label>
+                <textarea rows={2} value={editing.cgi_priority_full || ''} onChange={(e) => upd('cgi_priority_full', e.target.value)} />
+              </div>
+
+              <div className="filter-label" style={{ margin: '4px 0 10px' }}>Status, tarixlər və büdcə</div>
               <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                 <div style={{ flex: 1 }}>
                   <label>Status</label>
@@ -423,21 +560,25 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
               </div>
               <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                 <div style={{ flex: 1 }}>
-                  <label>Başlama tarixi</label>
+                  <label>{FIELD_LABELS.start_date}</label>
                   <input type="date" value={editing.start_date || ''} onChange={(e) => upd('start_date', e.target.value)} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label>Bitmə tarixi</label>
+                  <label>{FIELD_LABELS.end_date}</label>
                   <input type="date" value={editing.end_date || ''} onChange={(e) => upd('end_date', e.target.value)} />
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                 <div style={{ flex: 1 }}>
-                  <label>Man Hours</label>
+                  <label>{FIELD_LABELS.man_hours}</label>
                   <input type="number" value={editing.man_hours || 0} onChange={(e) => upd('man_hours', Number(e.target.value))} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label>Büdcə (₼)</label>
+                  <label>{FIELD_LABELS.used_budget} (₼)</label>
+                  <input type="number" value={editing.used_budget || 0} onChange={(e) => upd('used_budget', Number(e.target.value))} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label>{FIELD_LABELS.budget} (₼)</label>
                   <input type="number" value={editing.budget || 0} onChange={(e) => upd('budget', Number(e.target.value))} />
                 </div>
               </div>

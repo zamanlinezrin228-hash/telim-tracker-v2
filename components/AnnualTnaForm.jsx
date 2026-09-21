@@ -212,14 +212,23 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
       return;
     }
 
-    // A manager submitting (for themselves or their team) IS the review
-    // step, so those rows go straight to L&D. A no-team employee submitting
-    // for themselves has no such oversight built into the act of filling
-    // the form, so their row needs to actually go through their manager
-    // first — the same routing RequestFormModal already uses for ad-hoc
-    // self-submissions.
-    const newRowStatus = hasTeam ? 'Pending' : (profile.manager_id ? 'Pending Manager Review' : 'Pending');
-    const newRowReviewingManager = hasTeam ? null : (profile.manager_id || null);
+    // Mirrors RequestFormModal's exact two-rule routing: a lone self-
+    // submission (no team) always needs its own manager's sign-off if one
+    // exists, regardless of scope_level — nobody else reviewed it on the
+    // way in. A manager submitting a batch (for their team, or themselves
+    // as part of it) IS that review step, EXCEPT when the manager is
+    // şöbə-level with their own manager — their batch still has to climb
+    // one more hop to the dept-level manager before reaching L&D
+    // (Employee → şöbə manager → dept manager → L&D). A dept-level
+    // manager, or anyone with no manager_id, is the top of that chain and
+    // goes straight to 'Pending'.
+    const needsUpwardReview = hasTeam && profile.scope_level === 'sube' && !!profile.manager_id;
+    const newRowStatus = hasTeam
+      ? (needsUpwardReview ? 'Pending Manager Review' : 'Pending')
+      : (profile.manager_id ? 'Pending Manager Review' : 'Pending');
+    const newRowReviewingManager = hasTeam
+      ? (needsUpwardReview ? profile.manager_id : null)
+      : (profile.manager_id || null);
 
     const newRows = filled.filter((r) => !r.sourceRequestId);
     const mergedRows = filled.filter((r) => r.sourceRequestId);
@@ -256,15 +265,19 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
       tasks.push(sb.from('training_requests').insert(insertPayloads));
     }
     // Employee-submitted rows are UPDATEd in place (never re-inserted) so
-    // requested_by keeps pointing at the original submitter — the manager
-    // including it in their batch is what moves it from 'Pending Manager
-    // Review' to 'Pending', recorded the same way ad-hoc manager approvals
-    // already are (manager_reviewed_by set, manager_note for any comment).
+    // requested_by keeps pointing at the original submitter. Forwarding
+    // follows the exact same newRowStatus/newRowReviewingManager rule as
+    // this manager's own new rows above — a şöbə-level manager forwards it
+    // one more hop up to their own dept-level manager rather than straight
+    // to L&D, continuing the employee → şöbə manager → dept manager → L&D
+    // chain; recorded the same way ad-hoc manager approvals already are
+    // (manager_reviewed_by set, manager_note for any comment).
     mergedRows.forEach((r) => {
       tasks.push(
         sb.from('training_requests').update({
           ...fieldsFor(r),
-          status: 'Pending',
+          status: newRowStatus,
+          reviewing_manager_id: newRowReviewingManager,
           manager_reviewed_by: profile.id,
           updated_at: new Date().toISOString(),
         }).eq('id', r.sourceRequestId)
