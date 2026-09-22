@@ -261,7 +261,7 @@ export default function IdpView({ requests, trainings }) {
                 <table>
                   <thead>
                     <tr>
-                      <th>İl</th><th>Təlim</th><th>Provayder</th><th>Status</th><th>Başlama</th><th>Bitmə</th><th>Saat</th><th>Büdcə</th>
+                      <th>İl</th><th>Təlim</th><th>Cari səviyyə</th><th>Tələb olunan</th><th>Əhəmiyyət</th><th>Prioritet</th><th>Provayder</th><th>Status</th><th>Başlama</th><th>Bitmə</th><th>Saat</th><th>Büdcə</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -282,17 +282,11 @@ export default function IdpView({ requests, trainings }) {
                               <MapIcon size={10} strokeWidth={2.4} /> Səriştə: {mapping.competency}
                             </div>
                           )}
-                          {(t.current_skill_level || t.required_skill_level || t.importance_level || t.priority) && (
-                            <div style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--ink-500)', marginTop: 3, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 5 }}>
-                              {[
-                                t.current_skill_level && <span key="cur"><b>Cari səviyyə:</b> {t.current_skill_level}</span>,
-                                t.required_skill_level && <span key="req"><b>Tələb olunan:</b> {t.required_skill_level}</span>,
-                                t.importance_level && <span key="imp"><b>Əhəmiyyət:</b> {t.importance_level}</span>,
-                              ].filter(Boolean).reduce((acc, el, i) => (i === 0 ? [el] : [...acc, <span key={'dot' + i}> · </span>, el]), [])}
-                              {t.priority && <PriorityBadge priority={t.priority} />}
-                            </div>
-                          )}
                         </td>
+                        <td style={{ fontSize: 12 }}>{t.current_skill_level || '—'}</td>
+                        <td style={{ fontSize: 12 }}>{t.required_skill_level || '—'}</td>
+                        <td style={{ fontSize: 12 }}>{t.importance_level || '—'}</td>
+                        <td>{t.priority ? <PriorityBadge priority={t.priority} /> : '—'}</td>
                         <td>{t.vendor || '—'}</td>
                         <td><TrainingStatusBadge status={t.status} /></td>
                         <td>{t.start_date || t.start_raw || '—'}</td>

@@ -1,4 +1,4 @@
-import { GraduationCap, Home, LayoutDashboard, ClipboardList, FileText, CalendarDays, UserSquare2, LogOut } from 'lucide-react';
+import { GraduationCap, Home, LayoutDashboard, ClipboardList, FileText, CalendarDays, UserSquare2, Compass, LogOut } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import ThemeToggle from './ThemeToggle';
 
@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard },
   { key: 'tracking', label: 'İzləmə Cədvəli', Icon: ClipboardList },
   { key: 'requests', label: 'Təlim Sorğuları', Icon: FileText },
+  { key: 'guide', label: 'Bələdçi', Icon: Compass },
 ];
 
 function initials(name) {
