@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import ExcelJS from 'exceljs';
-import { CheckCircle2, Plus, X, Send, Lightbulb, UserCheck, Download } from 'lucide-react';
+import { CheckCircle2, Plus, X, Send, Lightbulb, UserCheck, Download, Pencil, XCircle, RotateCcw } from 'lucide-react';
 import { sb } from '../lib/supabase';
+import { showToast } from '../lib/toast';
 import { styleGroupedTable, downloadWorkbook } from '../lib/excelExport';
 import { GROUP_BG, GROUP_TEXT } from '../lib/tableGroups';
+import NoteModal from './NoteModal';
+import TnaRowEditModal from './TnaRowEditModal';
 
 const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical'];
 const PRIORITY_LABELS = { Low: 'Aşağı', Medium: 'Orta', High: 'Yüksək', Critical: 'Kritik' };
@@ -144,6 +147,8 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
   const [library, setLibrary] = useState([]);
+  const [noteAction, setNoteAction] = useState(null);
+  const [editingIdx, setEditingIdx] = useState(null);
   const mergedPendingRef = useRef(false);
 
   useEffect(() => {
@@ -152,46 +157,72 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
     });
   }, []);
 
-  // A direct report without a team of their own can submit a single Annual
-  // TNA need through their manager (see handleSubmit's no-team branch, which
-  // routes it to 'Pending Manager Review' instead of straight to L&D). Those
-  // rows surface here so the manager can review/edit them alongside their
-  // own entries and forward the whole batch together — merged in once per
+  function mapIncomingRow(r, isReviewIncoming) {
+    // A genuine employee self-submission has requested_by = the employee
+    // themself, so `team` resolves it directly. A row of MY OWN coming back
+    // for revision always has requested_by = me (handleSubmit stamps every
+    // row I submit with my own id, whoever it's about), so the described
+    // employee has to be resolved by name instead.
+    const submitter = isReviewIncoming
+      ? team.find((t) => t.id === r.requested_by)
+      : selectableEmployees.find((e) => e.full_name_az === r.employee_name);
+    return {
+      sourceRequestId: r.id,
+      isReviewIncoming,
+      revisionNote: !isReviewIncoming ? (r.manager_note || r.reviewer_note || '') : '',
+      employeeId: submitter ? submitter.id : '',
+      manualName: submitter ? '' : (r.employee_name || ''),
+      position: r.position || '',
+      category: '', competency: '',
+      skill: r.training_title || '',
+      needReason: r.reason || '',
+      priority: r.priority || 'Medium',
+      importance: r.importance_level || '',
+      currentLevel: r.current_skill_level || '',
+      requiredLevel: r.required_skill_level || '',
+      compCat: r.comp_cat || '', vendor: r.vendor || '',
+      manHours: r.man_hours != null ? String(r.man_hours) : '', budget: r.budget != null ? String(r.budget) : '',
+      transformationArea: r.transformation_area || '', learningMethod: r.learning_method || '',
+      activityDuration: r.activity_duration || '', learningGoal: r.learning_goal || '',
+      start: r.preferred_start || '', end: r.preferred_end || '',
+    };
+  }
+
+  // Two distinct kinds of rows merge into this manager's own draft table:
+  // (1) a direct report WITHOUT a team of their own submitting a single
+  // Annual TNA need through this manager (Task 2) — reviewed inline via the
+  // Redaktə/Təsdiqlə/Rədd actions in the table's last column. A şöbə-level
+  // manager's own forwarded BATCH is deliberately excluded here — that now
+  // has its own dedicated "Departament üzrə baxış" review tab
+  // (AnnualTnaManagerReview) instead of silently merging into whoever is
+  // reviewing it. (2) rows I submitted myself that came back 'Needs
+  // Revision' — merged back in as ordinary editable rows so resubmitting is
+  // just editing + hitting the normal submit button again. Fetched once per
   // mount, since Kateqoriya/Səriştə (the two upper cascade levels) were
   // never persisted and can't be reconstructed, only the final Alt səriştə.
   useEffect(() => {
-    if (!hasTeam || mergedPendingRef.current) return;
+    if (mergedPendingRef.current) return;
     mergedPendingRef.current = true;
-    sb.from('training_requests')
-      .select('*')
-      .eq('reviewing_manager_id', profile.id)
-      .eq('status', 'Pending Manager Review')
-      .eq('source', 'Manager Survey')
-      .then(({ data }) => {
-        if (!data || data.length === 0) return;
-        const mapped = data.map((r) => {
-          const submitter = team.find((t) => t.id === r.requested_by);
-          return {
-            sourceRequestId: r.id,
-            employeeId: submitter ? r.requested_by : '',
-            manualName: submitter ? '' : (r.employee_name || ''),
-            position: r.position || '',
-            category: '', competency: '',
-            skill: r.training_title || '',
-            needReason: r.reason || '',
-            priority: r.priority || 'Medium',
-            importance: r.importance_level || '',
-            currentLevel: r.current_skill_level || '',
-            requiredLevel: r.required_skill_level || '',
-            compCat: r.comp_cat || '', vendor: r.vendor || '',
-            manHours: r.man_hours != null ? String(r.man_hours) : '', budget: r.budget != null ? String(r.budget) : '',
-            transformationArea: r.transformation_area || '', learningMethod: r.learning_method || '',
-            activityDuration: r.activity_duration || '', learningGoal: r.learning_goal || '',
-            start: r.preferred_start || '', end: r.preferred_end || '',
-          };
-        });
-        setRows((prev) => [...mapped, ...prev]);
+
+    const incomingQuery = hasTeam
+      ? sb.from('training_requests').select('*')
+          .eq('reviewing_manager_id', profile.id).eq('status', 'Pending Manager Review').eq('source', 'Manager Survey')
+      : Promise.resolve({ data: [] });
+    const myRevisionsQuery = sb.from('training_requests').select('*')
+      .eq('requested_by', profile.id).eq('status', 'Needs Revision').eq('source', 'Manager Survey');
+
+    Promise.all([incomingQuery, myRevisionsQuery]).then(([incomingRes, revisionsRes]) => {
+      const incoming = (incomingRes.data || []).filter((r) => {
+        const submitter = team.find((t) => t.id === r.requested_by);
+        return !submitter || submitter.scope_level !== 'sube';
       });
+      const revisions = revisionsRes.data || [];
+      const mapped = [
+        ...incoming.map((r) => mapIncomingRow(r, true)),
+        ...revisions.map((r) => mapIncomingRow(r, false)),
+      ];
+      if (mapped.length) setRows((prev) => [...mapped, ...prev]);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasTeam, profile.id]);
 
@@ -201,6 +232,55 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
       if (m?.dept) return m.dept;
     }
     return profile.dept;
+  }
+
+  function fieldsFor(r) {
+    const member = r.employeeId ? selectableEmployees.find((t) => t.id === r.employeeId) : null;
+    return {
+      employee_name: member ? (member.full_name_az || member.id) : r.manualName.trim(),
+      dept: member?.dept || profile.dept || '—',
+      sube: member?.sube || profile.sube || null,
+      position: r.position.trim() || null,
+      training_title: r.skill.trim(),
+      reason: r.needReason.trim(),
+      priority: r.priority,
+      importance_level: r.importance || null,
+      current_skill_level: r.currentLevel || null,
+      required_skill_level: r.requiredLevel || null,
+      comp_cat: r.compCat || null,
+      vendor: r.vendor.trim() || null,
+      man_hours: r.manHours !== '' ? Number(r.manHours) : null,
+      budget: r.budget !== '' ? Number(r.budget) : null,
+      transformation_area: r.transformationArea.trim() || null,
+      learning_method: r.learningMethod.trim() || null,
+      activity_duration: r.activityDuration.trim() || null,
+      learning_goal: r.learningGoal.trim() || null,
+      preferred_start: r.start || null,
+      preferred_end: r.end || null,
+    };
+  }
+
+  // Mirrors RequestFormModal's exact two-rule routing: a lone self-
+  // submission (no team) always needs its own manager's sign-off if one
+  // exists, regardless of scope_level — nobody else reviewed it on the way
+  // in. A manager submitting a batch (for their team, or themselves as part
+  // of it) IS that review step, EXCEPT when the manager is şöbə-level with
+  // their own manager — their batch still has to climb one more hop to the
+  // dept-level manager before reaching L&D (Employee → şöbə manager → dept
+  // manager → L&D). A dept-level manager, or anyone with no manager_id, is
+  // the top of that chain and goes straight to 'Pending'. Shared by the full
+  // batch submit below and by the "Təsdiqlə" immediate action on a single
+  // employee-submitted row (Task 2), since both forward a row the same way.
+  function computeForwardStatus() {
+    const needsUpwardReview = hasTeam && profile.scope_level === 'sube' && !!profile.manager_id;
+    return {
+      status: hasTeam
+        ? (needsUpwardReview ? 'Pending Manager Review' : 'Pending')
+        : (profile.manager_id ? 'Pending Manager Review' : 'Pending'),
+      reviewingManagerId: hasTeam
+        ? (needsUpwardReview ? profile.manager_id : null)
+        : (profile.manager_id || null),
+    };
   }
 
   function updateRow(idx, field, value) {
@@ -224,6 +304,44 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
 
   function addRow() { setRows((prev) => [...prev, emptyRow()]); }
   function removeRow(idx) { setRows((prev) => prev.filter((_, i) => i !== idx)); }
+
+  // Task 2's three actions for an employee-submitted row (r.isReviewIncoming)
+  // merged into this manager's own draft table — decided immediately rather
+  // than waiting for the manager's next full batch submit, and then dropped
+  // out of the local draft either way since the decision already persisted.
+  async function approveIncomingRow(idx) {
+    const r = rows[idx];
+    const { status, reviewingManagerId } = computeForwardStatus();
+    const { error: err } = await sb.from('training_requests').update({
+      ...fieldsFor(r), status, reviewing_manager_id: reviewingManagerId,
+      manager_reviewed_by: profile.id, updated_at: new Date().toISOString(),
+    }).eq('id', r.sourceRequestId);
+    if (err) { showToast('Xəta: ' + err.message, 'error'); return; }
+    removeRow(idx);
+    if (onSubmitted) await onSubmitted();
+  }
+
+  async function rejectIncomingRow(idx, note) {
+    const r = rows[idx];
+    const { error: err } = await sb.from('training_requests').update({
+      status: 'Rejected', manager_note: note, manager_reviewed_by: profile.id, updated_at: new Date().toISOString(),
+    }).eq('id', r.sourceRequestId);
+    if (err) { showToast('Xəta: ' + err.message, 'error'); return; }
+    removeRow(idx);
+    if (onSubmitted) await onSubmitted();
+  }
+
+  async function afterRowEditSaved(idx) {
+    const r = rows[idx];
+    const { data, error: err } = await sb.from('training_requests').select('*').eq('id', r.sourceRequestId).single();
+    setEditingIdx(null);
+    if (err || !data) return;
+    setRows((prev) => {
+      const next = [...prev];
+      next[idx] = mapIncomingRow(data, r.isReviewIncoming);
+      return next;
+    });
+  }
 
   async function handleSubmit() {
     setError('');
@@ -267,52 +385,10 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
       return;
     }
 
-    // Mirrors RequestFormModal's exact two-rule routing: a lone self-
-    // submission (no team) always needs its own manager's sign-off if one
-    // exists, regardless of scope_level — nobody else reviewed it on the
-    // way in. A manager submitting a batch (for their team, or themselves
-    // as part of it) IS that review step, EXCEPT when the manager is
-    // şöbə-level with their own manager — their batch still has to climb
-    // one more hop to the dept-level manager before reaching L&D
-    // (Employee → şöbə manager → dept manager → L&D). A dept-level
-    // manager, or anyone with no manager_id, is the top of that chain and
-    // goes straight to 'Pending'.
-    const needsUpwardReview = hasTeam && profile.scope_level === 'sube' && !!profile.manager_id;
-    const newRowStatus = hasTeam
-      ? (needsUpwardReview ? 'Pending Manager Review' : 'Pending')
-      : (profile.manager_id ? 'Pending Manager Review' : 'Pending');
-    const newRowReviewingManager = hasTeam
-      ? (needsUpwardReview ? profile.manager_id : null)
-      : (profile.manager_id || null);
+    const { status: newRowStatus, reviewingManagerId: newRowReviewingManager } = computeForwardStatus();
 
     const newRows = filled.filter((r) => !r.sourceRequestId);
     const mergedRows = filled.filter((r) => r.sourceRequestId);
-
-    function fieldsFor(r) {
-      const member = r.employeeId ? selectableEmployees.find((t) => t.id === r.employeeId) : null;
-      return {
-        employee_name: member ? (member.full_name_az || member.id) : r.manualName.trim(),
-        dept: member?.dept || profile.dept || '—',
-        sube: member?.sube || profile.sube || null,
-        position: r.position.trim() || null,
-        training_title: r.skill.trim(),
-        reason: r.needReason.trim(),
-        priority: r.priority,
-        importance_level: r.importance || null,
-        current_skill_level: r.currentLevel || null,
-        required_skill_level: r.requiredLevel || null,
-        comp_cat: r.compCat || null,
-        vendor: r.vendor.trim() || null,
-        man_hours: r.manHours !== '' ? Number(r.manHours) : null,
-        budget: r.budget !== '' ? Number(r.budget) : null,
-        transformation_area: r.transformationArea.trim() || null,
-        learning_method: r.learningMethod.trim() || null,
-        activity_duration: r.activityDuration.trim() || null,
-        learning_goal: r.learningGoal.trim() || null,
-        preferred_start: r.start || null,
-        preferred_end: r.end || null,
-      };
-    }
 
     const insertPayloads = newRows.map((r) => ({
       ...fieldsFor(r),
@@ -477,9 +553,17 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                 <tr key={idx} style={{ background: idx % 2 === 0 ? 'var(--surface)' : 'var(--ink-50)' }}>
                   <td className="sticky-col" style={{ width: 42, textAlign: 'center', color: 'var(--ink-300)', fontSize: 12, fontWeight: 600, borderTop: '1px solid var(--ink-100)' }}>{idx + 1}</td>
                   <td style={{ minWidth: 170, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
-                    {r.sourceRequestId && (
+                    {r.isReviewIncoming && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: 'var(--purple)', marginBottom: 3 }}>
                         <UserCheck size={11} strokeWidth={2.4} /> Əməkdaş təqdim edib
+                      </div>
+                    )}
+                    {r.sourceRequestId && !r.isReviewIncoming && r.revisionNote && (
+                      <div style={{ fontSize: 10, fontWeight: 400, color: 'var(--amber)', marginBottom: 3, lineHeight: 1.35 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 700 }}>
+                          <RotateCcw size={11} strokeWidth={2.4} /> Düzəliş tələb olunur
+                        </div>
+                        {r.revisionNote}
                       </div>
                     )}
                     <select value={r.employeeId} onChange={(e) => updateRow(idx, 'employeeId', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
@@ -597,11 +681,25 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                   <td style={{ minWidth: 140, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <input type="date" value={r.end} onChange={(e) => updateRow(idx, 'end', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
                   </td>
-                  <td style={{ borderTop: '1px solid var(--ink-100)', textAlign: 'center' }}>
-                    {rows.length > 1 && (
-                      <button onClick={() => removeRow(idx)} className="row-remove-btn" title="Sətri sil">
-                        <X size={15} strokeWidth={2.2} />
-                      </button>
+                  <td style={{ borderTop: '1px solid var(--ink-100)', textAlign: 'center', minWidth: r.isReviewIncoming ? 132 : undefined }}>
+                    {r.isReviewIncoming ? (
+                      <div style={{ display: 'flex', gap: 3, justifyContent: 'center' }}>
+                        <button onClick={() => setEditingIdx(idx)} className="row-remove-btn" title="Redaktə et">
+                          <Pencil size={14} strokeWidth={2.2} />
+                        </button>
+                        <button onClick={() => approveIncomingRow(idx)} className="row-remove-btn" title="Təsdiqlə" style={{ color: 'var(--green)' }}>
+                          <CheckCircle2 size={15} strokeWidth={2.2} />
+                        </button>
+                        <button onClick={() => setNoteAction({ idx })} className="row-remove-btn" title="Rədd et" style={{ color: 'var(--red)' }}>
+                          <XCircle size={15} strokeWidth={2.2} />
+                        </button>
+                      </div>
+                    ) : (
+                      rows.length > 1 && (
+                        <button onClick={() => removeRow(idx)} className="row-remove-btn" title="Sətri sil">
+                          <X size={15} strokeWidth={2.2} />
+                        </button>
+                      )
                     )}
                   </td>
                 </tr>
@@ -624,6 +722,29 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
           <Send size={14} strokeWidth={2.2} /> {submitting ? 'Göndərilir...' : 'Hamısını Göndər'}
         </button>
       </div>
+
+      {noteAction && (
+        <NoteModal
+          title="Rədd səbəbi"
+          placeholder="Qeydinizi yazın..."
+          confirmLabel="Rədd et"
+          confirmVariant="danger"
+          required
+          onCancel={() => setNoteAction(null)}
+          onConfirm={async (note) => {
+            await rejectIncomingRow(noteAction.idx, note);
+            setNoteAction(null);
+          }}
+        />
+      )}
+
+      {editingIdx !== null && (
+        <TnaRowEditModal
+          request={{ id: rows[editingIdx].sourceRequestId, ...fieldsFor(rows[editingIdx]) }}
+          onClose={() => setEditingIdx(null)}
+          onSaved={() => afterRowEditSaved(editingIdx)}
+        />
+      )}
     </div>
   );
 }

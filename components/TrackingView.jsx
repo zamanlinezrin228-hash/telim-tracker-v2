@@ -97,6 +97,33 @@ function displayVal(v) {
   return v === null || v === undefined || v === '' ? '—' : String(v);
 }
 
+// Column-filter selections + search text survive a page refresh via
+// localStorage, guarded throughout since it can throw or be unavailable
+// (private browsing, blocked site data, etc.) — a failed read/write just
+// means filters fall back to their normal in-memory defaults.
+const FILTER_STORAGE_KEY = 'tna-tracking-filters';
+
+function loadSavedFilterState() {
+  try {
+    const raw = localStorage.getItem(FILTER_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveFilterState(search, filters) {
+  try {
+    const filtersOut = {};
+    Object.entries(filters).forEach(([k, v]) => { filtersOut[k] = [...v]; });
+    localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({ search, filters: filtersOut }));
+  } catch {
+    // localStorage unavailable — filters just won't persist this session
+  }
+}
+
 const NUMERIC_KEYS = new Set(['budget', 'used_budget', 'man_hours', 'plan_year', 'weighted_gap', 'cgi']);
 function sortValue(t, key) {
   if (NUMERIC_KEYS.has(key)) return Number(t[key]) || 0;
@@ -202,11 +229,32 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
   }, [trainings]);
 
   useEffect(() => {
+    const saved = loadSavedFilterState();
     const initial = {};
-    FILTER_FIELDS.forEach((f) => { initial[f] = new Set(uniqueValsByField[f]); });
+    FILTER_FIELDS.forEach((f) => {
+      const avail = uniqueValsByField[f];
+      const savedValues = saved?.filters?.[f];
+      if (Array.isArray(savedValues)) {
+        // Intersect with values that actually exist today — a value dropped
+        // from the data (or a stale/corrupted save) shouldn't silently
+        // filter everything out.
+        const restored = new Set(savedValues.filter((v) => avail.includes(v)));
+        initial[f] = restored.size > 0 ? restored : new Set(avail);
+      } else {
+        initial[f] = new Set(avail);
+      }
+    });
     setFilters(initial);
+    if (typeof saved?.search === 'string') setSearch(saved.search);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trainings.length]);
+
+  // Persist whenever the applied filters or search text change, once the
+  // initial restore above has actually populated `filters`.
+  useEffect(() => {
+    if (!filters.dept) return;
+    saveFilterState(search, filters);
+  }, [search, filters]);
 
   function setFieldFilter(field, selectedSet) {
     setFilters((prev) => ({ ...prev, [field]: selectedSet }));
