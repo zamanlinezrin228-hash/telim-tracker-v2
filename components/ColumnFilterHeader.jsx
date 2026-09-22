@@ -35,7 +35,7 @@ export default function ColumnFilterHeader({ label, values, selected, onChange, 
   function cancel() { setOpen(false); }
 
   return (
-    <th style={{ position: 'relative', ...headerStyle }} className={sticky ? 'sticky-col' : undefined}>
+    <th style={{ position: 'sticky', top: 0, ...headerStyle }} className={sticky ? 'sticky-col' : undefined}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <span onClick={(e) => onSort && onSort(e)} style={{ cursor: onSort ? 'pointer' : undefined, display: 'flex', alignItems: 'center', gap: 3 }}>
           {label} {sortIndicator}

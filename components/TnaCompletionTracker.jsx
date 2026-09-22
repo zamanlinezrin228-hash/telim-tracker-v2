@@ -68,17 +68,60 @@ function ProgressBlock({ done, total, managers }) {
   );
 }
 
-export default function TnaCompletionTracker({ profile, requests, planYear }) {
+// The dept-manager variant needs none of computeGroups' dept/şöbə nesting —
+// `team` (profiles where manager_id = this dept manager's own id) is
+// already scoped to one department, so it only has to pick out the şöbə
+// managers within it and check who has submitted.
+function DeptManagerCompletionCard({ team, requests, planYear }) {
+  const submittedManagerIds = new Set(
+    requests
+      .filter((r) => r.source === 'Manager Survey' && new Date(r.created_at).getFullYear() === planYear)
+      .map((r) => r.requested_by)
+  );
+  const managers = team
+    .filter((m) => m.scope_level === 'sube')
+    .map((m) => ({ ...m, submitted: submittedManagerIds.has(m.id) }))
+    .sort(byName);
+  const done = managers.filter((m) => m.submitted).length;
+  const total = managers.length;
+
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <div className="section-title">İllik TNA Tamamlanma Statusu — Şöbə Rəhbərləri ({planYear})</div>
+      <div className="section-sub">
+        Sizə birbaşa tabe olan şöbə rəhbərlərindən hansıların {planYear}-ci il üçün İllik TNA cədvəlini doldurduğu
+        {total ? ` — ${done}/${total} rəhbər tamamlayıb.` : '.'}
+      </div>
+      {total === 0 ? (
+        <div className="card"><EmptyState icon={Users2}>Sizə tabe olan şöbə rəhbəri tapılmadı.</EmptyState></div>
+      ) : (
+        <div className="card" style={{ maxWidth: 420 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ fontWeight: 700, fontSize: 13.5 }}>Şöbə rəhbərləri</div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: done === total ? 'var(--green)' : 'var(--amber)' }}>{done}/{total}</div>
+          </div>
+          <ProgressBlock done={done} total={total} managers={managers} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function TnaCompletionTracker({ profile, team, requests, planYear }) {
+  const isLd = profile.role === 'ld';
   const [profiles, setProfiles] = useState(null);
 
   useEffect(() => {
-    if (profile.role !== 'ld') return;
+    if (!isLd) return;
     sb.from('profiles').select('id, full_name_az, dept, sube, role, manager_id').then(({ data }) => {
       setProfiles(data || []);
     });
-  }, [profile.role]);
+  }, [isLd]);
 
-  if (profile.role !== 'ld') return null;
+  if (!isLd) {
+    if (!team) return null;
+    return <DeptManagerCompletionCard team={team} requests={requests} planYear={planYear} />;
+  }
   if (profiles === null) return null;
 
   const submittedManagerIds = new Set(

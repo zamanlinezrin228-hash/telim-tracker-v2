@@ -2,22 +2,41 @@ import { useState } from 'react';
 import { PlusSquare, Users2, Folder, History } from 'lucide-react';
 import AnnualTnaForm from './AnnualTnaForm';
 import AnnualTnaActiveReview from './AnnualTnaActiveReview';
+import AnnualTnaManagerReview from './AnnualTnaManagerReview';
 import AnnualTnaDecisionHistory from './AnnualTnaDecisionHistory';
 import TnaCompletionTracker from './TnaCompletionTracker';
 
-// L&D/HR-only İllik TNA panel: four sub-views switched by pill tabs
-// instead of one long stacked page. "Sorğu yarat" only makes sense for
-// an L&D/HR user who also manages people (same hasTeam gate the bulk
-// entry table already used); "Statuslar" stays L&D-only, matching
-// TnaCompletionTracker's own existing role check.
+// L&D/HR gets the full company-wide picture. A dept-level manager
+// (scope_level='dept') with şöbə-level managers reporting to them gets the
+// exact same four-tab pill layout — but every tab's DATA stays scoped to
+// just their own department: "Departament üzrə baxış" renders
+// AnnualTnaManagerReview, which only ever reads rows addressed to this
+// manager (reviewing_manager_id = profile.id), never L&D's company-wide
+// AnnualTnaActiveReview; "Statuslar" uses TnaCompletionTracker's own-team
+// branch (their şöbə-manager direct reports only); "Qərarlar tarixçəsi"
+// pre-filters to r.dept === profile.dept before handing rows to the
+// purely-presentational AnnualTnaDecisionHistory. None of this reuses
+// L&D's company-wide data-fetching logic — only the tab/nav layout.
 export default function AnnualTnaHub({ profile, team, requests, planYear, tnaWindowOpen, onDataChanged }) {
   const hasTeam = team && team.length > 0;
-  const showSorgu = (tnaWindowOpen || profile.role === 'ld') && hasTeam;
-  const showStatuslar = profile.role === 'ld';
+  const isLd = profile.role === 'ld';
+  const isDeptManager = !isLd && profile.scope_level === 'dept';
+
+  const showSorgu = (tnaWindowOpen || isLd || isDeptManager) && hasTeam;
+  const showStatuslar = isLd || isDeptManager;
 
   const surveyRequests = requests.filter((r) => r.source === 'Manager Survey');
-  const activeCount = surveyRequests.filter((r) => r.status === 'Pending' || r.status === 'In Review').length;
-  const decidedCount = surveyRequests.filter((r) => r.status === 'Approved' || r.status === 'Rejected' || r.status === 'Needs Revision').length;
+
+  // A dept manager's "Departament üzrə baxış" tracks a completely different,
+  // already-personally-scoped queue (rows forwarded straight to their own
+  // id) than L&D's company-wide Pending/In-Review count, so its badge is
+  // computed separately rather than reusing L&D's activeCount.
+  const activeCount = isDeptManager
+    ? surveyRequests.filter((r) => r.reviewing_manager_id === profile.id && r.status === 'Pending Manager Review').length
+    : surveyRequests.filter((r) => r.status === 'Pending' || r.status === 'In Review').length;
+
+  const decisionHistoryRequests = isDeptManager ? surveyRequests.filter((r) => r.dept === profile.dept) : surveyRequests;
+  const decidedCount = decisionHistoryRequests.filter((r) => r.status === 'Approved' || r.status === 'Rejected' || r.status === 'Needs Revision').length;
 
   const tabs = [
     ...(showSorgu ? [{ key: 'sorgu', label: 'Sorğu yarat', Icon: PlusSquare }] : []),
@@ -35,7 +54,11 @@ export default function AnnualTnaHub({ profile, team, requests, planYear, tnaWin
         <div className="page-header-row">
           <div>
             <h1>İllik TNA — {planYear}</h1>
-            <p>Rəhbərlərin illik təlim ehtiyacı sorğularını yaradın, izləyin və qərar verin.</p>
+            <p>
+              {isDeptManager
+                ? 'Departamentinizin illik təlim ehtiyacı sorğularını yaradın, izləyin və qərar verin.'
+                : 'Rəhbərlərin illik təlim ehtiyacı sorğularını yaradın, izləyin və qərar verin.'}
+            </p>
           </div>
           <div className="subtab-nav">
             {tabs.map((t) => (
@@ -57,13 +80,17 @@ export default function AnnualTnaHub({ profile, team, requests, planYear, tnaWin
           <AnnualTnaForm profile={profile} team={team} planYear={planYear} onSubmitted={onDataChanged} />
         )}
         {activeTab === 'statuslar' && (
-          <TnaCompletionTracker profile={profile} requests={requests} planYear={planYear} />
+          <TnaCompletionTracker profile={profile} team={team} requests={requests} planYear={planYear} />
         )}
         {activeTab === 'departament' && (
-          <AnnualTnaActiveReview profile={profile} requests={requests} onDataChanged={onDataChanged} />
+          isDeptManager ? (
+            <AnnualTnaManagerReview profile={profile} team={team} requests={requests} onDataChanged={onDataChanged} />
+          ) : (
+            <AnnualTnaActiveReview profile={profile} requests={requests} onDataChanged={onDataChanged} />
+          )
         )}
         {activeTab === 'qerarlar' && (
-          <AnnualTnaDecisionHistory requests={requests} planYear={planYear} onDataChanged={onDataChanged} />
+          <AnnualTnaDecisionHistory requests={decisionHistoryRequests} planYear={planYear} onDataChanged={onDataChanged} />
         )}
       </div>
     </div>

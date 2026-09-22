@@ -49,7 +49,11 @@ export default function Home() {
     const { data: { user } } = await sb.auth.getUser();
     const { data: prof } = await sb.from('profiles').select('*').eq('id', user.id).single();
     setProfile(prof);
-    const { data: teamData } = await sb.from('profiles').select('id, full_name_az, dept, sube, position').eq('manager_id', prof.id);
+    // scope_level/role are needed to tell a şöbə-level manager's own
+    // forwarded batch apart from a plain employee's single-row submission
+    // when both land in this same manager's queue (see AnnualTnaForm.jsx's
+    // merge effect and AnnualTnaHub.jsx's dept-manager scoping).
+    const { data: teamData } = await sb.from('profiles').select('id, full_name_az, dept, sube, position, scope_level, role').eq('manager_id', prof.id);
     setTeam(teamData || []);
     await loadData();
     setLoggedIn(true);
@@ -72,6 +76,11 @@ export default function Home() {
   }
 
   const isReviewer = profile && (profile.role === 'ld' || profile.role === 'hr');
+  // A dept-level manager with şöbə-level managers reporting to them gets the
+  // same İllik TNA tab layout as L&D (AnnualTnaHub), but every tab inside it
+  // stays scoped to just their own department — never L&D's company-wide
+  // data-fetching. See AnnualTnaHub.jsx.
+  const isDeptManager = profile && profile.scope_level === 'dept' && team.length > 0;
 
   // Polls for newly-arrived requests (ad-hoc + annual TNA) while an L&D/HR
   // reviewer has the app open, and surfaces a toast when the count grows —
@@ -143,7 +152,7 @@ export default function Home() {
     );
   }
 
-  const showAnnualTna = appSettings.tna_window_open || profile.role === 'ld';
+  const showAnnualTna = appSettings.tna_window_open || profile.role === 'ld' || isDeptManager;
 
   return (
     <>
@@ -162,7 +171,7 @@ export default function Home() {
             )}
             {view === 'annual-tna' && (
               <div>
-                {isReviewer ? (
+                {(isReviewer || isDeptManager) ? (
                   <AnnualTnaHub
                     profile={profile} team={team} requests={requests} planYear={appSettings.tna_plan_year}
                     tnaWindowOpen={appSettings.tna_window_open} onDataChanged={handleDataChanged}
