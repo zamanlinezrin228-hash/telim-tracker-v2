@@ -12,6 +12,7 @@ import RequestsView from '../components/RequestsView';
 import AnnualTnaForm from '../components/AnnualTnaForm';
 import AnnualTnaHub from '../components/AnnualTnaHub';
 import IdpView from '../components/IdpView';
+import ProcessGuideView from '../components/ProcessGuideView';
 import ToastHost from '../components/ToastHost';
 
 const NOTIFY_POLL_MS = 60000;
@@ -188,6 +189,7 @@ export default function Home() {
             {view === 'idp' && (profile.role === 'ld' || profile.role === 'hr') && (
               <IdpView requests={requests} trainings={trainings} />
             )}
+            {view === 'guide' && <ProcessGuideView />}
           </div>
         </div>
       </div>
