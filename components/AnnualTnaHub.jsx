@@ -18,11 +18,14 @@ import TnaCompletionTracker from './TnaCompletionTracker';
 // purely-presentational AnnualTnaDecisionHistory. None of this reuses
 // L&D's company-wide data-fetching logic — only the tab/nav layout.
 export default function AnnualTnaHub({ profile, team, requests, planYear, tnaWindowOpen, onDataChanged }) {
-  const hasTeam = team && team.length > 0;
   const isLd = profile.role === 'ld';
   const isDeptManager = !isLd && profile.scope_level === 'dept';
 
-  const showSorgu = (tnaWindowOpen || isLd || isDeptManager) && hasTeam;
+  // Not gated by hasTeam: L&D/HR/dept-manager staff are individual
+  // employees too and need to log their own personal need even with zero
+  // direct reports — AnnualTnaForm already handles a teamless profile fine
+  // (it just offers "Mən" as the only selectable person).
+  const showSorgu = tnaWindowOpen || isLd || isDeptManager;
   const showStatuslar = isLd || isDeptManager;
 
   const surveyRequests = requests.filter((r) => r.source === 'Manager Survey');
