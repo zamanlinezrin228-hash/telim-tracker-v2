@@ -318,7 +318,10 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
     }).eq('id', r.sourceRequestId);
     if (err) { showToast('Xəta: ' + err.message, 'error'); return; }
     removeRow(idx);
-    if (onSubmitted) await onSubmitted();
+    // Fire-and-forget: the app-wide requests/trainings refresh runs several
+    // sequential queries and must never gate a modal's own close/loading
+    // state on it finishing (or throwing) — the row is already gone locally.
+    if (onSubmitted) onSubmitted();
   }
 
   async function rejectIncomingRow(idx, note) {
@@ -328,7 +331,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
     }).eq('id', r.sourceRequestId);
     if (err) { showToast('Xəta: ' + err.message, 'error'); return; }
     removeRow(idx);
-    if (onSubmitted) await onSubmitted();
+    if (onSubmitted) onSubmitted();
   }
 
   async function afterRowEditSaved(idx) {

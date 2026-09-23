@@ -11,8 +11,13 @@ export default function NoteModal({ title, placeholder, confirmLabel, confirmVar
     if (required && !note.trim()) { setError('Qeyd mütləqdir.'); return; }
     setError('');
     setSaving(true);
-    await onConfirm(note);
-    setSaving(false);
+    try {
+      await onConfirm(note);
+    } catch (e) {
+      setError('Xəta baş verdi: ' + (e?.message || 'naməlum xəta'));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
