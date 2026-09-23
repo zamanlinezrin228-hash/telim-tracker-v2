@@ -17,31 +17,40 @@ export default function RequestsView({ profile, team, requests, planYear, onData
   const [addToPlanRequest, setAddToPlanRequest] = useState(null);
   const [resubmitRequest, setResubmitRequest] = useState(null);
 
+  // The `requests` prop only catches up once the parent's app-wide refresh
+  // (several sequential queries) finishes — without this, a just-decided
+  // row sits there looking untouched and invites clicking it again.
+  const [locallyUpdated, setLocallyUpdated] = useState(() => new Map());
+  const mergedRequests = useMemo(
+    () => requests.map((r) => locallyUpdated.get(r.id) ? { ...r, ...locallyUpdated.get(r.id) } : r),
+    [requests, locallyUpdated]
+  );
+
   const role = profile.role;
   const hasTeam = team && team.length > 0;
   const isReviewer = role === 'hr' || role === 'ld';
-  const myRequests = requests.filter((r) => r.requested_by === profile.id);
-  const toReview = requests.filter((r) => r.reviewing_manager_id === profile.id && r.status === 'Pending Manager Review');
+  const myRequests = mergedRequests.filter((r) => r.requested_by === profile.id);
+  const toReview = mergedRequests.filter((r) => r.reviewing_manager_id === profile.id && r.status === 'Pending Manager Review');
 
   const scopeHistory = useMemo(() => {
     if (!hasTeam) return [];
     const inScope = (r) => profile.scope_level === 'dept' ? r.dept === profile.dept : r.sube === profile.sube;
-    return requests.filter((r) => r.status !== 'Pending Manager Review' && inScope(r));
-  }, [requests, hasTeam, profile]);
+    return mergedRequests.filter((r) => r.status !== 'Pending Manager Review' && inScope(r));
+  }, [mergedRequests, hasTeam, profile]);
 
   const reviewerGrouped = useMemo(() => {
     if (!isReviewer) return {};
-    const visible = requests.filter((r) => r.status !== 'Pending Manager Review' && r.source !== 'Manager Survey');
+    const visible = mergedRequests.filter((r) => r.status !== 'Pending Manager Review' && r.source !== 'Manager Survey');
     const grouped = {};
     visible.forEach((r) => { (grouped[r.dept] = grouped[r.dept] || []).push(r); });
     return grouped;
-  }, [requests, isReviewer]);
+  }, [mergedRequests, isReviewer]);
 
   const reviewerActive = isReviewer
     ? Object.fromEntries(Object.entries(reviewerGrouped).map(([d, list]) => [d, list.filter((r) => r.status === 'Pending' || r.status === 'In Review')]).filter(([, list]) => list.length))
     : {};
-  const reviewerDecided = isReviewer ? requests.filter((r) => (r.status === 'Approved' || r.status === 'Rejected' || r.status === 'Needs Revision') && r.source !== 'Manager Survey') : [];
-  const pendingCount = isReviewer ? requests.filter((r) => r.status === 'Pending').length : 0;
+  const reviewerDecided = isReviewer ? mergedRequests.filter((r) => (r.status === 'Approved' || r.status === 'Rejected' || r.status === 'Needs Revision') && r.source !== 'Manager Survey') : [];
+  const pendingCount = isReviewer ? mergedRequests.filter((r) => r.status === 'Pending').length : 0;
 
   const reviewInReviewCount = isReviewer ? Object.values(reviewerActive).flat().filter((r) => r.status === 'In Review').length : 0;
   const reviewApprovedCount = reviewerDecided.filter((r) => r.status === 'Approved').length;
@@ -65,26 +74,34 @@ export default function RequestsView({ profile, team, requests, planYear, onData
         { label: 'Rədd edilib', value: myRejectedCount, Icon: XCircle, color: '#dc2626' },
       ];
 
-  async function refresh() {
+  function refresh() {
     setShowForm(false);
     setNoteAction(null);
     setAddToPlanRequest(null);
     setResubmitRequest(null);
-    await onDataChanged();
+    // Fire-and-forget: this can take a few seconds and must never gate the
+    // modal closing or the row updating — locallyUpdated already handles that.
+    if (onDataChanged) onDataChanged();
   }
+
+  const MANAGER_DECIDE_TOAST = { Pending: 'Təsdiqləndi və L&D-yə göndərildi.', Rejected: 'Rədd edildi.' };
+  const LD_DECIDE_TOAST = { Approved: 'Təsdiqləndi.', 'Needs Revision': 'Geri göndərildi.', Rejected: 'Rədd edildi.' };
 
   async function managerDecide(id, targetStatus, note) {
     const { error } = await sb.from('training_requests').update({
       status: targetStatus, manager_note: note, manager_reviewed_by: profile.id, updated_at: new Date().toISOString(),
     }).eq('id', id);
     if (error) { showToast('Xəta: ' + error.message, 'error'); return; }
-    await refresh();
+    setLocallyUpdated((prev) => new Map(prev).set(id, { status: targetStatus, manager_note: note }));
+    showToast(MANAGER_DECIDE_TOAST[targetStatus] || 'Yadda saxlanıldı.', 'success');
+    refresh();
   }
 
   async function takeIntoReview(id) {
     const { error } = await sb.from('training_requests').update({ status: 'In Review', updated_at: new Date().toISOString() }).eq('id', id);
     if (error) { showToast('Xəta: ' + error.message, 'error'); return; }
-    await onDataChanged();
+    setLocallyUpdated((prev) => new Map(prev).set(id, { status: 'In Review' }));
+    if (onDataChanged) onDataChanged();
   }
 
   async function ldDecide(id, targetStatus, note) {
@@ -92,7 +109,9 @@ export default function RequestsView({ profile, team, requests, planYear, onData
       status: targetStatus, reviewer_note: note, reviewed_by: profile.id, updated_at: new Date().toISOString(),
     }).eq('id', id);
     if (error) { showToast('Xəta: ' + error.message, 'error'); return; }
-    await refresh();
+    setLocallyUpdated((prev) => new Map(prev).set(id, { status: targetStatus, reviewer_note: note }));
+    showToast(LD_DECIDE_TOAST[targetStatus] || 'Yadda saxlanıldı.', 'success');
+    refresh();
   }
 
   function RequestTable({ list, showNotes }) {

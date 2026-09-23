@@ -16,10 +16,15 @@ import TnaRowEditModal from './TnaRowEditModal';
 export default function AnnualTnaManagerReview({ profile, team, requests, onDataChanged }) {
   const [noteAction, setNoteAction] = useState(null);
   const [editingRequest, setEditingRequest] = useState(null);
+  // The `requests` prop only catches up once the parent's app-wide refresh
+  // (several sequential queries) finishes, which can take a few seconds —
+  // without this, a just-decided row sits there looking untouched and
+  // invites the user to click Təsdiqlə again on a row already forwarded.
+  const [decidedIds, setDecidedIds] = useState(() => new Set());
 
   const incoming = useMemo(
-    () => requests.filter((r) => r.reviewing_manager_id === profile.id && r.status === 'Pending Manager Review' && r.source === 'Manager Survey'),
-    [requests, profile.id]
+    () => requests.filter((r) => r.reviewing_manager_id === profile.id && r.status === 'Pending Manager Review' && r.source === 'Manager Survey' && !decidedIds.has(r.id)),
+    [requests, profile.id, decidedIds]
   );
 
   const grouped = useMemo(() => {
@@ -34,18 +39,24 @@ export default function AnnualTnaManagerReview({ profile, team, requests, onData
 
   const groupKeys = Object.keys(grouped).sort((a, b) => a.localeCompare(b, 'az'));
 
-  async function refresh() {
+  function refresh() {
     setNoteAction(null);
     setEditingRequest(null);
-    await onDataChanged();
+    // Fire-and-forget: this can take a few seconds and must never gate the
+    // modal closing or the row disappearing — decidedIds already handles that.
+    if (onDataChanged) onDataChanged();
   }
+
+  const DECIDE_TOAST = { Pending: 'Təsdiqləndi və göndərildi.', 'Needs Revision': 'Geri göndərildi.', Rejected: 'Rədd edildi.' };
 
   async function decide(id, targetStatus, note) {
     const { error } = await sb.from('training_requests').update({
       status: targetStatus, manager_note: note, manager_reviewed_by: profile.id, updated_at: new Date().toISOString(),
     }).eq('id', id);
     if (error) { showToast('Xəta: ' + error.message, 'error'); return; }
-    await refresh();
+    setDecidedIds((prev) => new Set(prev).add(id));
+    showToast(DECIDE_TOAST[targetStatus] || 'Yadda saxlanıldı.', 'success');
+    refresh();
   }
 
   if (incoming.length === 0) {

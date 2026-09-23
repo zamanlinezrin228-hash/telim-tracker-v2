@@ -22,10 +22,14 @@ function scrollToDept(dept) {
 export default function AnnualTnaActiveReview({ profile, requests, onDataChanged }) {
   const [noteAction, setNoteAction] = useState(null);
   const [expandedDepts, setExpandedDepts] = useState(new Set());
+  // The `requests` prop only catches up once the parent's app-wide refresh
+  // (several sequential queries) finishes — without this, a just-decided
+  // row sits there looking untouched and invites clicking it again.
+  const [locallyUpdated, setLocallyUpdated] = useState(() => new Map());
 
   const surveyRequests = useMemo(
-    () => requests.filter((r) => r.source === 'Manager Survey'),
-    [requests]
+    () => requests.filter((r) => r.source === 'Manager Survey').map((r) => locallyUpdated.get(r.id) ? { ...r, ...locallyUpdated.get(r.id) } : r),
+    [requests, locallyUpdated]
   );
 
   const grouped = useMemo(() => {
@@ -67,23 +71,30 @@ export default function AnnualTnaActiveReview({ profile, requests, onDataChanged
     setTimeout(() => scrollToDept(dept), 50);
   }
 
-  async function refresh() {
+  function refresh() {
     setNoteAction(null);
-    await onDataChanged();
+    // Fire-and-forget: this can take a few seconds and must never gate the
+    // modal closing or the row updating — locallyUpdated already handles that.
+    if (onDataChanged) onDataChanged();
   }
 
   async function takeIntoReview(id) {
     const { error } = await sb.from('training_requests').update({ status: 'In Review', updated_at: new Date().toISOString() }).eq('id', id);
     if (error) { showToast('Xəta: ' + error.message, 'error'); return; }
-    await onDataChanged();
+    setLocallyUpdated((prev) => new Map(prev).set(id, { status: 'In Review' }));
+    if (onDataChanged) onDataChanged();
   }
+
+  const DECIDE_TOAST = { Approved: 'Təsdiqləndi.', 'Needs Revision': 'Geri göndərildi.', Rejected: 'Rədd edildi.' };
 
   async function decide(id, targetStatus, note) {
     const { error } = await sb.from('training_requests').update({
       status: targetStatus, reviewer_note: note, reviewed_by: profile.id, updated_at: new Date().toISOString(),
     }).eq('id', id);
     if (error) { showToast('Xəta: ' + error.message, 'error'); return; }
-    await refresh();
+    setLocallyUpdated((prev) => new Map(prev).set(id, { status: targetStatus, reviewer_note: note }));
+    showToast(DECIDE_TOAST[targetStatus] || 'Yadda saxlanıldı.', 'success');
+    refresh();
   }
 
   if (surveyRequests.length === 0) {
