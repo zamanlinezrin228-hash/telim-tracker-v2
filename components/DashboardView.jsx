@@ -8,7 +8,7 @@ import {
 import { fmtMoney, statusMeta, matchesOwnScope } from '../lib/helpers';
 import { styleHeaderRow, downloadWorkbook } from '../lib/excelExport';
 import {
-  computeKPIs, departmentBreakdown, monthlyTrend, topBy, topLearners,
+  computeKPIs, departmentBreakdown, departmentSavedCostBreakdown, monthlyTrend, topBy, topLearners,
   completionFunnel, generateInsights,
 } from '../lib/analytics';
 import AnalysisView from './AnalysisView';
@@ -151,6 +151,7 @@ export default function DashboardView({ trainings, profile, team, restrictToOwnS
 
   const kpis = useMemo(() => computeKPIs(filtered), [filtered]);
   const depts = useMemo(() => departmentBreakdown(filtered), [filtered]);
+  const savedCostBreakdown = useMemo(() => departmentSavedCostBreakdown(filtered), [filtered]);
   const trend = useMemo(() => monthlyTrend(filtered), [filtered]);
   // Rankings reflect verified, completed trainings — not everything that was merely requested or started.
   const topTrainings = useMemo(() => topBy(completedOnly, 'skill', 6), [completedOnly]);
@@ -424,6 +425,52 @@ export default function DashboardView({ trainings, profile, team, restrictToOwnS
                   <tr><td colSpan={5}><EmptyState>Məlumat yoxdur</EmptyState></td></tr>
                 )}
               </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* ---------- Qənaət Analizi: dedicated planned/used/saved breakdown ---------- */}
+        <div className="section-head"><div className="section-title">Qənaət Analizi</div></div>
+        <div className="section-sub" style={{ marginBottom: 4 }}>
+          Yalnız hər iki dəyər (planlanmış büdcə və istifadə olunmuş büdcə) qeyd edilmiş təlimlər əsasında, departament üzrə qənaət/artıq xərc
+        </div>
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Departament</th>
+                  <th>Hesablanan Təlim sayı</th>
+                  <th>Planlanmış Büdcə</th>
+                  <th>İstifadə Olunmuş</th>
+                  <th>Qənaət</th>
+                </tr>
+              </thead>
+              <tbody>
+                {savedCostBreakdown.map((d) => (
+                  <tr key={d.dept}>
+                    <td style={{ fontWeight: 600 }}>{d.dept}</td>
+                    <td>{d.count}</td>
+                    <td>{fmtMoney(d.plannedBudget)}</td>
+                    <td>{fmtMoney(d.usedBudget)}</td>
+                    <td style={{ fontWeight: 700, color: d.savedCost >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtMoney(d.savedCost)}</td>
+                  </tr>
+                ))}
+                {!savedCostBreakdown.length && (
+                  <tr><td colSpan={5}><EmptyState>Hələ həm planlanmış, həm də istifadə olunmuş büdcəsi qeyd edilmiş təlim yoxdur</EmptyState></td></tr>
+                )}
+              </tbody>
+              {savedCostBreakdown.length > 0 && (
+                <tfoot>
+                  <tr style={{ background: 'var(--ink-50)' }}>
+                    <td style={{ fontWeight: 800 }}>Cəmi</td>
+                    <td style={{ fontWeight: 700 }}>{savedCostBreakdown.reduce((a, d) => a + d.count, 0)}</td>
+                    <td style={{ fontWeight: 700 }}>{fmtMoney(savedCostBreakdown.reduce((a, d) => a + d.plannedBudget, 0))}</td>
+                    <td style={{ fontWeight: 700 }}>{fmtMoney(savedCostBreakdown.reduce((a, d) => a + d.usedBudget, 0))}</td>
+                    <td style={{ fontWeight: 800 }}>{fmtMoney(kpis.totalSavedCost)}</td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         </div>

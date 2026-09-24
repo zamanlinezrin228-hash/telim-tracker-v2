@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import ExcelJS from 'exceljs';
 import { ArrowLeftRight, Download } from 'lucide-react';
 import { statusMeta, priorityMeta } from '../lib/helpers';
@@ -31,7 +31,16 @@ function labelFor(field, v) {
 }
 
 function newAgg() {
-  return { count: 0, budgetSum: 0, usedBudgetSum: 0, savedCostSum: 0, hoursSum: 0, completedCount: 0, participants: new Set() };
+  return {
+    count: 0, budgetSum: 0, usedBudgetSum: 0, savedCostSum: 0,
+    // Separate from budgetSum/usedBudgetSum above (which include every row
+    // regardless of whether the other field is set, for the plain
+    // budget/used_budget metrics) — these two only ever accumulate from the
+    // SAME rows counted into savedCostSum, so the "Planlanmış: X · İstifadə: Y"
+    // detail line always satisfies X - Y === the Qənaət value shown next to it.
+    savedCostBudgetSum: 0, savedCostUsedSum: 0,
+    hoursSum: 0, completedCount: 0, participants: new Set(),
+  };
 }
 function addToAgg(agg, t) {
   agg.count += 1;
@@ -40,7 +49,11 @@ function addToAgg(agg, t) {
   // Saved cost only counts rows where BOTH budget and used_budget are set —
   // a row still missing one of them contributes nothing here, same rule as
   // the Dashboard's saved-cost KPI (lib/analytics.js's rowSavedCost).
-  if (hasSavedCost(t)) agg.savedCostSum += Number(t.budget) - Number(t.used_budget);
+  if (hasSavedCost(t)) {
+    agg.savedCostSum += Number(t.budget) - Number(t.used_budget);
+    agg.savedCostBudgetSum += Number(t.budget);
+    agg.savedCostUsedSum += Number(t.used_budget);
+  }
   agg.hoursSum += Number(t.man_hours) || 0;
   if (t.status === 'Completed') agg.completedCount += 1;
   if (t.employee_name) agg.participants.add(t.employee_name);
@@ -48,14 +61,42 @@ function addToAgg(agg, t) {
 
 export default function AnalysisView({ trainings }) {
   const [rowField, setRowField] = useState('dept');
-  const [colField, setColField] = useState('status');
+  // Multiple column dimensions can be selected at once (e.g. Status AND
+  // Departament together), producing composite column headers — unlike
+  // rowField, which stays single-select. Stored as a Set of field keys;
+  // colFieldsArr (below) derives the actual, deterministically-ordered list
+  // to use, always excluding rowField so the same field can't sit on both axes.
+  const [colFields, setColFields] = useState(() => new Set(['status']));
   const [metric, setMetric] = useState('budget');
   const [catFilters, setCatFilters] = useState({});
   const [showPct, setShowPct] = useState(false);
 
+  const colFieldsArr = useMemo(
+    () => DIMENSION_FIELDS.filter((f) => f !== rowField && colFields.has(f)),
+    [colFields, rowField]
+  );
+
+  // Self-heals to a single fallback field whenever the derived list would
+  // otherwise be empty — e.g. the user unchecked every column field, or
+  // rowField changed to the one field that was previously selected for
+  // columns. Keeps the table always renderable without blocking checkbox
+  // interactions with extra validation logic.
+  useEffect(() => {
+    if (colFieldsArr.length === 0) {
+      const fallback = DIMENSION_FIELDS.find((f) => f !== rowField) || DIMENSION_FIELDS[0];
+      setColFields(new Set([fallback]));
+    }
+  }, [colFieldsArr, rowField]);
+
+  // Only well-defined when exactly one column field is selected — mirrors
+  // the field it's swapping with rowField, same as the old single-select
+  // swap. Disabled (not hidden) otherwise, since swapping rowField into a
+  // multi-field column selection has no obvious single meaning.
   function swapFields() {
-    setRowField(colField);
-    setColField(rowField);
+    if (colFieldsArr.length !== 1) return;
+    const other = colFieldsArr[0];
+    setColFields(new Set([rowField]));
+    setRowField(other);
   }
 
   const uniqueValsByField = useMemo(() => {
@@ -97,9 +138,14 @@ export default function AnalysisView({ trainings }) {
 
     sliced.forEach((t) => {
       const r = displayVal(t[rowField]);
-      const c = displayVal(t[colField]);
+      // Composite key so multiple column fields collapse into one combined
+      // column — e.g. colFieldsArr = ['status', 'dept'] produces keys like
+      // "Approved|||Maliyyə departamenti". Field values themselves never
+      // contain '|||', same assumption the row|||col cellAgg key below
+      // already relies on.
+      const c = colFieldsArr.map((f) => displayVal(t[f])).join('|||');
       rowSet.add(r); colSet.add(c);
-      const key = r + '|||' + c;
+      const key = r + '||||||' + c;
       if (!cellAgg[key]) cellAgg[key] = newAgg();
       if (!rowAgg[r]) rowAgg[r] = newAgg();
       if (!colAgg[c]) colAgg[c] = newAgg();
@@ -116,7 +162,14 @@ export default function AnalysisView({ trainings }) {
     const maxCellVal = Math.max(...Object.values(cellAgg).map((a) => Math.abs(metricValue(a))), 1);
 
     return { rowKeys: rowKeysArr, colKeys: colKeysArr, cellAgg, rowAgg, colAgg, grandAgg, maxCellVal };
-  }, [sliced, rowField, colField, metric]);
+  }, [sliced, rowField, colFieldsArr, metric]);
+
+  // Turns a composite column key back into its per-field display label,
+  // e.g. "Approved|||Maliyyə departamenti" -> "Təsdiqləndi / Maliyyə departamenti".
+  function colLabel(key) {
+    const parts = key.split('|||');
+    return colFieldsArr.map((f, i) => labelFor(f, parts[i])).join(' / ');
+  }
 
   function fmt(n) {
     if (metric === 'count' || metric === 'participants') return Math.round(n).toLocaleString('az-AZ');
@@ -135,6 +188,21 @@ export default function AnalysisView({ trainings }) {
     return fmt(raw);
   }
 
+  // Qənaət alone is a difference of two other numbers, so a bare total is
+  // easy to misread without them — shown as a small sub-line under the main
+  // value, same budgetSum/usedBudgetSum the saved_cost total is already
+  // derived from (only ever accumulated from rows with both fields set —
+  // see addToAgg). Skipped in percent mode, where the context would clutter
+  // more than it clarifies.
+  function savedCostDetail(agg) {
+    if (metric !== 'saved_cost' || showPct || !agg || (!agg.savedCostBudgetSum && !agg.savedCostUsedSum)) return null;
+    return (
+      <div style={{ fontSize: 10.5, color: 'var(--ink-400)', fontWeight: 400, marginTop: 2, whiteSpace: 'nowrap' }}>
+        Planlanmış: {fmt(agg.savedCostBudgetSum)} · İstifadə: {fmt(agg.savedCostUsedSum)}
+      </div>
+    );
+  }
+
   function heatColor(agg) {
     const raw = metricValue(agg);
     if (!raw) return 'transparent';
@@ -150,13 +218,13 @@ export default function AnalysisView({ trainings }) {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Analiz');
     const columns = [{ header: FIELD_LABELS[rowField], key: 'rowLabel', width: 26 }];
-    colKeys.forEach((c, i) => { columns.push({ header: labelFor(colField, c), key: `c${i}`, width: 18 }); });
+    colKeys.forEach((c, i) => { columns.push({ header: colLabel(c), key: `c${i}`, width: 18 }); });
     columns.push({ header: 'Cəmi', key: 'total', width: 16 });
     ws.columns = columns;
 
     rowKeys.forEach((r) => {
       const rowData = { rowLabel: labelFor(rowField, r) };
-      colKeys.forEach((c, i) => { rowData[`c${i}`] = metricValue(cellAgg[r + '|||' + c]); });
+      colKeys.forEach((c, i) => { rowData[`c${i}`] = metricValue(cellAgg[r + '||||||' + c]); });
       rowData.total = metricValue(rowAgg[r]);
       ws.addRow(rowData);
     });
@@ -200,17 +268,23 @@ export default function AnalysisView({ trainings }) {
           </div>
           <button
             onClick={swapFields}
-            title="Sətir/Sütunu dəyiş"
+            title={colFieldsArr.length === 1 ? 'Sətir/Sütunu dəyiş' : 'Yalnız bir sütun sahəsi seçiləndə dəyişmək mümkündür'}
             className="btn btn-outline btn-sm"
+            disabled={colFieldsArr.length !== 1}
             style={{ height: 40, padding: '0 12px' }}
           >
             <ArrowLeftRight size={15} strokeWidth={2.2} />
           </button>
           <div>
-            <div className="filter-label">Sütun sahəsi</div>
-            <select value={colField} onChange={(e) => setColField(e.target.value)} style={{ minWidth: 180 }}>
-              {DIMENSION_FIELDS.map((f) => <option key={f} value={f}>{FIELD_LABELS[f]}</option>)}
-            </select>
+            <div className="filter-label">Sütun sahələri (çoxlu seçim)</div>
+            <MultiSelectFilter
+              label="Sütun sahələri"
+              options={DIMENSION_FIELDS.filter((f) => f !== rowField)}
+              selected={colFields}
+              onChange={(s) => setColFields(s)}
+              labelFor={(f) => FIELD_LABELS[f]}
+            />
+            <div style={{ fontSize: 11.5, color: 'var(--ink-500)', marginTop: 4 }}>{colFieldsArr.map((f) => FIELD_LABELS[f]).join(' / ')}</div>
           </div>
           <div>
             <div className="filter-label">Dəyər</div>
@@ -256,7 +330,7 @@ export default function AnalysisView({ trainings }) {
           <thead>
             <tr>
               <th>{FIELD_LABELS[rowField]}</th>
-              {colKeys.map((c) => <th key={c}>{labelFor(colField, c)}</th>)}
+              {colKeys.map((c) => <th key={c}>{colLabel(c)}</th>)}
               <th>Cəmi</th>
             </tr>
           </thead>
@@ -265,20 +339,32 @@ export default function AnalysisView({ trainings }) {
               <tr key={r}>
                 <td style={{ fontWeight: 600 }}>{labelFor(rowField, r)}</td>
                 {colKeys.map((c) => {
-                  const agg = cellAgg[r + '|||' + c];
+                  const agg = cellAgg[r + '||||||' + c];
                   return (
                     <td key={c} style={{ background: heatColor(agg) }}>
                       {cellDisplay(agg, rowAgg[r])}
+                      {savedCostDetail(agg)}
                     </td>
                   );
                 })}
-                <td style={{ fontWeight: 700 }}>{fmt(metricValue(rowAgg[r]))}</td>
+                <td style={{ fontWeight: 700 }}>
+                  {fmt(metricValue(rowAgg[r]))}
+                  {savedCostDetail(rowAgg[r])}
+                </td>
               </tr>
             ))}
             <tr style={{ background: 'var(--ink-50)' }}>
               <td style={{ fontWeight: 800 }}>Cəmi</td>
-              {colKeys.map((c) => <td key={c} style={{ fontWeight: 700 }}>{fmt(metricValue(colAgg[c]))}</td>)}
-              <td style={{ fontWeight: 800 }}>{fmt(metricValue(grandAgg))}</td>
+              {colKeys.map((c) => (
+                <td key={c} style={{ fontWeight: 700 }}>
+                  {fmt(metricValue(colAgg[c]))}
+                  {savedCostDetail(colAgg[c])}
+                </td>
+              ))}
+              <td style={{ fontWeight: 800 }}>
+                {fmt(metricValue(grandAgg))}
+                {savedCostDetail(grandAgg)}
+              </td>
             </tr>
           </tbody>
         </table>
