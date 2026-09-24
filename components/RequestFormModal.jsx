@@ -222,7 +222,7 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
             <label>Vendor (istəyə bağlı)</label>
             <input type="text" value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder="Tövsiyə etdiyiniz provayder (istəyə bağlı)" />
             {profile.role !== 'ld' && (
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 11.5, color: 'var(--ink-400)', marginTop: 5 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 11.5, fontWeight: 700, color: 'var(--red)', marginTop: 5 }}>
                 <span>Bu, sadəcə tövsiyədir. Yekun vendor L&D-nin qiymətləndirməsindən sonra sizə bildiriləcək.</span>
               </div>
             )}

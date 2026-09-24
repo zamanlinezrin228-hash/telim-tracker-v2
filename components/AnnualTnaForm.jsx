@@ -460,13 +460,6 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
           siyahısı görünəcək (istəyə bağlı — özünüz də tamamilə fərqli bir şey yaza bilərsiniz).
         </span>
       </div>
-      {profile.role !== 'ld' && (
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 12.5, color: 'var(--ink-400)', marginBottom: 18 }}>
-          <Lightbulb size={15} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
-          <span>Vendor sahəsi üzrə: Bu, sadəcə tövsiyədir. Yekun vendor L&D-nin qiymətləndirməsindən sonra sizə bildiriləcək.</span>
-        </div>
-      )}
-
       <div className="tna-table" style={{ border: '2px solid var(--ink-200)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-xs)', marginBottom: 16 }}>
         <style jsx>{`
           .tna-table th, .tna-table td { border-right: 1.5px solid var(--ink-200); font-size: 13px; }
@@ -479,7 +472,14 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
               <tr>
                 <th className="sticky-col" style={{ width: 42, background: 'var(--ink-50)', borderBottom: '3px solid var(--ink-300)' }}></th>
                 {HEADER_GROUPS.map((h, i) => (
-                  <th key={i} style={{ background: GROUP_BG[h.group], color: GROUP_TEXT[h.group], fontSize: 11.5, borderBottom: `3px solid ${GROUP_TEXT[h.group]}` }}>{h.label}</th>
+                  <th key={i} style={{ background: GROUP_BG[h.group], color: GROUP_TEXT[h.group], fontSize: 11.5, borderBottom: `3px solid ${GROUP_TEXT[h.group]}` }}>
+                    {h.label}
+                    {h.label === 'Vendor' && profile.role !== 'ld' && (
+                      <div style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--red)', textTransform: 'none', letterSpacing: 0, marginTop: 3, lineHeight: 1.3 }}>
+                        Bu, sadəcə tövsiyədir. Yekun vendor L&D-nin qiymətləndirməsindən sonra bildiriləcək.
+                      </div>
+                    )}
+                  </th>
                 ))}
               </tr>
             </thead>
