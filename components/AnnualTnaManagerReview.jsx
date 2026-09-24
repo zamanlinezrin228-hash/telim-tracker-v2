@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Users2, CheckCircle2, XCircle, RotateCcw, Pencil, History } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import { showToast } from '../lib/toast';
-import { fmtDateTime, isDecidedStatus, reqStatusMeta, matchesOwnScope, deriveApprovalStage, needsUpwardForward } from '../lib/helpers';
+import { fmtDateTime, isDecidedStatus, reqStatusMeta, matchesOwnScope, deriveApprovalStage, computeForward } from '../lib/helpers';
 import { ReqStatusBadge, PriorityBadge } from './Badges';
 import ApprovalStepper from './ApprovalStepper';
 import EmptyState from './EmptyState';
@@ -96,17 +96,25 @@ export default function AnnualTnaManagerReview({ profile, team, requests, onData
 
   // A şöbə manager's approval forwards one level up to their own dept
   // manager. A dept-level manager is always the top of the chain —
-  // needsUpwardForward() caps it there regardless of profiles.manager_id
-  // (the real HR reporting line, which can continue up through VPs/the
-  // CEO — never an approval gate in this workflow) — same rule as
-  // RequestsView.jsx's managerApprove and AnnualTnaForm.jsx's
-  // computeForwardStatus.
+  // computeForward()'s needsUpwardForward check caps it there regardless
+  // of profiles.manager_id (the real HR reporting line, which can continue
+  // up through VPs/the CEO — never an approval gate in this workflow) —
+  // same rule as RequestsView.jsx's managerApprove and AnnualTnaForm.jsx's
+  // computeForwardStatus. computeForward re-reads manager_id/scope_level
+  // live instead of trusting the `profile` prop, which is only ever
+  // fetched once at login.
   async function decide(id, targetStatus, note) {
-    const forward = targetStatus === 'Pending'
-      ? (needsUpwardForward(profile)
-          ? { status: 'Pending Manager Review', reviewing_manager_id: profile.manager_id }
-          : { status: 'Pending', reviewing_manager_id: null })
-      : { status: targetStatus };
+    let forward;
+    if (targetStatus === 'Pending') {
+      try {
+        forward = await computeForward(sb, profile.id);
+      } catch (e) {
+        showToast('Xəta: ' + e.message, 'error');
+        return;
+      }
+    } else {
+      forward = { status: targetStatus };
+    }
     const { error } = await sb.from('training_requests').update({
       ...forward, manager_note: note, manager_reviewed_by: profile.id, updated_at: new Date().toISOString(),
     }).eq('id', id);

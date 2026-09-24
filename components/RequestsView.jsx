@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Plus, Folder, Clock, Search, CheckCircle2, XCircle, FileText, CheckCheck, ListPlus, RotateCcw, Pencil } from 'lucide-react';
 import { sb } from '../lib/supabase';
-import { reqStatusMeta, groupByEmployee, fmtDateTime, isDecidedStatus, deriveApprovalStage, matchesOwnScope, needsUpwardForward } from '../lib/helpers';
+import { reqStatusMeta, groupByEmployee, fmtDateTime, isDecidedStatus, deriveApprovalStage, matchesOwnScope, computeForward } from '../lib/helpers';
 import { showToast } from '../lib/toast';
 import { ReqStatusBadge, PriorityBadge } from './Badges';
 import ApprovalStepper from './ApprovalStepper';
@@ -109,15 +109,21 @@ export default function RequestsView({ profile, team, requests, planYear, adhocR
   const LD_DECIDE_TOAST = { Approved: 'Təsdiqləndi.', 'Needs Revision': 'Geri göndərildi.', Rejected: 'Rədd edildi.' };
 
   // A şöbə manager's approval forwards one level up to their own dept
-  // manager (reviewing_manager_id = profile.manager_id). A dept-level
-  // manager is always the top of this chain — needsUpwardForward() caps it
-  // there regardless of profiles.manager_id, since that's the real HR
-  // reporting line (which can continue up through VPs/the CEO) and must
-  // never become an approval gate in this workflow.
+  // manager (reviewing_manager_id = manager_id). A dept-level manager is
+  // always the top of this chain — computeForward()'s needsUpwardForward
+  // check caps it there regardless of profiles.manager_id, since that's
+  // the real HR reporting line (which can continue up through VPs/the
+  // CEO) and must never become an approval gate in this workflow.
+  // computeForward re-reads manager_id/scope_level live instead of trusting
+  // the `profile` prop, which is only ever fetched once at login.
   async function managerApprove(id, note) {
-    const forward = needsUpwardForward(profile)
-      ? { status: 'Pending Manager Review', reviewing_manager_id: profile.manager_id }
-      : { status: 'Pending', reviewing_manager_id: null };
+    let forward;
+    try {
+      forward = await computeForward(sb, profile.id);
+    } catch (e) {
+      showToast('Xəta: ' + e.message, 'error');
+      return;
+    }
     const { error } = await sb.from('training_requests').update({
       ...forward, manager_note: note, manager_reviewed_by: profile.id, updated_at: new Date().toISOString(),
     }).eq('id', id);

@@ -17,18 +17,11 @@
 -- This UPDATE only touches Ruslan's own manager_id. The already-stuck
 -- training_requests row (id=2, Həmidə's submission) is NOT touched here —
 -- its reviewing_manager_id was already set from Ruslan's (bad) manager_id
--- at approval time, so it needs a one-time correction too. Uncomment the
--- second statement below to also fix that specific row so it appears in
--- Samir's queue immediately; leave it commented if you'd rather have Samir
--- (or Ruslan, if you send it back) simply re-approve it through the UI.
+-- at approval time, so it needs a one-time correction too. Run
+-- 2026-09-24_resync_stuck_pending_manager_review.sql AFTER this one to fix
+-- that (and any other row in the same state) generally, rather than a
+-- one-off id=2 patch.
 
 update public.profiles
 set manager_id = '160f40cf-9a44-4597-b795-f7a2b3d9b7d0' -- Samir Süleymanov
 where id = 'e2c5d5a4-704c-440b-b0c8-d51dc39c6023';       -- Ruslan Qəhrəmanov
-
--- Optional: also fix the specific stuck request row (Həmidə Əsgərova's
--- submission, training_requests.id = 2) so it shows up in Samir's queue
--- right away instead of waiting for a future re-approval.
--- update public.training_requests
--- set reviewing_manager_id = '160f40cf-9a44-4597-b795-f7a2b3d9b7d0' -- Samir Süleymanov
--- where id = 2;
