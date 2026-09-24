@@ -105,30 +105,35 @@ function RankList({ items, renderValue, emptyLabel }) {
   );
 }
 
-export default function DashboardView({ trainings, profile, team }) {
+export default function DashboardView({ trainings, profile, team, restrictToOwnScope }) {
   const years = useMemo(() => {
     const set = new Set(trainings.map((t) => t.plan_year).filter(Boolean));
     return [...set].sort((a, b) => b - a);
   }, [trainings]);
 
   const [selectedYear, setSelectedYear] = useState('all');
-  const [scopeMode, setScopeMode] = useState('company');
+  const [scopeMode, setScopeMode] = useState(restrictToOwnScope ? 'own' : 'company');
 
   // Only a manager with direct reports has a narrower "own dept/şöbə" view to
   // switch to — same hasTeam check used for this elsewhere (RequestsView.jsx,
   // AnnualTnaForm.jsx). Everyone else just gets the company-wide dashboard.
   const hasTeam = team && team.length > 0;
-  const canScopeFilter = profile?.role === 'manager' && hasTeam;
+  // A manager without dashboard_full_access is FORCED to their own dept/sube
+  // (restrictToOwnScope, set by pages/index.js) — no toggle to widen out to
+  // company-wide data. Only a manager who already has full access gets the
+  // optional company-wide/own-scope switch.
+  const canScopeFilter = profile?.role === 'manager' && hasTeam && !restrictToOwnScope;
   // Same dept-vs-sube distinction TrackingView's RLS and RequestsView's
   // scopeHistory already use for a manager's own visibility scope.
   const ownScopeLabel = profile?.scope_level === 'sube' ? 'Yalnız öz şöbəm' : 'Yalnız öz departamentim';
 
   const scoped = useMemo(() => {
-    if (!canScopeFilter || scopeMode !== 'own') return trainings;
+    const forceOwn = restrictToOwnScope && hasTeam;
+    if (!forceOwn && (!canScopeFilter || scopeMode !== 'own')) return trainings;
     return trainings.filter((t) => (
       profile.scope_level === 'sube' ? t.sube === profile.sube : t.dept === profile.dept
     ));
-  }, [trainings, canScopeFilter, scopeMode, profile]);
+  }, [trainings, canScopeFilter, scopeMode, profile, restrictToOwnScope, hasTeam]);
 
   const filtered = useMemo(() => {
     if (selectedYear === 'all') return scoped;
@@ -216,6 +221,12 @@ export default function DashboardView({ trainings, profile, team }) {
                   <option value="company">Bütün şirkət</option>
                   <option value="own">{ownScopeLabel}</option>
                 </select>
+              </div>
+            )}
+            {restrictToOwnScope && hasTeam && (
+              <div>
+                <div className="filter-label">Əhatə dairəsi</div>
+                <span className="badge" style={{ background: 'var(--ink-400)', height: 40, display: 'inline-flex', alignItems: 'center' }}>{ownScopeLabel}</span>
               </div>
             )}
             <div>

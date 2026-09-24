@@ -2,7 +2,9 @@ import { useState, useMemo } from 'react';
 import { Users2, CheckCircle2, XCircle, RotateCcw, Pencil } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import { showToast } from '../lib/toast';
+import { fmtDateTime, reqStatusMeta } from '../lib/helpers';
 import { ReqStatusBadge, PriorityBadge } from './Badges';
+import ApprovalStepper from './ApprovalStepper';
 import EmptyState from './EmptyState';
 import NoteModal from './NoteModal';
 import TnaRowEditModal from './TnaRowEditModal';
@@ -47,15 +49,31 @@ export default function AnnualTnaManagerReview({ profile, team, requests, onData
     if (onDataChanged) onDataChanged();
   }
 
-  const DECIDE_TOAST = { Pending: 'Təsdiqləndi və göndərildi.', 'Needs Revision': 'Geri göndərildi.', Rejected: 'Rədd edildi.' };
+  const DECIDE_TOAST = {
+    Pending: 'Təsdiqləndi və L&D-yə göndərildi.',
+    'Pending Manager Review': 'Təsdiqləndi və növbəti rəhbərə göndərildi.',
+    'Needs Revision': 'Geri göndərildi.',
+    Rejected: 'Rədd edildi.',
+  };
 
+  // Bug fix (Task 6): approving a şöbə-forwarded batch used to jump straight
+  // to status='Pending' (visible to L&D) regardless of whether this dept
+  // manager has their own manager above them. Now it forwards one more level
+  // up when profile.manager_id is set, and only opens to L&D once it reaches
+  // the top of the chain — same rule as RequestsView.jsx's managerApprove
+  // and AnnualTnaForm.jsx's computeForwardStatus.
   async function decide(id, targetStatus, note) {
+    const forward = targetStatus === 'Pending'
+      ? (profile.manager_id
+          ? { status: 'Pending Manager Review', reviewing_manager_id: profile.manager_id }
+          : { status: 'Pending', reviewing_manager_id: null })
+      : { status: targetStatus };
     const { error } = await sb.from('training_requests').update({
-      status: targetStatus, manager_note: note, manager_reviewed_by: profile.id, updated_at: new Date().toISOString(),
+      ...forward, manager_note: note, manager_reviewed_by: profile.id, updated_at: new Date().toISOString(),
     }).eq('id', id);
     if (error) { showToast('Xəta: ' + error.message, 'error'); return; }
     setDecidedIds((prev) => new Set(prev).add(id));
-    showToast(DECIDE_TOAST[targetStatus] || 'Yadda saxlanıldı.', 'success');
+    showToast(DECIDE_TOAST[forward.status] || 'Yadda saxlanıldı.', 'success');
     refresh();
   }
 
@@ -73,7 +91,7 @@ export default function AnnualTnaManagerReview({ profile, team, requests, onData
           <div className="req-dept-head"><Users2 size={15} strokeWidth={2} /> {key} <span className="req-dept-count">{grouped[key].length}</span></div>
           <div className="req-list" style={{ marginTop: 12 }}>
             {grouped[key].map((r) => (
-              <div className="req-card" key={r.id}>
+              <div className="req-card" key={r.id} style={{ '--state-color': reqStatusMeta(r.status).color }}>
                 <div className="req-card-top">
                   <div>
                     <div className="req-card-name">
@@ -87,6 +105,10 @@ export default function AnnualTnaManagerReview({ profile, team, requests, onData
                     <ReqStatusBadge status={r.status} />
                   </div>
                 </div>
+
+                <div className="req-timestamps"><span><b>Göndərilib:</b> {fmtDateTime(r.created_at)}</span></div>
+
+                <ApprovalStepper request={r} profile={profile} team={team} />
 
                 {r.reason && (
                   <div className="req-field-highlight">

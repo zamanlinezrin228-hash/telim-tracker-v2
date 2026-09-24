@@ -93,7 +93,7 @@ export default function AnnualTnaHub({ profile, team, requests, planYear, tnaWin
           )
         )}
         {activeTab === 'qerarlar' && (
-          <AnnualTnaDecisionHistory requests={decisionHistoryRequests} planYear={planYear} onDataChanged={onDataChanged} />
+          <AnnualTnaDecisionHistory profile={profile} team={team} requests={decisionHistoryRequests} planYear={planYear} onDataChanged={onDataChanged} />
         )}
       </div>
     </div>

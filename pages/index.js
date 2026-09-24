@@ -26,7 +26,7 @@ export default function Home() {
   const [trainings, setTrainings] = useState([]);
   const [allTrainings, setAllTrainings] = useState([]);
   const [requests, setRequests] = useState([]);
-  const [appSettings, setAppSettings] = useState({ tna_window_open: false, tna_plan_year: new Date().getFullYear() });
+  const [appSettings, setAppSettings] = useState({ tna_window_open: false, tna_plan_year: new Date().getFullYear(), adhoc_requests_open: false });
   const [view, setView] = useState('home');
 
   const loadData = useCallback(async () => {
@@ -82,6 +82,15 @@ export default function Home() {
   // stays scoped to just their own department — never L&D's company-wide
   // data-fetching. See AnnualTnaHub.jsx.
   const isDeptManager = profile && profile.scope_level === 'dept' && team.length > 0;
+
+  // Dashboard access: L&D/HR (same elevated-review roles as everywhere else
+  // in the app) and anyone explicitly flagged dashboard_full_access see the
+  // full company-wide picture; a manager with direct reports sees their own
+  // dept/sube only; a plain employee with neither doesn't get the card/route
+  // at all. See the reviewed sql/2026-09-24_add_dashboard_full_access.sql.
+  const hasDashboardFullAccess = !!profile && (isReviewer || profile.dashboard_full_access === true);
+  const isScopedManager = profile && profile.role === 'manager' && team.length > 0;
+  const canSeeDashboard = hasDashboardFullAccess || isScopedManager;
 
   // Polls for newly-arrived requests (ad-hoc + annual TNA) while an L&D/HR
   // reviewer has the app open, and surfaces a toast when the count grows —
@@ -159,16 +168,18 @@ export default function Home() {
     <>
       <Head><title>Təlim Tracker</title></Head>
       <div className="app-shell">
-        <Sidebar view={view} setView={setView} profile={profile} showAnnualTna={showAnnualTna} badges={sidebarBadges} />
+        <Sidebar view={view} setView={setView} profile={profile} showAnnualTna={showAnnualTna} showDashboard={canSeeDashboard} badges={sidebarBadges} />
         <div className="app-main">
           <div key={view} className="view-enter">
             {view === 'home' && (
-              <HomeScreen profile={profile} team={team} setView={setView} tnaWindowOpen={appSettings.tna_window_open} planYear={appSettings.tna_plan_year} />
+              <HomeScreen profile={profile} team={team} setView={setView} tnaWindowOpen={appSettings.tna_window_open} planYear={appSettings.tna_plan_year} canSeeDashboard={canSeeDashboard} />
             )}
-            {view === 'dashboard' && <DashboardView trainings={allTrainings} profile={profile} team={team} requests={requests} />}
+            {view === 'dashboard' && canSeeDashboard && (
+              <DashboardView trainings={allTrainings} profile={profile} team={team} requests={requests} restrictToOwnScope={!hasDashboardFullAccess} />
+            )}
             {view === 'tracking' && <TrackingView trainings={trainings} profile={profile} onDataChanged={handleDataChanged} />}
             {view === 'requests' && (
-              <RequestsView profile={profile} team={team} requests={requests} planYear={appSettings.tna_plan_year} onDataChanged={handleDataChanged} />
+              <RequestsView profile={profile} team={team} requests={requests} planYear={appSettings.tna_plan_year} adhocRequestsOpen={appSettings.adhoc_requests_open} onDataChanged={handleDataChanged} />
             )}
             {view === 'annual-tna' && (
               <div>

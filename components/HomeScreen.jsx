@@ -1,18 +1,23 @@
 import { LayoutDashboard, ClipboardList, FileText, CalendarDays, UserSquare2, ArrowRight } from 'lucide-react';
 
-export default function HomeScreen({ profile, team, setView, tnaWindowOpen, planYear }) {
+export default function HomeScreen({ profile, team, setView, tnaWindowOpen, planYear, canSeeDashboard }) {
   const hasTeam = team && team.length > 0;
   const isReviewer = profile.role === 'ld' || profile.role === 'hr';
 
-  const cards = [
-    {
+  const cards = [];
+
+  if (canSeeDashboard) {
+    cards.push({
       key: 'dashboard',
       title: 'Dashboard',
       desc: 'Ümumi mənzərə — təlim sayı, büdcə, status və departament üzrə analiz.',
       Icon: LayoutDashboard,
       accent: '#2563eb',
       linkLabel: 'Analizə bax',
-    },
+    });
+  }
+
+  cards.push(
     {
       key: 'tracking',
       title: 'İzləmə Cədvəli',
@@ -31,7 +36,7 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
       accent: '#d97706',
       linkLabel: 'Sorğu göndər',
     },
-  ];
+  );
 
   if (tnaWindowOpen || profile.role === 'ld') {
     cards.push({

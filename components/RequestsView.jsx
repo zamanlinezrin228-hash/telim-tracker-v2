@@ -1,9 +1,11 @@
 import { useState, useMemo } from 'react';
 import { Plus, Folder, Clock, Search, CheckCircle2, XCircle, FileText, CheckCheck, ListPlus, RotateCcw, Pencil } from 'lucide-react';
 import { sb } from '../lib/supabase';
-import { reqStatusMeta, groupByEmployee } from '../lib/helpers';
+import { reqStatusMeta, groupByEmployee, fmtDateTime, isDecidedStatus, deriveApprovalStage } from '../lib/helpers';
 import { showToast } from '../lib/toast';
 import { ReqStatusBadge, PriorityBadge } from './Badges';
+import ApprovalStepper from './ApprovalStepper';
+import StageMeta from './StageMeta';
 import EmptyState from './EmptyState';
 import RequestFormModal from './RequestFormModal';
 import NoteModal from './NoteModal';
@@ -11,7 +13,7 @@ import AddToPlanModal from './AddToPlanModal';
 import ResubmitModal from './ResubmitModal';
 import CountUp from './CountUp';
 
-export default function RequestsView({ profile, team, requests, planYear, onDataChanged }) {
+export default function RequestsView({ profile, team, requests, planYear, adhocRequestsOpen, onDataChanged }) {
   const [showForm, setShowForm] = useState(false);
   const [noteAction, setNoteAction] = useState(null);
   const [addToPlanRequest, setAddToPlanRequest] = useState(null);
@@ -27,6 +29,7 @@ export default function RequestsView({ profile, team, requests, planYear, onData
   );
 
   const role = profile.role;
+  const canCreateAdhoc = role === 'ld' || !!adhocRequestsOpen;
   const hasTeam = team && team.length > 0;
   const isReviewer = role === 'hr' || role === 'ld';
   const myRequests = mergedRequests.filter((r) => r.requested_by === profile.id);
@@ -84,16 +87,41 @@ export default function RequestsView({ profile, team, requests, planYear, onData
     if (onDataChanged) onDataChanged();
   }
 
-  const MANAGER_DECIDE_TOAST = { Pending: 'Təsdiqləndi və L&D-yə göndərildi.', Rejected: 'Rədd edildi.' };
+  const MANAGER_DECIDE_TOAST = {
+    Pending: 'Təsdiqləndi və L&D-yə göndərildi.',
+    'Pending Manager Review': 'Təsdiqləndi və növbəti rəhbərə göndərildi.',
+    Rejected: 'Rədd edildi.',
+  };
   const LD_DECIDE_TOAST = { Approved: 'Təsdiqləndi.', 'Needs Revision': 'Geri göndərildi.', Rejected: 'Rədd edildi.' };
 
-  async function managerDecide(id, targetStatus, note) {
+  // Bug fix (Task 6): approving used to jump straight to status='Pending'
+  // (visible to L&D), skipping the approving manager's OWN manager — so a
+  // şöbə manager's approval would bypass the dept manager above them, and a
+  // dept manager's approval would bypass their own manager too when one was
+  // set. Now: if the approving manager has their own manager_id, forward one
+  // level up ('Pending Manager Review' + reviewing_manager_id = that
+  // manager's manager_id); only a manager with no manager_id (top of the
+  // chain) opens the request up to L&D ('Pending').
+  async function managerApprove(id, note) {
+    const forward = profile.manager_id
+      ? { status: 'Pending Manager Review', reviewing_manager_id: profile.manager_id }
+      : { status: 'Pending', reviewing_manager_id: null };
     const { error } = await sb.from('training_requests').update({
-      status: targetStatus, manager_note: note, manager_reviewed_by: profile.id, updated_at: new Date().toISOString(),
+      ...forward, manager_note: note, manager_reviewed_by: profile.id, updated_at: new Date().toISOString(),
     }).eq('id', id);
     if (error) { showToast('Xəta: ' + error.message, 'error'); return; }
-    setLocallyUpdated((prev) => new Map(prev).set(id, { status: targetStatus, manager_note: note }));
-    showToast(MANAGER_DECIDE_TOAST[targetStatus] || 'Yadda saxlanıldı.', 'success');
+    setLocallyUpdated((prev) => new Map(prev).set(id, { ...forward, manager_note: note }));
+    showToast(MANAGER_DECIDE_TOAST[forward.status] || 'Yadda saxlanıldı.', 'success');
+    refresh();
+  }
+
+  async function managerReject(id, note) {
+    const { error } = await sb.from('training_requests').update({
+      status: 'Rejected', manager_note: note, manager_reviewed_by: profile.id, updated_at: new Date().toISOString(),
+    }).eq('id', id);
+    if (error) { showToast('Xəta: ' + error.message, 'error'); return; }
+    setLocallyUpdated((prev) => new Map(prev).set(id, { status: 'Rejected', manager_note: note }));
+    showToast(MANAGER_DECIDE_TOAST.Rejected, 'success');
     refresh();
   }
 
@@ -115,12 +143,12 @@ export default function RequestsView({ profile, team, requests, planYear, onData
   }
 
   function RequestTable({ list, showNotes }) {
-    const colCount = showNotes ? 7 : 5;
+    const colCount = showNotes ? 8 : 6;
     return (
       <table>
         <thead>
           <tr>
-            <th>Təlim</th><th>Prioritet</th><th>Status</th><th>Göndərilib</th>
+            <th>Təlim</th><th>Prioritet</th><th>Status</th><th>Göndərilib</th><th>Qərar tarixi</th>
             {showNotes && <><th>Manager qeydi</th><th>L&D qeydi</th></>}
             <th></th>
           </tr>
@@ -130,8 +158,9 @@ export default function RequestsView({ profile, team, requests, planYear, onData
             <tr key={r.id}>
               <td>{r.training_title}</td>
               <td><PriorityBadge priority={r.priority} /></td>
-              <td><ReqStatusBadge status={r.status} /></td>
-              <td>{new Date(r.created_at).toLocaleDateString('az-AZ')}</td>
+              <td><ReqStatusBadge status={r.status} /><StageMeta request={r} profile={profile} team={team} /></td>
+              <td style={{ fontSize: 12.5 }}>{fmtDateTime(r.created_at)}</td>
+              <td style={{ fontSize: 12.5 }}>{isDecidedStatus(r.status) ? fmtDateTime(r.updated_at) : '—'}</td>
               {showNotes && (<><td style={{ fontSize: 12.5 }}>{r.manager_note || '—'}</td><td style={{ fontSize: 12.5 }}>{r.reviewer_note || '—'}</td></>)}
               <td>
                 {r.status === 'Needs Revision' && (
@@ -157,7 +186,9 @@ export default function RequestsView({ profile, team, requests, planYear, onData
             <h1>Təlim Sorğuları</h1>
             <p>Yeni sorğu göndər, komandanın sorğularına bax və qərar ver.</p>
           </div>
-          <button onClick={() => setShowForm(true)} className="btn btn-primary"><Plus size={15} strokeWidth={2.4} /> Yeni Sorğu</button>
+          {canCreateAdhoc && (
+            <button onClick={() => setShowForm(true)} className="btn btn-primary"><Plus size={15} strokeWidth={2.4} /> Yeni Sorğu</button>
+          )}
         </div>
       </div>
 
@@ -179,7 +210,7 @@ export default function RequestsView({ profile, team, requests, planYear, onData
               <div className="card" style={{ marginBottom: 20 }}>
                 <div className="req-list">
                   {toReview.map((r) => (
-                    <div className="req-card" key={r.id}>
+                    <div className="req-card" key={r.id} style={{ '--state-color': reqStatusMeta(r.status).color }}>
                       <div className="req-card-top">
                         <div>
                           <div className="req-card-name">{r.employee_name}</div>
@@ -187,6 +218,8 @@ export default function RequestsView({ profile, team, requests, planYear, onData
                         </div>
                         <div className="req-card-badges"><PriorityBadge priority={r.priority} /></div>
                       </div>
+                      <div className="req-timestamps"><span><b>Göndərilib:</b> {fmtDateTime(r.created_at)}</span></div>
+                      <ApprovalStepper request={r} profile={profile} team={team} />
                       {r.reason && (
                         <div className="req-field-highlight">
                           <div className="req-field-label">Səbəb</div>
@@ -233,14 +266,28 @@ export default function RequestsView({ profile, team, requests, planYear, onData
                     <div style={{ padding: '12px 14px 4px', fontWeight: 700, fontSize: 14 }}>{employeeName}</div>
                     {items.map((r) => {
                       const sm = reqStatusMeta(r.status);
+                      const stage = deriveApprovalStage(r, { profile, team });
                       return (
                         <div key={r.id} style={{ borderTop: '1px solid var(--ink-100)' }}>
                           <div style={{ height: 4, background: sm.color }} />
                           <div style={{ padding: 12 }}>
                             <div style={{ fontSize: 13, color: 'var(--ink-700)', marginBottom: 8 }}>{r.training_title}</div>
                             <ReqStatusBadge status={r.status} />
-                            {r.manager_note && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginTop: 8 }}><b>Manager:</b> {r.manager_note}</div>}
-                            {r.reviewer_note && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginTop: 4 }}><b>L&D:</b> {r.reviewer_note}</div>}
+                            <StageMeta request={r} profile={profile} team={team} />
+                            <div className="req-timestamps" style={{ margin: '6px 0 0' }}>
+                              <span><b>Göndərilib:</b> {fmtDateTime(r.created_at)}</span>
+                              {isDecidedStatus(r.status) && <span><b>Qərar:</b> {fmtDateTime(r.updated_at)}</span>}
+                            </div>
+                            {r.manager_note && (
+                              <div style={{ fontSize: 12, color: 'var(--ink-500)', marginTop: 8 }}>
+                                <b>{stage.decisionBy?.role === 'Rəhbər' ? (stage.decisionBy.name || 'Rəhbər') : 'Manager'}:</b> {r.manager_note}
+                              </div>
+                            )}
+                            {r.reviewer_note && (
+                              <div style={{ fontSize: 12, color: 'var(--ink-500)', marginTop: 4 }}>
+                                <b>{stage.decisionBy?.role === 'L&D' ? (stage.decisionBy.name || 'L&D') : 'L&D'}:</b> {r.reviewer_note}
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
@@ -263,7 +310,7 @@ export default function RequestsView({ profile, team, requests, planYear, onData
                 <div className="req-dept-head"><Folder size={15} strokeWidth={2} /> {dept} <span className="req-dept-count">{reviewerActive[dept].length}</span></div>
                 <div className="req-list">
                   {reviewerActive[dept].map((r) => (
-                    <div className="req-card" key={r.id}>
+                    <div className="req-card" key={r.id} style={{ '--state-color': reqStatusMeta(r.status).color }}>
                       <div className="req-card-top">
                         <div>
                           <div className="req-card-name">
@@ -277,6 +324,13 @@ export default function RequestsView({ profile, team, requests, planYear, onData
                           <ReqStatusBadge status={r.status} />
                         </div>
                       </div>
+
+                      <div className="req-timestamps">
+                        <span><b>Göndərilib:</b> {fmtDateTime(r.created_at)}</span>
+                        {isDecidedStatus(r.status) && <span><b>Qərar:</b> {fmtDateTime(r.updated_at)}</span>}
+                      </div>
+
+                      <ApprovalStepper request={r} profile={profile} team={team} />
 
                       {r.reason && (
                         <div className="req-field-highlight">
@@ -343,6 +397,7 @@ export default function RequestsView({ profile, team, requests, planYear, onData
                       </div>
                       {items.map((r) => {
                         const sm = reqStatusMeta(r.status);
+                        const stage = deriveApprovalStage(r, { profile, team });
                         return (
                           <div key={r.id} style={{ borderTop: '1px solid var(--ink-100)' }}>
                             <div style={{ height: 4, background: sm.color }} />
@@ -351,8 +406,21 @@ export default function RequestsView({ profile, team, requests, planYear, onData
                                 <div style={{ fontSize: 13, color: 'var(--ink-700)' }}>{r.training_title}</div>
                                 <ReqStatusBadge status={r.status} />
                               </div>
+                              <div className="req-timestamps" style={{ margin: '0 0 8px' }}>
+                                <span><b>Göndərilib:</b> {fmtDateTime(r.created_at)}</span>
+                                <span><b>Qərar:</b> {fmtDateTime(r.updated_at)}</span>
+                              </div>
+                              {stage.decisionBy && (r.status === 'Rejected' || r.status === 'Needs Revision') && (
+                                <div style={{ fontSize: 11.5, color: 'var(--ink-500)', fontWeight: 700, marginBottom: 4 }}>
+                                  {stage.decisionBy.role}{stage.decisionBy.name ? ` — ${stage.decisionBy.name}` : ''} qərarı
+                                </div>
+                              )}
+                              {r.manager_note && r.status !== 'Approved' && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginBottom: 6 }}><b>Qeyd:</b> {r.manager_note}</div>}
                               {r.reviewer_note && <div style={{ fontSize: 12, color: 'var(--ink-500)', marginBottom: 10 }}><b>L&D qeyd:</b> {r.reviewer_note}</div>}
-                              {r.status === 'Approved' && !r.linked_training_id && (
+                              {/* Task 5: only L&D performs this final step — 'hr' is also a
+                                  reviewer (isReviewer) for the review queue above, but not for
+                                  this action. */}
+                              {profile.role === 'ld' && r.status === 'Approved' && !r.linked_training_id && (
                                 <button onClick={() => setAddToPlanRequest(r)} className="btn btn-purple btn-sm btn-block"><ListPlus size={13} strokeWidth={2.2} /> Plana Əlavə Et</button>
                               )}
                               {r.linked_training_id && (
@@ -394,8 +462,8 @@ export default function RequestsView({ profile, team, requests, planYear, onData
             required={noteAction.type === 'ld-revise'}
             onCancel={() => setNoteAction(null)}
             onConfirm={async (note) => {
-              if (noteAction.type === 'manager-approve') await managerDecide(noteAction.id, 'Pending', note);
-              if (noteAction.type === 'manager-reject') await managerDecide(noteAction.id, 'Rejected', note);
+              if (noteAction.type === 'manager-approve') await managerApprove(noteAction.id, note);
+              if (noteAction.type === 'manager-reject') await managerReject(noteAction.id, note);
               if (noteAction.type === 'ld-approve') await ldDecide(noteAction.id, 'Approved', note);
               if (noteAction.type === 'ld-revise') await ldDecide(noteAction.id, 'Needs Revision', note);
               if (noteAction.type === 'ld-reject') await ldDecide(noteAction.id, 'Rejected', note);

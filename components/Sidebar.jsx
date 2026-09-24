@@ -3,7 +3,6 @@ import { sb } from '../lib/supabase';
 import ThemeToggle from './ThemeToggle';
 
 const NAV_ITEMS = [
-  { key: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard },
   { key: 'tracking', label: 'İzləmə Cədvəli', Icon: ClipboardList },
   { key: 'requests', label: 'Təlim Sorğuları', Icon: FileText },
   { key: 'guide', label: 'Bələdçi', Icon: Compass },
@@ -17,7 +16,7 @@ function initials(name) {
 
 const ROLE_LABELS = { ld: 'L&D', hr: 'HR', employee: 'İşçi' };
 
-export default function Sidebar({ view, setView, profile, showAnnualTna, badges = {} }) {
+export default function Sidebar({ view, setView, profile, showAnnualTna, showDashboard, badges = {} }) {
   async function handleLogout() {
     await sb.auth.signOut();
     window.location.reload();
@@ -25,6 +24,7 @@ export default function Sidebar({ view, setView, profile, showAnnualTna, badges 
 
   const isReviewer = profile?.role === 'ld' || profile?.role === 'hr';
   const items = [
+    ...(showDashboard ? [{ key: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard }] : []),
     ...NAV_ITEMS,
     ...(showAnnualTna ? [{ key: 'annual-tna', label: 'İllik TNA', Icon: CalendarDays }] : []),
     ...(isReviewer ? [{ key: 'idp', label: 'IDP', Icon: UserSquare2 }] : []),

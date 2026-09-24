@@ -272,7 +272,12 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
   // batch submit below and by the "Təsdiqlə" immediate action on a single
   // employee-submitted row (Task 2), since both forward a row the same way.
   function computeForwardStatus() {
-    const needsUpwardReview = hasTeam && profile.scope_level === 'sube' && !!profile.manager_id;
+    // Any manager with their own manager_id set — dept-level or şöbə-level —
+    // must forward one level up rather than skip straight to L&D; this used
+    // to be gated on scope_level === 'sube' only, which incorrectly routed
+    // a dept-level manager's approvals straight to 'Pending' even when that
+    // manager had their own manager above them (see Task 6 bug fix).
+    const needsUpwardReview = hasTeam && !!profile.manager_id;
     return {
       status: hasTeam
         ? (needsUpwardReview ? 'Pending Manager Review' : 'Pending')
@@ -518,13 +523,19 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
           ? `${planYear}-ci il üçün öz təlim ehtiyacınızı və ya komandanızın ehtiyaclarını cədvəldə doldurun. Əməkdaşı siyahıdan seçə, ya da əl ilə yaza bilərsiniz.`
           : `${planYear}-ci il üçün öz təlim ehtiyacınızı cədvəldə doldurun.`}
       </div>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 12.5, color: 'var(--blue)', marginBottom: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 12.5, color: 'var(--blue)', marginBottom: profile.role === 'ld' ? 18 : 8 }}>
         <Lightbulb size={15} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
         <span>
           Əməkdaş seçdikdən sonra Kateqoriya → Səriştə → Alt səriştə sahələrində onun departamentinə aid bütün səriştə
           siyahısı görünəcək (istəyə bağlı — özünüz də tamamilə fərqli bir şey yaza bilərsiniz).
         </span>
       </div>
+      {profile.role !== 'ld' && (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 12.5, color: 'var(--ink-400)', marginBottom: 18 }}>
+          <Lightbulb size={15} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>Vendor sahəsi üzrə: Bu, sadəcə tövsiyədir. Yekun vendor L&D-nin qiymətləndirməsindən sonra sizə bildiriləcək.</span>
+        </div>
+      )}
 
       <div className="tna-table" style={{ border: '2px solid var(--ink-200)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-xs)', marginBottom: 16 }}>
         <style jsx>{`
