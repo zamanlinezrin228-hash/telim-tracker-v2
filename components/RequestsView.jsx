@@ -320,6 +320,15 @@ export default function RequestsView({ profile, team, requests, planYear, adhocR
                                 <b>{stage.decisionBy?.role === 'L&D' ? (stage.decisionBy.name || 'L&D') : 'L&D'}:</b> {r.reviewer_note}
                               </div>
                             )}
+                            {/* Anyone in the chain who can see this row (not just the
+                                original submitter) can fix and resubmit a Needs
+                                Revision item — resubmitting routes it forward from
+                                THIS manager's own level, per ResubmitModal.jsx. */}
+                            {r.status === 'Needs Revision' && (
+                              <button onClick={() => setResubmitRequest(r)} className="btn btn-warning btn-sm" style={{ marginTop: 8 }}>
+                                <Pencil size={12} strokeWidth={2.2} /> Redaktə et
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
@@ -509,7 +518,7 @@ export default function RequestsView({ profile, team, requests, planYear, adhocR
         )}
 
         {resubmitRequest && (
-          <ResubmitModal request={resubmitRequest} onClose={() => setResubmitRequest(null)} onSubmitted={refresh} />
+          <ResubmitModal request={resubmitRequest} profile={profile} onClose={() => setResubmitRequest(null)} onSubmitted={refresh} />
         )}
       </div>
     </div>

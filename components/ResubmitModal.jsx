@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Send } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import { showToast } from '../lib/toast';
+import { needsUpwardForward } from '../lib/helpers';
 
 const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical'];
 const PRIORITY_LABELS = { Low: 'Aşağı', Medium: 'Orta', High: 'Yüksək', Critical: 'Kritik' };
@@ -11,13 +12,21 @@ const IMPORTANCE_SUGGESTIONS = [
 ];
 const LEVEL_SUGGESTIONS = ['1 – Fundamental', '2 – İnkişaf edən', '3 – Yetərli', '4 – İrəli', '5 – Ekspert'];
 
-// Reopens a 'Needs Revision' request for the submitter to edit and send
-// back, rather than making them start a brand new request from scratch.
+// Reopens a 'Needs Revision' request for editing and resubmission — usable
+// by anyone in the chain who can see the row (the original submitter, or
+// any şöbə/dept manager whose scope it falls in — RequestsView.jsx's
+// scopeHistory already gives them visibility), not just whoever it was
+// originally submitted by. Whoever actually fixes and resubmits it decides
+// where it goes next: it's routed exactly like a brand new submission FROM
+// THEM (needsUpwardForward on their own profile), not sent back to
+// whichever reviewer most recently returned it. So if a şöbə manager fixes
+// it, it goes to their own dept manager next (skipping needing their own
+// re-approval); if a dept manager fixes it, it goes straight to L&D.
 // Importance/level fields stay free-text (datalist) instead of a rigid
 // <select> because the two request-creation forms in this app store
 // slightly different wording for the same scale, so a fixed dropdown
 // could fail to match whatever string is already saved on the row.
-export default function ResubmitModal({ request, onClose, onSubmitted }) {
+export default function ResubmitModal({ request, profile, onClose, onSubmitted }) {
   const [title, setTitle] = useState(request.training_title || '');
   const [reason, setReason] = useState(request.reason || '');
   const [priority, setPriority] = useState(request.priority || 'Medium');
@@ -34,7 +43,9 @@ export default function ResubmitModal({ request, onClose, onSubmitted }) {
     setError('');
     if (!title.trim()) { setError('Təlimin adını yazın.'); return; }
 
-    const nextStatus = request.reviewing_manager_id ? 'Pending Manager Review' : 'Pending';
+    const forward = needsUpwardForward(profile)
+      ? { status: 'Pending Manager Review', reviewing_manager_id: profile.manager_id }
+      : { status: 'Pending', reviewing_manager_id: null };
     const payload = {
       training_title: title.trim(),
       reason: reason.trim(),
@@ -45,8 +56,11 @@ export default function ResubmitModal({ request, onClose, onSubmitted }) {
       importance_level: importance || null,
       current_skill_level: currentLevel || null,
       required_skill_level: requiredLevel || null,
-      status: nextStatus,
+      ...forward,
+      manager_note: null,
       reviewer_note: null,
+      manager_reviewed_by: profile.role === 'manager' ? profile.id : null,
+      reviewed_by: null,
       updated_at: new Date().toISOString(),
     };
 
