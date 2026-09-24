@@ -273,7 +273,7 @@ export default function RequestsView({ profile, team, requests, planYear, adhocR
                           <div style={{ padding: 12 }}>
                             <div style={{ fontSize: 13, color: 'var(--ink-700)', marginBottom: 8 }}>{r.training_title}</div>
                             <ReqStatusBadge status={r.status} />
-                            <StageMeta request={r} profile={profile} team={team} />
+                            <ApprovalStepper request={r} profile={profile} team={team} />
                             <div className="req-timestamps" style={{ margin: '6px 0 0' }}>
                               <span><b>Göndərilib:</b> {fmtDateTime(r.created_at)}</span>
                               {isDecidedStatus(r.status) && <span><b>Qərar:</b> {fmtDateTime(r.updated_at)}</span>}
@@ -410,6 +410,7 @@ export default function RequestsView({ profile, team, requests, planYear, adhocR
                                 <span><b>Göndərilib:</b> {fmtDateTime(r.created_at)}</span>
                                 <span><b>Qərar:</b> {fmtDateTime(r.updated_at)}</span>
                               </div>
+                              <ApprovalStepper request={r} profile={profile} team={team} />
                               {stage.decisionBy && (r.status === 'Rejected' || r.status === 'Needs Revision') && (
                                 <div style={{ fontSize: 11.5, color: 'var(--ink-500)', fontWeight: 700, marginBottom: 4 }}>
                                   {stage.decisionBy.role}{stage.decisionBy.name ? ` — ${stage.decisionBy.name}` : ''} qərarı

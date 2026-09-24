@@ -1,44 +1,54 @@
 import { useState } from 'react';
 import { PlusSquare, Users2, Folder, History } from 'lucide-react';
+import { matchesOwnScope } from '../lib/helpers';
 import AnnualTnaForm from './AnnualTnaForm';
 import AnnualTnaActiveReview from './AnnualTnaActiveReview';
 import AnnualTnaManagerReview from './AnnualTnaManagerReview';
 import AnnualTnaDecisionHistory from './AnnualTnaDecisionHistory';
 import TnaCompletionTracker from './TnaCompletionTracker';
 
-// L&D/HR gets the full company-wide picture. A dept-level manager
-// (scope_level='dept') with şöbə-level managers reporting to them gets the
-// exact same four-tab pill layout — but every tab's DATA stays scoped to
-// just their own department: "Departament üzrə baxış" renders
-// AnnualTnaManagerReview, which only ever reads rows addressed to this
-// manager (reviewing_manager_id = profile.id), never L&D's company-wide
-// AnnualTnaActiveReview; "Statuslar" uses TnaCompletionTracker's own-team
-// branch (their şöbə-manager direct reports only); "Qərarlar tarixçəsi"
-// pre-filters to r.dept === profile.dept before handing rows to the
-// purely-presentational AnnualTnaDecisionHistory. None of this reuses
-// L&D's company-wide data-fetching logic — only the tab/nav layout.
+// L&D/HR gets the full company-wide picture. ANY manager with direct
+// reports — dept-level (scope_level='dept') or şöbə-level (scope_level=
+// 'sube') alike — gets the exact same four-tab pill layout, but every tab's
+// DATA stays scoped to just their own dept/şöbə: "Departament üzrə baxış"
+// renders AnnualTnaManagerReview, which only ever reads rows addressed to
+// this manager (reviewing_manager_id = profile.id) regardless of level,
+// never L&D's company-wide AnnualTnaActiveReview; "Qərarlar tarixçəsi"
+// pre-filters to this manager's own dept/şöbə before handing rows to the
+// purely-presentational AnnualTnaDecisionHistory. "Statuslar" (completion
+// tracking of managers reporting to YOU) only makes sense one level up the
+// chain, so it stays dept-manager/L&D only. None of this reuses L&D's
+// company-wide data-fetching logic — only the tab/nav layout.
 export default function AnnualTnaHub({ profile, team, requests, planYear, tnaWindowOpen, onDataChanged }) {
   const isLd = profile.role === 'ld';
-  const isDeptManager = !isLd && profile.scope_level === 'dept';
+  const isScopedManager = !isLd && profile.role === 'manager' && team && team.length > 0;
+  const isDeptManager = isScopedManager && profile.scope_level === 'dept';
 
   // Not gated by hasTeam: L&D/HR/dept-manager staff are individual
   // employees too and need to log their own personal need even with zero
   // direct reports — AnnualTnaForm already handles a teamless profile fine
   // (it just offers "Mən" as the only selectable person).
-  const showSorgu = tnaWindowOpen || isLd || isDeptManager;
+  const showSorgu = tnaWindowOpen || isLd || isScopedManager;
   const showStatuslar = isLd || isDeptManager;
 
   const surveyRequests = requests.filter((r) => r.source === 'Manager Survey');
 
-  // A dept manager's "Departament üzrə baxış" tracks a completely different,
-  // already-personally-scoped queue (rows forwarded straight to their own
-  // id) than L&D's company-wide Pending/In-Review count, so its badge is
-  // computed separately rather than reusing L&D's activeCount.
-  const activeCount = isDeptManager
+  // A scoped manager's "Departament üzrə baxış" tracks a completely
+  // different, already-personally-scoped queue (rows forwarded straight to
+  // their own id) than L&D's company-wide Pending/In-Review count, so its
+  // badge is computed separately rather than reusing L&D's activeCount.
+  const activeCount = isScopedManager
     ? surveyRequests.filter((r) => r.reviewing_manager_id === profile.id && r.status === 'Pending Manager Review').length
     : surveyRequests.filter((r) => r.status === 'Pending' || r.status === 'In Review').length;
 
-  const decisionHistoryRequests = isDeptManager ? surveyRequests.filter((r) => r.dept === profile.dept) : surveyRequests;
+  // matchesOwnScope does a case/whitespace-normalized dept-or-şöbə
+  // comparison (dept for a dept-level manager, şöbə for a şöbə-level one) —
+  // a plain `===` here previously mismatched whenever a submitter's
+  // profile.dept disagreed on casing with this manager's own profile.dept
+  // (the same class of bug behind Dashboard showing 0 for a dept manager).
+  const decisionHistoryRequests = isScopedManager
+    ? surveyRequests.filter((r) => matchesOwnScope(r, profile))
+    : surveyRequests;
   const decidedCount = decisionHistoryRequests.filter((r) => r.status === 'Approved' || r.status === 'Rejected' || r.status === 'Needs Revision').length;
 
   const tabs = [
@@ -58,8 +68,10 @@ export default function AnnualTnaHub({ profile, team, requests, planYear, tnaWin
           <div>
             <h1>İllik TNA — {planYear}</h1>
             <p>
-              {isDeptManager
-                ? 'Departamentinizin illik təlim ehtiyacı sorğularını yaradın, izləyin və qərar verin.'
+              {isScopedManager
+                ? (profile.scope_level === 'sube'
+                    ? 'Şöbənizin illik təlim ehtiyacı sorğularını yaradın, izləyin və qərar verin.'
+                    : 'Departamentinizin illik təlim ehtiyacı sorğularını yaradın, izləyin və qərar verin.')
                 : 'Rəhbərlərin illik təlim ehtiyacı sorğularını yaradın, izləyin və qərar verin.'}
             </p>
           </div>
@@ -86,7 +98,7 @@ export default function AnnualTnaHub({ profile, team, requests, planYear, tnaWin
           <TnaCompletionTracker profile={profile} team={team} requests={requests} planYear={planYear} />
         )}
         {activeTab === 'departament' && (
-          isDeptManager ? (
+          isScopedManager ? (
             <AnnualTnaManagerReview profile={profile} team={team} requests={requests} onDataChanged={onDataChanged} />
           ) : (
             <AnnualTnaActiveReview profile={profile} requests={requests} onDataChanged={onDataChanged} />

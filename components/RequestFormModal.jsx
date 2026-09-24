@@ -27,6 +27,7 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
   const [importance, setImportance] = useState('');
   const [currentLevel, setCurrentLevel] = useState('');
   const [requiredLevel, setRequiredLevel] = useState('');
+  const [vendor, setVendor] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -56,6 +57,7 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
       importance_level: importance || null,
       current_skill_level: currentLevel || null,
       required_skill_level: requiredLevel || null,
+      vendor: vendor.trim() || null,
       source: 'Ad-hoc',
     };
 
@@ -215,6 +217,15 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
                 {LEVEL_OPTIONS.map((o) => <option key={o} value={o}>{o.split(' – ')[0]} – {o.split(' – ')[1].split(' ')[0]}</option>)}
               </select>
             </div>
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <label>Vendor (istəyə bağlı)</label>
+            <input type="text" value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder="Tövsiyə etdiyiniz provayder (istəyə bağlı)" />
+            {profile.role !== 'ld' && (
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 11.5, color: 'var(--ink-400)', marginTop: 5 }}>
+                <span>Bu, sadəcə tövsiyədir. Yekun vendor L&D-nin qiymətləndirməsindən sonra sizə bildiriləcək.</span>
+              </div>
+            )}
           </div>
         </div>
 

@@ -5,7 +5,7 @@ import {
   XCircle, AlertTriangle, PauseCircle, CalendarClock, Building2, Trophy, Target,
   Sparkles, ThumbsUp, ShieldAlert, Award, GraduationCap, Download, Printer,
 } from 'lucide-react';
-import { fmtMoney, statusMeta } from '../lib/helpers';
+import { fmtMoney, statusMeta, matchesOwnScope } from '../lib/helpers';
 import { styleHeaderRow, downloadWorkbook } from '../lib/excelExport';
 import {
   computeKPIs, departmentBreakdown, monthlyTrend, topBy, topLearners,
@@ -130,9 +130,7 @@ export default function DashboardView({ trainings, profile, team, restrictToOwnS
   const scoped = useMemo(() => {
     const forceOwn = restrictToOwnScope && hasTeam;
     if (!forceOwn && (!canScopeFilter || scopeMode !== 'own')) return trainings;
-    return trainings.filter((t) => (
-      profile.scope_level === 'sube' ? t.sube === profile.sube : t.dept === profile.dept
-    ));
+    return trainings.filter((t) => matchesOwnScope(t, profile));
   }, [trainings, canScopeFilter, scopeMode, profile, restrictToOwnScope, hasTeam]);
 
   const filtered = useMemo(() => {
