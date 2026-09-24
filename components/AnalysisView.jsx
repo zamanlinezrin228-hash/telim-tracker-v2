@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import ExcelJS from 'exceljs';
 import { ArrowLeftRight, Download } from 'lucide-react';
 import { statusMeta, priorityMeta } from '../lib/helpers';
+import { hasSavedCost } from '../lib/analytics';
 import { styleHeaderRow, downloadWorkbook } from '../lib/excelExport';
 import MultiSelectFilter from './MultiSelectFilter';
 
@@ -16,7 +17,7 @@ const DIMENSION_FIELDS = Object.keys(FIELD_LABELS);
 const METRIC_LABELS = {
   budget: 'Büdcənin cəmi', used_budget: 'İstifadə olunmuş büdcənin cəmi', count: 'Təlim sayı', man_hours: 'Saatın cəmi',
   avg_budget: 'Orta büdcə', avg_hours: 'Orta saat', completion_rate: 'Tamamlanma faizi',
-  participants: 'İştirakçı sayı (unikal)',
+  participants: 'İştirakçı sayı (unikal)', saved_cost: 'Qənaət (Büdcə − İstifadə)',
 };
 const METRIC_OPTIONS = Object.keys(METRIC_LABELS);
 
@@ -30,12 +31,16 @@ function labelFor(field, v) {
 }
 
 function newAgg() {
-  return { count: 0, budgetSum: 0, usedBudgetSum: 0, hoursSum: 0, completedCount: 0, participants: new Set() };
+  return { count: 0, budgetSum: 0, usedBudgetSum: 0, savedCostSum: 0, hoursSum: 0, completedCount: 0, participants: new Set() };
 }
 function addToAgg(agg, t) {
   agg.count += 1;
   agg.budgetSum += Number(t.budget) || 0;
   agg.usedBudgetSum += Number(t.used_budget) || 0;
+  // Saved cost only counts rows where BOTH budget and used_budget are set —
+  // a row still missing one of them contributes nothing here, same rule as
+  // the Dashboard's saved-cost KPI (lib/analytics.js's rowSavedCost).
+  if (hasSavedCost(t)) agg.savedCostSum += Number(t.budget) - Number(t.used_budget);
   agg.hoursSum += Number(t.man_hours) || 0;
   if (t.status === 'Completed') agg.completedCount += 1;
   if (t.employee_name) agg.participants.add(t.employee_name);
@@ -75,6 +80,7 @@ export default function AnalysisView({ trainings }) {
       case 'count': return agg.count;
       case 'budget': return agg.budgetSum;
       case 'used_budget': return agg.usedBudgetSum;
+      case 'saved_cost': return agg.savedCostSum;
       case 'man_hours': return agg.hoursSum;
       case 'avg_budget': return agg.count ? agg.budgetSum / agg.count : 0;
       case 'avg_hours': return agg.count ? agg.hoursSum / agg.count : 0;
@@ -105,7 +111,9 @@ export default function AnalysisView({ trainings }) {
 
     const rowKeysArr = [...rowSet].sort((a, b) => metricValue(rowAgg[b]) - metricValue(rowAgg[a]));
     const colKeysArr = [...colSet].sort();
-    const maxCellVal = Math.max(...Object.values(cellAgg).map((a) => metricValue(a)), 1);
+    // Math.abs so saved_cost (the only metric that can go negative) still
+    // scales its heat intensity by magnitude, not just by how positive it is.
+    const maxCellVal = Math.max(...Object.values(cellAgg).map((a) => Math.abs(metricValue(a))), 1);
 
     return { rowKeys: rowKeysArr, colKeys: colKeysArr, cellAgg, rowAgg, colAgg, grandAgg, maxCellVal };
   }, [sliced, rowField, colField, metric]);
@@ -130,9 +138,12 @@ export default function AnalysisView({ trainings }) {
   function heatColor(agg) {
     const raw = metricValue(agg);
     if (!raw) return 'transparent';
-    const intensity = Math.min(1, raw / maxCellVal);
+    // saved_cost can go negative (overspend) unlike every other metric here —
+    // intensity is based on magnitude so both directions scale correctly,
+    // and a negative total shades red instead of the default blue.
+    const intensity = Math.min(1, Math.abs(raw) / maxCellVal);
     const alpha = 0.08 + intensity * 0.35;
-    return `rgba(37, 99, 235, ${alpha.toFixed(2)})`;
+    return raw < 0 ? `rgba(220, 38, 38, ${alpha.toFixed(2)})` : `rgba(37, 99, 235, ${alpha.toFixed(2)})`;
   }
 
   async function exportPivot() {
@@ -156,7 +167,7 @@ export default function AnalysisView({ trainings }) {
     const totalRow = ws.addRow(totalRowData);
     totalRow.font = { bold: true };
 
-    const numFmt = metric === 'budget' || metric === 'used_budget' || metric === 'avg_budget' ? '#,##0 "₼"'
+    const numFmt = metric === 'budget' || metric === 'used_budget' || metric === 'saved_cost' || metric === 'avg_budget' ? '#,##0 "₼"'
       : metric === 'completion_rate' ? '0"%"'
       : metric === 'man_hours' || metric === 'avg_hours' ? '#,##0.0'
       : '#,##0';

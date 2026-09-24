@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs';
 import {
   BookOpen, Users, CheckCircle2, RefreshCw, Timer, Wallet, TrendingUp, Percent,
   XCircle, AlertTriangle, PauseCircle, CalendarClock, Building2, Trophy, Target,
-  Sparkles, ThumbsUp, ShieldAlert, Award, GraduationCap, Download, Printer,
+  Sparkles, ThumbsUp, ShieldAlert, Award, GraduationCap, Download, Printer, PiggyBank,
 } from 'lucide-react';
 import { fmtMoney, statusMeta, matchesOwnScope } from '../lib/helpers';
 import { styleHeaderRow, downloadWorkbook } from '../lib/excelExport';
@@ -23,6 +23,7 @@ const KPI_EXPORT_ROWS = [
   ['Ümumi Təlim Saatı', (k) => k.totalHours],
   ['Ümumi Büdcə', (k) => fmtMoney(k.totalBudget)],
   ['İstifadə Olunmuş Büdcə', (k) => fmtMoney(k.totalUsedBudget)],
+  ['Ümumi Qənaət', (k) => fmtMoney(k.totalSavedCost)],
   ['Büdcə İstifadəsi', (k) => `${k.budgetUtilization}%`],
   ['Orta Büdcə / Təlim', (k) => fmtMoney(k.avgBudget)],
   ['Saat Başına Xərc', (k) => fmtMoney(k.costPerHour)],
@@ -46,9 +47,14 @@ const LEARNING_STATS = [
   { key: 'totalHours', label: 'Ümumi Təlim Saatı', Icon: Timer, color: '#7c3aed' },
 ];
 
+// Saved cost's color depends on its sign (green = saved, red = went over
+// budget), unlike every other KPI here which has one fixed color — so its
+// `color` is a function of the raw KPI values instead of a plain string;
+// StatGroup below checks for that and calls it.
 const FINANCIAL_STATS = [
   { key: 'totalBudget', label: 'Ümumi Büdcə', Icon: Wallet, color: '#0f766e', format: fmtMoney },
   { key: 'totalUsedBudget', label: 'İstifadə Olunmuş Büdcə', Icon: Wallet, color: '#0369a1', format: fmtMoney },
+  { key: 'totalSavedCost', label: 'Ümumi Qənaət', Icon: PiggyBank, color: (k) => (k.totalSavedCost >= 0 ? '#059669' : '#dc2626'), format: fmtMoney },
   { key: 'budgetUtilization', label: 'Büdcə İstifadəsi', Icon: Percent, color: '#7c3aed', format: (n) => `${n}%` },
   { key: 'avgBudget', label: 'Orta Büdcə / Təlim', Icon: TrendingUp, color: '#ea580c', format: fmtMoney },
   { key: 'costPerHour', label: 'Saat Başına Xərc', Icon: Percent, color: '#b45309', format: fmtMoney },
@@ -72,15 +78,18 @@ function StatGroup({ title, stats, raw, i0 }) {
     <>
       <div className="kpi-group-title">{title}</div>
       <div className="kpi-grid">
-        {stats.map((s, i) => (
-          <div className="stat-card stagger-item" key={s.key} style={{ '--i': i0 + i }}>
-            <div className="stat-icon" style={{ '--icon-color': s.color, color: s.color }}><s.Icon size={16} strokeWidth={2.2} /></div>
-            <div className="stat-label">{s.label}</div>
-            <div className="stat-value" style={{ color: s.color }}>
-              <CountUp value={raw[s.key]} format={s.format} />
+        {stats.map((s, i) => {
+          const color = typeof s.color === 'function' ? s.color(raw) : s.color;
+          return (
+            <div className="stat-card stagger-item" key={s.key} style={{ '--i': i0 + i }}>
+              <div className="stat-icon" style={{ '--icon-color': color, color }}><s.Icon size={16} strokeWidth={2.2} /></div>
+              <div className="stat-label">{s.label}</div>
+              <div className="stat-value" style={{ color }}>
+                <CountUp value={raw[s.key]} format={s.format} />
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </>
   );
@@ -186,13 +195,15 @@ export default function DashboardView({ trainings, profile, team, restrictToOwnS
       { header: 'Ləğv edilib', key: 'canceled', width: 12 },
       { header: 'Tamamlanma Faizi', key: 'rate', width: 16 },
       { header: 'Büdcə', key: 'budget', width: 16 },
+      { header: 'Qənaət', key: 'savedCost', width: 16 },
       { header: 'Saat', key: 'hours', width: 12 },
     ];
     depts.forEach((d) => deptSheet.addRow({
       dept: d.dept, total: d.total, completed: d.completed, canceled: d.canceled,
-      rate: `${d.completionRate}%`, budget: d.budget, hours: d.hours,
+      rate: `${d.completionRate}%`, budget: d.budget, savedCost: d.savedCost, hours: d.hours,
     }));
     deptSheet.getColumn('budget').numFmt = '#,##0 "₼"';
+    deptSheet.getColumn('savedCost').numFmt = '#,##0 "₼"';
     styleHeaderRow(deptSheet);
 
     const tarix = new Date().toISOString().slice(0, 10);
@@ -251,28 +262,28 @@ export default function DashboardView({ trainings, profile, team, restrictToOwnS
         {/* ---------- KPI groups ---------- */}
         <StatGroup title="Learning KPI-lər" stats={LEARNING_STATS} raw={kpis} i0={0} />
         <StatGroup title="Maliyyə KPI-ləri" stats={FINANCIAL_STATS} raw={kpis} i0={5} />
-        <StatGroup title="Fəallıq KPI-ləri" stats={ENGAGEMENT_STATS} raw={kpis} i0={12} />
+        <StatGroup title="Fəallıq KPI-ləri" stats={ENGAGEMENT_STATS} raw={kpis} i0={13} />
 
         <div className="kpi-group-title">İdarəetmə KPI-ləri</div>
         <div className="kpi-grid">
-          <div className="stat-card stagger-item" style={{ '--i': 17 }}>
+          <div className="stat-card stagger-item" style={{ '--i': 18 }}>
             <div className="stat-icon" style={{ '--icon-color': '#0891b2', color: '#0891b2' }}><Building2 size={16} strokeWidth={2.2} /></div>
             <div className="stat-label">Aktiv Departament</div>
             <div className="stat-value" style={{ color: '#0891b2' }}><CountUp value={kpis.departments} /></div>
           </div>
-          <div className="stat-card stagger-item" style={{ '--i': 18 }}>
+          <div className="stat-card stagger-item" style={{ '--i': 19 }}>
             <div className="stat-icon" style={{ '--icon-color': '#2563eb', color: '#2563eb' }}><Trophy size={16} strokeWidth={2.2} /></div>
             <div className="stat-label">Ən Fəal Departament</div>
             <div className="stat-value stat-value-text" style={{ color: '#2563eb' }} title={topDept?.dept}>{topDept ? topDept.dept : '—'}</div>
             {topDept && <div className="stat-sub">{topDept.total} təlim</div>}
           </div>
-          <div className="stat-card stagger-item" style={{ '--i': 19 }}>
+          <div className="stat-card stagger-item" style={{ '--i': 20 }}>
             <div className="stat-icon" style={{ '--icon-color': '#059669', color: '#059669' }}><Award size={16} strokeWidth={2.2} /></div>
             <div className="stat-label">Ən Yüksək Tamamlanma</div>
             <div className="stat-value stat-value-text" style={{ color: '#059669' }} title={bestCompletionDept?.dept}>{bestCompletionDept ? bestCompletionDept.dept : '—'}</div>
             {bestCompletionDept && <div className="stat-sub">{bestCompletionDept.completionRate}%</div>}
           </div>
-          <div className="stat-card stagger-item" style={{ '--i': 20 }}>
+          <div className="stat-card stagger-item" style={{ '--i': 21 }}>
             <div className="stat-icon" style={{ '--icon-color': '#7c3aed', color: '#7c3aed' }}><Target size={16} strokeWidth={2.2} /></div>
             <div className="stat-label">Orta Təlim / Departament</div>
             <div className="stat-value" style={{ color: '#7c3aed' }}><CountUp value={avgPerDept} /></div>
@@ -359,6 +370,38 @@ export default function DashboardView({ trainings, profile, team, restrictToOwnS
                 <div className="bar-val">{d.total} / {d.completionRate}%</div>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* ---------- Departament üzrə Sıralama (incl. per-dept saved cost) ---------- */}
+        <div className="section-head"><div className="section-title">Departament üzrə Sıralama</div></div>
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Departament</th>
+                  <th>Təlim sayı</th>
+                  <th>Tamamlanma Faizi</th>
+                  <th>Büdcə</th>
+                  <th>Qənaət</th>
+                </tr>
+              </thead>
+              <tbody>
+                {depts.map((d) => (
+                  <tr key={d.dept}>
+                    <td style={{ fontWeight: 600 }}>{d.dept}</td>
+                    <td>{d.total}</td>
+                    <td>{d.completionRate}%</td>
+                    <td>{fmtMoney(d.budget)}</td>
+                    <td style={{ fontWeight: 700, color: d.savedCost >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtMoney(d.savedCost)}</td>
+                  </tr>
+                ))}
+                {!depts.length && (
+                  <tr><td colSpan={5}><EmptyState>Məlumat yoxdur</EmptyState></td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 
