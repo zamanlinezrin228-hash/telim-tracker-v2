@@ -880,6 +880,21 @@ tbody tr:hover td.sticky-col { background: var(--ink-200); }
 .idp-generated { font-size: 11.5px; color: rgba(255,255,255,0.7); white-space: nowrap; flex-shrink: 0; }
 .idp-req-card:first-child { border-top: none; }
 
+.idp-eval-row td { border-top: none; padding: 0 !important; }
+.idp-eval-block {
+  margin: -1px 10px 10px; padding: 12px 14px; border-radius: 10px;
+  background: color-mix(in srgb, var(--eval-color, var(--ink-400)) 6%, var(--ink-50));
+  border: 1px solid color-mix(in srgb, var(--eval-color, var(--ink-400)) 25%, var(--border));
+}
+.idp-eval-header {
+  display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 800;
+  color: var(--ink-700); margin-bottom: 10px;
+}
+.idp-eval-verdict {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700;
+  padding: 5px 11px; border-radius: 999px; border: 1px solid;
+}
+
 /* ---------- print (window.print() PDF exports: IDP, Dashboard) ---------- */
 
 .print-only-block { display: none; }

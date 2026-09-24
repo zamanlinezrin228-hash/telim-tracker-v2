@@ -194,12 +194,19 @@ export default function Home() {
   }
 
   const showAnnualTna = appSettings.tna_window_open || profile.role === 'ld' || isScopedManager;
+  // Any manager with direct reports needs IDP too now, not just LD/HR —
+  // it's where they record a post-training "Qiymətləndirmə" (evaluation)
+  // for their own team. Same hasTeam check RequestsView.jsx/AnnualTnaHub.jsx
+  // already use, so an LD/HR user who also directly manages someone still
+  // gets both the company-wide picker AND the evaluation action on their
+  // own team's rows (see IdpView.jsx's isDirectManager).
+  const showIdp = isReviewer || hasTeam;
 
   return (
     <>
       <Head><title>Təlim Tracker</title></Head>
       <div className="app-shell">
-        <Sidebar view={view} setView={setView} profile={profile} showAnnualTna={showAnnualTna} showDashboard={canSeeDashboard} badges={sidebarBadges} />
+        <Sidebar view={view} setView={setView} profile={profile} showAnnualTna={showAnnualTna} showDashboard={canSeeDashboard} showIdp={showIdp} badges={sidebarBadges} />
         <div className="app-main">
           <div key={view} className="view-enter">
             {view === 'home' && (
@@ -229,8 +236,8 @@ export default function Home() {
                 )}
               </div>
             )}
-            {view === 'idp' && (profile.role === 'ld' || profile.role === 'hr') && (
-              <IdpView requests={requests} trainings={trainings} />
+            {view === 'idp' && showIdp && (
+              <IdpView requests={requests} trainings={trainings} profile={profile} team={team} onDataChanged={handleDataChanged} />
             )}
             {view === 'guide' && <ProcessGuideView />}
           </div>

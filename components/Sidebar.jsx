@@ -16,18 +16,17 @@ function initials(name) {
 
 const ROLE_LABELS = { ld: 'L&D', hr: 'HR', employee: 'İşçi' };
 
-export default function Sidebar({ view, setView, profile, showAnnualTna, showDashboard, badges = {} }) {
+export default function Sidebar({ view, setView, profile, showAnnualTna, showDashboard, showIdp, badges = {} }) {
   async function handleLogout() {
     await sb.auth.signOut();
     window.location.reload();
   }
 
-  const isReviewer = profile?.role === 'ld' || profile?.role === 'hr';
   const items = [
     ...(showDashboard ? [{ key: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard }] : []),
     ...NAV_ITEMS,
     ...(showAnnualTna ? [{ key: 'annual-tna', label: 'İllik TNA', Icon: CalendarDays }] : []),
-    ...(isReviewer ? [{ key: 'idp', label: 'IDP', Icon: UserSquare2 }] : []),
+    ...(showIdp ? [{ key: 'idp', label: 'IDP', Icon: UserSquare2 }] : []),
   ];
 
   return (
