@@ -245,6 +245,15 @@ export default function AnnualTnaManagerReview({ profile, team, requests, onData
                     {stage.origin !== 'manager' && r.reviewer_note && (
                       <div style={{ fontSize: 12, color: 'var(--ink-500)', marginBottom: 6 }}><b>Qeyd:</b> {r.reviewer_note}</div>
                     )}
+                    {/* Anyone who can see this row in their own dept/şöbə history can
+                        fix and resubmit it — not just the original submitter.
+                        Resubmitting routes it forward from THIS manager's own level
+                        (see TnaRowEditModal.jsx), not back to whoever sent it back. */}
+                    {r.status === 'Needs Revision' && (
+                      <button onClick={() => setEditingRequest(r)} className="btn btn-warning btn-sm">
+                        <Pencil size={13} strokeWidth={2.2} /> Redaktə et və yenidən göndər
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -269,7 +278,7 @@ export default function AnnualTnaManagerReview({ profile, team, requests, onData
       )}
 
       {editingRequest && (
-        <TnaRowEditModal request={editingRequest} onClose={() => setEditingRequest(null)} onSaved={refresh} />
+        <TnaRowEditModal request={editingRequest} profile={profile} onClose={() => setEditingRequest(null)} onSaved={refresh} />
       )}
     </div>
   );

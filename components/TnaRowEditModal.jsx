@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Save } from 'lucide-react';
 import { sb } from '../lib/supabase';
+import { needsUpwardForward } from '../lib/helpers';
 
 const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical'];
 const PRIORITY_LABELS = { Low: 'Aşağı', Medium: 'Orta', High: 'Yüksək', Critical: 'Kritik' };
@@ -19,11 +20,14 @@ const NEED_REASON_OPTIONS = [
 ];
 const TRANSFORMATION_AREA_OPTIONS = ['Yes', 'No'];
 
-// Full-field edit modal for a single training_requests row — shared by the
-// dept-manager's "Departament üzrə baxış" review (a şöbə-forwarded batch
-// row) and a direct manager's employee-submitted-row actions, since both
-// need to edit the exact same Annual TNA field set before deciding.
-export default function TnaRowEditModal({ request, onClose, onSaved }) {
+// Full-field edit modal for a single training_requests row — shared by a
+// manager's pre-decision edit (fields only, status untouched — they still
+// separately Təsdiqlə/Rədd et/Geri göndər afterwards) and, when `profile`
+// is passed and the row is 'Needs Revision', fixing-and-resubmitting it:
+// whoever does the fix determines where it goes next, exactly like a fresh
+// submission from them (needsUpwardForward on their own profile), not back
+// to whoever most recently sent it back — same rule as ResubmitModal.jsx.
+export default function TnaRowEditModal({ request, profile, onClose, onSaved }) {
   const [title, setTitle] = useState(request.training_title || '');
   const [position, setPosition] = useState(request.position || '');
   const [reason, setReason] = useState(request.reason || '');
@@ -59,6 +63,16 @@ export default function TnaRowEditModal({ request, onClose, onSaved }) {
       preferred_start: start || null, preferred_end: end || null,
       updated_at: new Date().toISOString(),
     };
+    if (request.status === 'Needs Revision' && profile) {
+      const forward = needsUpwardForward(profile)
+        ? { status: 'Pending Manager Review', reviewing_manager_id: profile.manager_id }
+        : { status: 'Pending', reviewing_manager_id: null };
+      Object.assign(payload, forward, {
+        manager_note: null, reviewer_note: null,
+        manager_reviewed_by: profile.role === 'manager' ? profile.id : null,
+        reviewed_by: null,
+      });
+    }
     const { error: err } = await sb.from('training_requests').update(payload).eq('id', request.id);
     setSaving(false);
     if (err) { setError('Xəta: ' + err.message); return; }
