@@ -111,10 +111,14 @@ export default function IdpView({ requests, trainings, profile, team, onDataChan
   // task asks for, not the wider dept/şöbə scope a manager can otherwise
   // see. An L&D/HR viewer who also happens to directly manage someone
   // (e.g. a şöbə lead whose own team sits inside L&D/HR) gets this too,
-  // same dual-role handling as the İllik TNA hub.
-  const isDirectManager = !!employee && !!team && team.some(
-    (t) => t.full_name_az === employee.name && (t.dept || '') === (employee.dept || '')
-  );
+  // same dual-role handling as the İllik TNA hub. Matched on name ALONE,
+  // not also dept — team is already narrowed to just this manager's own
+  // reports, and trainings.dept/profiles.dept disagree on casing in real
+  // data (confirmed: "Maliyyə Departamenti" on trainings vs "Maliyyə
+  // departamenti" on profiles), the same casing mismatch matchesOwnScope
+  // exists to handle elsewhere — a plain dept `===` here silently hid the
+  // Qiymətləndir button for every real manager/report pair.
+  const isDirectManager = !!employee && !!team && team.some((t) => t.full_name_az === employee.name);
 
   const employeeRequests = useMemo(() => {
     if (!employee) return [];
