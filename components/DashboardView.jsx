@@ -165,6 +165,11 @@ export default function DashboardView({ trainings, profile, team, restrictToOwnS
 
   const maxTrend = Math.max(...trend.map((m) => m.count), 1);
   const maxFunnel = Math.max(...funnel.map((f) => f.count), 1);
+  // Math.abs so a department deep in overspend (a large negative savedCost)
+  // still scales its bar by magnitude, same reasoning as AnalysisView's
+  // heatColor for the saved_cost metric.
+  const savedCostDepts = useMemo(() => [...depts].sort((a, b) => Math.abs(b.savedCost) - Math.abs(a.savedCost)), [depts]);
+  const maxAbsSavedCost = Math.max(...depts.map((d) => Math.abs(d.savedCost)), 1);
 
   const statusRows = useMemo(() => {
     const counts = {};
@@ -370,6 +375,24 @@ export default function DashboardView({ trainings, profile, team, restrictToOwnS
                 <div className="bar-val">{d.total} / {d.completionRate}%</div>
               </div>
             ))}
+          </div>
+          <div className="card">
+            <div style={{ fontWeight: 700, marginBottom: 14 }}>Departament üzrə Qənaət</div>
+            {savedCostDepts.length ? savedCostDepts.slice(0, 10).map((d) => (
+              <div className="bar-row" key={d.dept}>
+                <div className="bar-label" title={d.dept}>{d.dept}</div>
+                <div className="bar-track">
+                  <div
+                    className="bar-fill"
+                    style={{
+                      width: `${Math.max(d.savedCost ? 4 : 0, Math.round((Math.abs(d.savedCost) / maxAbsSavedCost) * 100))}%`,
+                      background: d.savedCost >= 0 ? 'var(--green)' : 'var(--red)',
+                    }}
+                  />
+                </div>
+                <div className="bar-val" style={{ width: 78, color: d.savedCost >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: 600 }}>{fmtMoney(d.savedCost)}</div>
+              </div>
+            )) : <EmptyState>Məlumat yoxdur</EmptyState>}
           </div>
         </div>
 
