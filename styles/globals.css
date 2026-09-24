@@ -677,7 +677,12 @@ tbody tr:hover td.sticky-col { background: var(--ink-200); }
   font-size: 21px; margin-bottom: 16px;
   background: color-mix(in srgb, var(--icon-color, var(--blue)) 15%, transparent);
 }
-.home-card-title { font-size: 16.5px; font-weight: 800; color: var(--ink-900); margin-bottom: 6px; }
+.home-card-title { font-size: 16.5px; font-weight: 800; color: var(--ink-900); margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+.home-card-badge {
+  background: #ef4444; color: #fff; font-size: 10.5px; font-weight: 800;
+  border-radius: 999px; min-width: 18px; height: 18px; padding: 0 5px;
+  display: flex; align-items: center; justify-content: center; line-height: 1; flex-shrink: 0;
+}
 .home-card-desc { font-size: 13px; color: var(--ink-500); line-height: 1.6; margin-bottom: 16px; flex: 1; }
 .home-card-link { font-size: 13.5px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
 

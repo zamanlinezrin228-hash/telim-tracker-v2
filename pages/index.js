@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import Head from 'next/head';
 import { sb } from '../lib/supabase';
 import { showToast } from '../lib/toast';
+import { countUnseenRequests } from '../lib/helpers';
 import LoginScreen from '../components/LoginScreen';
 import SignupScreen from '../components/SignupScreen';
 import Sidebar from '../components/Sidebar';
@@ -77,6 +78,10 @@ export default function Home() {
   }
 
   const isReviewer = profile && (profile.role === 'ld' || profile.role === 'hr');
+  // Deliberately not role-gated (unlike isScopedManager below) — this is
+  // "does anyone report to this profile at all," used for the
+  // notification-scope check, same as RequestsView.jsx's own hasTeam.
+  const hasTeam = team.length > 0;
   // Any manager (dept- or şöbə-level) with direct reports gets the same
   // İllik TNA tab layout as L&D (AnnualTnaHub), but every tab inside it
   // stays scoped to just their own dept/şöbə — never L&D's company-wide
@@ -116,12 +121,39 @@ export default function Home() {
     return () => { cancelled = true; clearInterval(id); };
   }, [loggedIn, isReviewer, loadData]);
 
-  const sidebarBadges = isReviewer
-    ? {
-        requests: requests.filter((r) => r.status === 'Pending').length,
-        'annual-tna': requests.filter((r) => r.status === 'Pending' && r.source === 'Manager Survey').length,
-      }
-    : {};
+  // Red "unseen activity" badge on the "Təlim Sorğuları" nav item/Home
+  // card — a brand-new submission landing in this profile's queue for the
+  // first time, or a decision/forward/status-change on any request within
+  // their own visibility scope (not just ones they personally decided),
+  // since their last_seen_requests_at. Same scope as RequestsView.jsx and
+  // AnnualTnaManagerReview.jsx (see inNotificationScope in lib/helpers.js)
+  // — one count spans both ad-hoc and İllik TNA requests, since both pages
+  // surface overlapping training_requests rows for a manager, and a
+  // separate per-page count would let a user "read" something on one page
+  // while the other still claims it's unread.
+  const requestsNotifCount = useMemo(
+    () => countUnseenRequests(requests, profile, { isReviewer, hasTeam }),
+    [requests, profile, isReviewer, hasTeam]
+  );
+
+  // Visiting either page that surfaces training_requests marks everything
+  // currently in scope as seen — updates local state immediately so the
+  // badge clears without waiting for a refetch, and persists it so it
+  // stays cleared across sessions. Keyed on profile?.id rather than the
+  // whole `profile` object so the setProfile call below doesn't retrigger
+  // this same effect.
+  useEffect(() => {
+    if (!loggedIn || !profile || (view !== 'requests' && view !== 'annual-tna')) return;
+    const now = new Date().toISOString();
+    setProfile((p) => (p ? { ...p, last_seen_requests_at: now } : p));
+    sb.from('profiles').update({ last_seen_requests_at: now }).eq('id', profile.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, loggedIn, profile?.id]);
+
+  const sidebarBadges = {
+    requests: requestsNotifCount,
+    ...(isReviewer ? { 'annual-tna': requests.filter((r) => r.status === 'Pending' && r.source === 'Manager Survey').length } : {}),
+  };
 
   if (loading) {
     return (
@@ -171,7 +203,7 @@ export default function Home() {
         <div className="app-main">
           <div key={view} className="view-enter">
             {view === 'home' && (
-              <HomeScreen profile={profile} team={team} setView={setView} tnaWindowOpen={appSettings.tna_window_open} planYear={appSettings.tna_plan_year} canSeeDashboard={canSeeDashboard} />
+              <HomeScreen profile={profile} team={team} setView={setView} tnaWindowOpen={appSettings.tna_window_open} planYear={appSettings.tna_plan_year} canSeeDashboard={canSeeDashboard} requestsNotifCount={requestsNotifCount} />
             )}
             {view === 'dashboard' && canSeeDashboard && (
               <DashboardView trainings={allTrainings} profile={profile} team={team} requests={requests} restrictToOwnScope={!hasDashboardFullAccess} />

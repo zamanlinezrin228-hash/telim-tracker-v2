@@ -1,6 +1,6 @@
 import { LayoutDashboard, ClipboardList, FileText, CalendarDays, UserSquare2, ArrowRight } from 'lucide-react';
 
-export default function HomeScreen({ profile, team, setView, tnaWindowOpen, planYear, canSeeDashboard }) {
+export default function HomeScreen({ profile, team, setView, tnaWindowOpen, planYear, canSeeDashboard, requestsNotifCount }) {
   const hasTeam = team && team.length > 0;
   const isReviewer = profile.role === 'ld' || profile.role === 'hr';
 
@@ -35,6 +35,7 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
       Icon: FileText,
       accent: '#d97706',
       linkLabel: 'Sorğu göndər',
+      badge: requestsNotifCount,
     },
   );
 
@@ -78,7 +79,10 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
               <div className="home-card-icon" style={{ '--icon-color': c.accent, color: c.accent }}>
                 <c.Icon size={22} strokeWidth={2} />
               </div>
-              <div className="home-card-title">{c.title}</div>
+              <div className="home-card-title">
+                {c.title}
+                {!!c.badge && <span className="home-card-badge">{c.badge > 99 ? '99+' : c.badge}</span>}
+              </div>
               <div className="home-card-desc">{c.desc}</div>
               <div className="home-card-link" style={{ color: c.accent }}>
                 {c.linkLabel} <ArrowRight size={15} strokeWidth={2.3} />
