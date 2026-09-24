@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Send } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import { showToast } from '../lib/toast';
-import { needsUpwardForward } from '../lib/helpers';
+import { computeForward } from '../lib/helpers';
 
 const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical'];
 const PRIORITY_LABELS = { Low: 'Aşağı', Medium: 'Orta', High: 'Yüksək', Critical: 'Kritik' };
@@ -22,7 +22,9 @@ const LEVEL_SUGGESTIONS = ['1 – Fundamental', '2 – İnkişaf edən', '3 – 
 // whichever reviewer most recently returned it. So if a şöbə manager fixes
 // it, it goes to their own dept manager next (skipping needing their own
 // re-approval); if a dept manager fixes it, it goes straight to L&D.
-// Importance/level fields stay free-text (datalist) instead of a rigid
+// computeForward re-reads manager_id/scope_level live from profiles
+// instead of trusting the `profile` prop, which is only ever fetched once
+// at login. Importance/level fields stay free-text (datalist) instead of a rigid
 // <select> because the two request-creation forms in this app store
 // slightly different wording for the same scale, so a fixed dropdown
 // could fail to match whatever string is already saved on the row.
@@ -43,9 +45,13 @@ export default function ResubmitModal({ request, profile, onClose, onSubmitted }
     setError('');
     if (!title.trim()) { setError('Təlimin adını yazın.'); return; }
 
-    const forward = needsUpwardForward(profile)
-      ? { status: 'Pending Manager Review', reviewing_manager_id: profile.manager_id }
-      : { status: 'Pending', reviewing_manager_id: null };
+    let forward;
+    try {
+      forward = await computeForward(sb, profile.id);
+    } catch (e) {
+      setError('Xəta: ' + e.message);
+      return;
+    }
     const payload = {
       training_title: title.trim(),
       reason: reason.trim(),

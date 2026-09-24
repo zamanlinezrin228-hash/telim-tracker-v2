@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Save } from 'lucide-react';
 import { sb } from '../lib/supabase';
-import { needsUpwardForward } from '../lib/helpers';
+import { computeForward } from '../lib/helpers';
 
 const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical'];
 const PRIORITY_LABELS = { Low: 'Aşağı', Medium: 'Orta', High: 'Yüksək', Critical: 'Kritik' };
@@ -25,8 +25,9 @@ const TRANSFORMATION_AREA_OPTIONS = ['Yes', 'No'];
 // separately Təsdiqlə/Rədd et/Geri göndər afterwards) and, when `profile`
 // is passed and the row is 'Needs Revision', fixing-and-resubmitting it:
 // whoever does the fix determines where it goes next, exactly like a fresh
-// submission from them (needsUpwardForward on their own profile), not back
-// to whoever most recently sent it back — same rule as ResubmitModal.jsx.
+// submission from them (computeForward, reading their manager_id/
+// scope_level live rather than off a possibly-stale profile prop), not
+// back to whoever most recently sent it back — same rule as ResubmitModal.jsx.
 export default function TnaRowEditModal({ request, profile, onClose, onSaved }) {
   const [title, setTitle] = useState(request.training_title || '');
   const [position, setPosition] = useState(request.position || '');
@@ -64,9 +65,17 @@ export default function TnaRowEditModal({ request, profile, onClose, onSaved }) 
       updated_at: new Date().toISOString(),
     };
     if (request.status === 'Needs Revision' && profile) {
-      const forward = needsUpwardForward(profile)
-        ? { status: 'Pending Manager Review', reviewing_manager_id: profile.manager_id }
-        : { status: 'Pending', reviewing_manager_id: null };
+      // computeForward re-reads manager_id/scope_level live from profiles
+      // instead of trusting the `profile` prop, which is only ever fetched
+      // once at login.
+      let forward;
+      try {
+        forward = await computeForward(sb, profile.id);
+      } catch (e) {
+        setSaving(false);
+        setError('Xəta: ' + e.message);
+        return;
+      }
       Object.assign(payload, forward, {
         manager_note: null, reviewer_note: null,
         manager_reviewed_by: profile.role === 'manager' ? profile.id : null,

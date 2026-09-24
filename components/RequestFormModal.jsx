@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Send } from 'lucide-react';
 import { sb } from '../lib/supabase';
-import { computeBudgetStatus, needsUpwardForward } from '../lib/helpers';
+import { computeBudgetStatus, computeForward } from '../lib/helpers';
 
 const IMPORTANCE_OPTIONS = [
   '1 – Aşağı (minimal təsir)', '2 – Orta (əsas işə təsir edir)',
@@ -61,15 +61,25 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
       source: 'Ad-hoc',
     };
 
+    // Same forward target for both branches below: whoever is submitting
+    // (whether for themselves or on behalf of their team) is the one whose
+    // chain decides the first reviewer. computeForward re-reads
+    // manager_id/scope_level live from profiles instead of trusting the
+    // `profile` prop, which is only ever fetched once at login — a şöbə
+    // manager forwards up to their own dept manager first; a dept-level
+    // manager is always the top of the chain and goes straight to L&D,
+    // regardless of their own profiles.manager_id (the real HR line, which
+    // can continue up through VPs/the CEO, never an approval gate here).
+    let forward;
+    try {
+      forward = await computeForward(sb, profile.id);
+    } catch (e) {
+      setError('Xəta: ' + e.message);
+      return;
+    }
+
     let payloads;
     if (forWhom === 'team') {
-      // Same rule as the "self" branch below and AnnualTnaForm.jsx's
-      // computeForwardStatus(): a şöbə manager forwards up to their own
-      // dept manager first; a dept-level manager is always the top of the
-      // chain (needsUpwardForward caps it there regardless of
-      // profiles.manager_id — the real HR line, which can continue up
-      // through VPs/the CEO, never an approval gate here).
-      const needsUpwardReview = needsUpwardForward(profile);
       payloads = selectedIds.map((id) => {
         const m = team.find((t) => t.id === id);
         return {
@@ -79,12 +89,10 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
           dept: m.dept || profile.dept || '—',
           sube: m.sube || profile.sube || null,
           position: m.position || null,
-          status: needsUpwardReview ? 'Pending Manager Review' : 'Pending',
-          reviewing_manager_id: needsUpwardReview ? profile.manager_id : null,
+          ...forward,
         };
       });
     } else {
-      const needsUpwardReview = needsUpwardForward(profile);
       payloads = [{
         ...base,
         requested_by: profile.id,
@@ -92,8 +100,7 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
         dept: profile.dept || '—',
         sube: profile.sube || null,
         position: profile.position || null,
-        status: needsUpwardReview ? 'Pending Manager Review' : 'Pending',
-        reviewing_manager_id: needsUpwardReview ? profile.manager_id : null,
+        ...forward,
       }];
     }
 

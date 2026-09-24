@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import ExcelJS from 'exceljs';
 import { CheckCircle2, Plus, X, Send, Lightbulb, Download, RotateCcw } from 'lucide-react';
 import { sb } from '../lib/supabase';
-import { needsUpwardForward } from '../lib/helpers';
+import { computeForward } from '../lib/helpers';
 import { styleGroupedTable, downloadWorkbook } from '../lib/excelExport';
 import { GROUP_BG, GROUP_TEXT } from '../lib/tableGroups';
 
@@ -232,31 +232,23 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
     };
   }
 
-  // Mirrors RequestFormModal's exact two-rule routing: a lone self-
-  // submission (no team) always needs its own manager's sign-off if one
-  // exists, unless that submitter is themselves a dept-level manager (see
-  // needsUpwardForward). A manager submitting a batch (for their team, or
-  // themselves as part of it) IS that review step, EXCEPT when the manager
-  // is şöbə-level with their own manager — their batch still has to climb
-  // one more hop to the dept-level manager before reaching L&D (Employee →
-  // şöbə manager → dept manager → L&D). A dept-level manager is ALWAYS the
-  // top of that chain and goes straight to 'Pending', regardless of their
-  // own profiles.manager_id (that's the real HR reporting line, which can
-  // continue up through VPs/the CEO — never an approval gate here). Shared
+  // Mirrors RequestFormModal's exact routing: a lone self-submission (no
+  // team) always needs its own manager's sign-off if one exists, unless
+  // that submitter is themselves a dept-level manager. A manager submitting
+  // a batch (for their team, or themselves as part of it) IS that review
+  // step, EXCEPT when the manager is şöbə-level with their own manager —
+  // their batch still has to climb one more hop to the dept-level manager
+  // before reaching L&D (Employee → şöbə manager → dept manager → L&D). A
+  // dept-level manager is ALWAYS the top of that chain and goes straight to
+  // 'Pending', regardless of their own profiles.manager_id (that's the real
+  // HR reporting line, which can continue up through VPs/the CEO — never an
+  // approval gate here). This reduces to the exact same decision whether or
+  // not the submitter hasTeam, so computeForward(sb, profile.id) — which
+  // re-reads manager_id/scope_level live instead of trusting the `profile`
+  // prop (only ever fetched once at login) — is all that's needed. Shared
   // by the full batch submit below and by the "Təsdiqlə" immediate action
   // on a single employee-submitted row (Task 2), since both forward a row
   // the same way.
-  function computeForwardStatus() {
-    const needsUpwardReview = hasTeam && needsUpwardForward(profile);
-    return {
-      status: hasTeam
-        ? (needsUpwardReview ? 'Pending Manager Review' : 'Pending')
-        : (needsUpwardForward(profile) ? 'Pending Manager Review' : 'Pending'),
-      reviewingManagerId: hasTeam
-        ? (needsUpwardReview ? profile.manager_id : null)
-        : (needsUpwardForward(profile) ? profile.manager_id : null),
-    };
-  }
 
   function updateRow(idx, field, value) {
     setRows((prev) => {
@@ -322,7 +314,15 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
       return;
     }
 
-    const { status: newRowStatus, reviewingManagerId: newRowReviewingManager } = computeForwardStatus();
+    let newRowStatus, newRowReviewingManager;
+    try {
+      const forward = await computeForward(sb, profile.id);
+      newRowStatus = forward.status;
+      newRowReviewingManager = forward.reviewing_manager_id;
+    } catch (e) {
+      setError('Xəta: ' + e.message);
+      return;
+    }
 
     const newRows = filled.filter((r) => !r.sourceRequestId);
     const mergedRows = filled.filter((r) => r.sourceRequestId);
