@@ -8,10 +8,6 @@ import { ReqStatusBadge, PriorityBadge, TrainingStatusBadge } from './Badges';
 import EmptyState from './EmptyState';
 import TrainingEvaluationModal from './TrainingEvaluationModal';
 
-function employeeKey(name, dept) {
-  return `${name}|||${dept || ''}`;
-}
-
 function fmtDate(d) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('az-AZ');
@@ -44,10 +40,28 @@ export default function IdpView({ requests, trainings, profile, team, onDataChan
   const [selectedYear, setSelectedYear] = useState('all');
   const [library, setLibrary] = useState([]);
   const [evalTraining, setEvalTraining] = useState(null);
+  const [ambiguousNames, setAmbiguousNames] = useState(new Set());
 
   useEffect(() => {
     sb.from('competency_library').select('category, competency, sub_competency').then(({ data }) => {
       setLibrary(data || []);
+    });
+    // A handful of names are shared by two genuinely different people in
+    // this org (confirmed live: e.g. two different "Tural Əhmədov"
+    // profiles in different departments) — for those specific names, dept
+    // stays part of the picker identity below to keep them apart. Every
+    // other name is grouped by name ALONE, because trainings/
+    // training_requests' free-text dept for the SAME real person can
+    // legitimately differ across rows (a transfer between departments, or
+    // simply inconsistent historical data entry) — keying by name+dept
+    // there was silently splitting one person's history into multiple
+    // picker entries, e.g. Həmidə Əsgərova's real 2026 trainings (logged
+    // under "İnformasiya texnologiyaları şöbəsi") never appearing once she
+    // ALSO got a row under her current "Maliyyə departamenti".
+    sb.from('profiles').select('full_name_az').then(({ data }) => {
+      const counts = new Map();
+      (data || []).forEach((p) => counts.set(p.full_name_az, (counts.get(p.full_name_az) || 0) + 1));
+      setAmbiguousNames(new Set([...counts].filter(([, n]) => n > 1).map(([name]) => name)));
     });
   }, []);
 
@@ -80,19 +94,27 @@ export default function IdpView({ requests, trainings, profile, team, onDataChan
     const map = new Map();
     function absorb(r) {
       if (!r.employee_name) return;
-      const key = employeeKey(r.employee_name, r.dept);
+      const key = ambiguousNames.has(r.employee_name) ? `${r.employee_name}|||${r.dept || ''}` : r.employee_name;
       if (!map.has(key)) {
         map.set(key, { key, name: r.employee_name, dept: r.dept, sube: r.sube, position: r.position, latest: r.created_at || null });
       } else {
         const cur = map.get(key);
         if (!cur.position && r.position) cur.position = r.position;
-        if (r.created_at && (!cur.latest || r.created_at > cur.latest)) { cur.latest = r.created_at; if (r.position) cur.position = r.position; }
+        // dept/sube/position all track whichever row is most recent, so a
+        // merged entry (see the ambiguousNames comment above) shows this
+        // person's latest known assignment, not just whichever row
+        // happened to be absorbed first.
+        if (r.created_at && (!cur.latest || r.created_at > cur.latest)) {
+          cur.latest = r.created_at;
+          if (r.position) cur.position = r.position;
+          cur.dept = r.dept; cur.sube = r.sube;
+        }
       }
     }
     requests.forEach(absorb);
     trainings.forEach(absorb);
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'az'));
-  }, [requests, trainings]);
+  }, [requests, trainings, ambiguousNames]);
 
   // Same "İl" filter pattern as Dashboard/Tracking. training_requests has
   // no plan_year column, so its rows are bucketed by the year they were
@@ -120,21 +142,28 @@ export default function IdpView({ requests, trainings, profile, team, onDataChan
   // Qiymətləndir button for every real manager/report pair.
   const isDirectManager = !!employee && !!team && team.some((t) => t.full_name_az === employee.name);
 
+  // Matches the same identity the `employees` picker groups by: name alone
+  // for everyone except the handful of genuinely ambiguous (shared) names,
+  // where dept stays part of the match to keep two different real people
+  // apart. See the ambiguousNames fetch above for why a plain dept match
+  // for everyone else was wrong.
+  const employeeIsAmbiguous = !!employee && ambiguousNames.has(employee.name);
+
   const employeeRequests = useMemo(() => {
     if (!employee) return [];
     return requests
-      .filter((r) => r.employee_name === employee.name && (r.dept || '') === (employee.dept || ''))
+      .filter((r) => r.employee_name === employee.name && (!employeeIsAmbiguous || (r.dept || '') === (employee.dept || '')))
       .filter((r) => selectedYear === 'all' || new Date(r.created_at).getFullYear() === Number(selectedYear))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  }, [requests, employee, selectedYear]);
+  }, [requests, employee, employeeIsAmbiguous, selectedYear]);
 
   const employeeTrainings = useMemo(() => {
     if (!employee) return [];
     return trainings
-      .filter((t) => t.employee_name === employee.name && (t.dept || '') === (employee.dept || ''))
+      .filter((t) => t.employee_name === employee.name && (!employeeIsAmbiguous || (t.dept || '') === (employee.dept || '')))
       .filter((t) => selectedYear === 'all' || t.plan_year === Number(selectedYear))
       .sort((a, b) => new Date(b.start_date || 0) - new Date(a.start_date || 0));
-  }, [trainings, employee, selectedYear]);
+  }, [trainings, employee, employeeIsAmbiguous, selectedYear]);
 
   const stats = useMemo(() => {
     const totalRequests = employeeRequests.length;
