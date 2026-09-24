@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Users2, CheckCircle2, XCircle, RotateCcw, Pencil, History } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import { showToast } from '../lib/toast';
-import { fmtDateTime, isDecidedStatus, reqStatusMeta, matchesOwnScope, deriveApprovalStage } from '../lib/helpers';
+import { fmtDateTime, isDecidedStatus, reqStatusMeta, matchesOwnScope, deriveApprovalStage, needsUpwardForward } from '../lib/helpers';
 import { ReqStatusBadge, PriorityBadge } from './Badges';
 import ApprovalStepper from './ApprovalStepper';
 import EmptyState from './EmptyState';
@@ -94,15 +94,16 @@ export default function AnnualTnaManagerReview({ profile, team, requests, onData
     Rejected: 'Rədd edildi.',
   };
 
-  // Bug fix (Task 6): approving a şöbə-forwarded batch used to jump straight
-  // to status='Pending' (visible to L&D) regardless of whether this dept
-  // manager has their own manager above them. Now it forwards one more level
-  // up when profile.manager_id is set, and only opens to L&D once it reaches
-  // the top of the chain — same rule as RequestsView.jsx's managerApprove
-  // and AnnualTnaForm.jsx's computeForwardStatus.
+  // A şöbə manager's approval forwards one level up to their own dept
+  // manager. A dept-level manager is always the top of the chain —
+  // needsUpwardForward() caps it there regardless of profiles.manager_id
+  // (the real HR reporting line, which can continue up through VPs/the
+  // CEO — never an approval gate in this workflow) — same rule as
+  // RequestsView.jsx's managerApprove and AnnualTnaForm.jsx's
+  // computeForwardStatus.
   async function decide(id, targetStatus, note) {
     const forward = targetStatus === 'Pending'
-      ? (profile.manager_id
+      ? (needsUpwardForward(profile)
           ? { status: 'Pending Manager Review', reviewing_manager_id: profile.manager_id }
           : { status: 'Pending', reviewing_manager_id: null })
       : { status: targetStatus };

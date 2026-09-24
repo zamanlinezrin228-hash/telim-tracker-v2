@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import ExcelJS from 'exceljs';
 import { CheckCircle2, Plus, X, Send, Lightbulb, Download, RotateCcw } from 'lucide-react';
 import { sb } from '../lib/supabase';
+import { needsUpwardForward } from '../lib/helpers';
 import { styleGroupedTable, downloadWorkbook } from '../lib/excelExport';
 import { GROUP_BG, GROUP_TEXT } from '../lib/tableGroups';
 
@@ -233,29 +234,27 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
 
   // Mirrors RequestFormModal's exact two-rule routing: a lone self-
   // submission (no team) always needs its own manager's sign-off if one
-  // exists, regardless of scope_level — nobody else reviewed it on the way
-  // in. A manager submitting a batch (for their team, or themselves as part
-  // of it) IS that review step, EXCEPT when the manager is şöbə-level with
-  // their own manager — their batch still has to climb one more hop to the
-  // dept-level manager before reaching L&D (Employee → şöbə manager → dept
-  // manager → L&D). A dept-level manager, or anyone with no manager_id, is
-  // the top of that chain and goes straight to 'Pending'. Shared by the full
-  // batch submit below and by the "Təsdiqlə" immediate action on a single
-  // employee-submitted row (Task 2), since both forward a row the same way.
+  // exists, unless that submitter is themselves a dept-level manager (see
+  // needsUpwardForward). A manager submitting a batch (for their team, or
+  // themselves as part of it) IS that review step, EXCEPT when the manager
+  // is şöbə-level with their own manager — their batch still has to climb
+  // one more hop to the dept-level manager before reaching L&D (Employee →
+  // şöbə manager → dept manager → L&D). A dept-level manager is ALWAYS the
+  // top of that chain and goes straight to 'Pending', regardless of their
+  // own profiles.manager_id (that's the real HR reporting line, which can
+  // continue up through VPs/the CEO — never an approval gate here). Shared
+  // by the full batch submit below and by the "Təsdiqlə" immediate action
+  // on a single employee-submitted row (Task 2), since both forward a row
+  // the same way.
   function computeForwardStatus() {
-    // Any manager with their own manager_id set — dept-level or şöbə-level —
-    // must forward one level up rather than skip straight to L&D; this used
-    // to be gated on scope_level === 'sube' only, which incorrectly routed
-    // a dept-level manager's approvals straight to 'Pending' even when that
-    // manager had their own manager above them (see Task 6 bug fix).
-    const needsUpwardReview = hasTeam && !!profile.manager_id;
+    const needsUpwardReview = hasTeam && needsUpwardForward(profile);
     return {
       status: hasTeam
         ? (needsUpwardReview ? 'Pending Manager Review' : 'Pending')
-        : (profile.manager_id ? 'Pending Manager Review' : 'Pending'),
+        : (needsUpwardForward(profile) ? 'Pending Manager Review' : 'Pending'),
       reviewingManagerId: hasTeam
         ? (needsUpwardReview ? profile.manager_id : null)
-        : (profile.manager_id || null),
+        : (needsUpwardForward(profile) ? profile.manager_id : null),
     };
   }
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Send } from 'lucide-react';
 import { sb } from '../lib/supabase';
-import { computeBudgetStatus } from '../lib/helpers';
+import { computeBudgetStatus, needsUpwardForward } from '../lib/helpers';
 
 const IMPORTANCE_OPTIONS = [
   '1 – Aşağı (minimal təsir)', '2 – Orta (əsas işə təsir edir)',
@@ -64,10 +64,12 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
     let payloads;
     if (forWhom === 'team') {
       // Same rule as the "self" branch below and AnnualTnaForm.jsx's
-      // computeForwardStatus(): any manager with their own manager_id set
-      // forwards up one level first, dept-level or şöbə-level alike — not
-      // just şöbə managers (see Task 6 bug fix).
-      const needsUpwardReview = !!profile.manager_id;
+      // computeForwardStatus(): a şöbə manager forwards up to their own
+      // dept manager first; a dept-level manager is always the top of the
+      // chain (needsUpwardForward caps it there regardless of
+      // profiles.manager_id — the real HR line, which can continue up
+      // through VPs/the CEO, never an approval gate here).
+      const needsUpwardReview = needsUpwardForward(profile);
       payloads = selectedIds.map((id) => {
         const m = team.find((t) => t.id === id);
         return {
@@ -82,6 +84,7 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
         };
       });
     } else {
+      const needsUpwardReview = needsUpwardForward(profile);
       payloads = [{
         ...base,
         requested_by: profile.id,
@@ -89,8 +92,8 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
         dept: profile.dept || '—',
         sube: profile.sube || null,
         position: profile.position || null,
-        status: profile.manager_id ? 'Pending Manager Review' : 'Pending',
-        reviewing_manager_id: profile.manager_id || null,
+        status: needsUpwardReview ? 'Pending Manager Review' : 'Pending',
+        reviewing_manager_id: needsUpwardReview ? profile.manager_id : null,
       }];
     }
 

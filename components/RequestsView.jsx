@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Plus, Folder, Clock, Search, CheckCircle2, XCircle, FileText, CheckCheck, ListPlus, RotateCcw, Pencil } from 'lucide-react';
 import { sb } from '../lib/supabase';
-import { reqStatusMeta, groupByEmployee, fmtDateTime, isDecidedStatus, deriveApprovalStage, matchesOwnScope } from '../lib/helpers';
+import { reqStatusMeta, groupByEmployee, fmtDateTime, isDecidedStatus, deriveApprovalStage, matchesOwnScope, needsUpwardForward } from '../lib/helpers';
 import { showToast } from '../lib/toast';
 import { ReqStatusBadge, PriorityBadge } from './Badges';
 import ApprovalStepper from './ApprovalStepper';
@@ -106,16 +106,14 @@ export default function RequestsView({ profile, team, requests, planYear, adhocR
   };
   const LD_DECIDE_TOAST = { Approved: 'Təsdiqləndi.', 'Needs Revision': 'Geri göndərildi.', Rejected: 'Rədd edildi.' };
 
-  // Bug fix (Task 6): approving used to jump straight to status='Pending'
-  // (visible to L&D), skipping the approving manager's OWN manager — so a
-  // şöbə manager's approval would bypass the dept manager above them, and a
-  // dept manager's approval would bypass their own manager too when one was
-  // set. Now: if the approving manager has their own manager_id, forward one
-  // level up ('Pending Manager Review' + reviewing_manager_id = that
-  // manager's manager_id); only a manager with no manager_id (top of the
-  // chain) opens the request up to L&D ('Pending').
+  // A şöbə manager's approval forwards one level up to their own dept
+  // manager (reviewing_manager_id = profile.manager_id). A dept-level
+  // manager is always the top of this chain — needsUpwardForward() caps it
+  // there regardless of profiles.manager_id, since that's the real HR
+  // reporting line (which can continue up through VPs/the CEO) and must
+  // never become an approval gate in this workflow.
   async function managerApprove(id, note) {
-    const forward = profile.manager_id
+    const forward = needsUpwardForward(profile)
       ? { status: 'Pending Manager Review', reviewing_manager_id: profile.manager_id }
       : { status: 'Pending', reviewing_manager_id: null };
     const { error } = await sb.from('training_requests').update({
