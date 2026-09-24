@@ -178,14 +178,15 @@ export default function Home() {
             )}
             {view === 'tracking' && <TrackingView trainings={trainings} profile={profile} onDataChanged={handleDataChanged} />}
             {view === 'requests' && (
-              <RequestsView profile={profile} team={team} requests={requests} planYear={appSettings.tna_plan_year} adhocRequestsOpen={appSettings.adhoc_requests_open} onDataChanged={handleDataChanged} />
+              <RequestsView profile={profile} team={team} requests={requests} planYear={appSettings.tna_plan_year} adhocRequestsOpen={appSettings.adhoc_requests_open} onDataChanged={handleDataChanged} setView={setView} />
             )}
             {view === 'annual-tna' && (
               <div>
                 {(isReviewer || isScopedManager) ? (
                   <AnnualTnaHub
                     profile={profile} team={team} requests={requests} planYear={appSettings.tna_plan_year}
-                    tnaWindowOpen={appSettings.tna_window_open} onDataChanged={handleDataChanged}
+                    tnaWindowOpen={appSettings.tna_window_open} adhocRequestsOpen={appSettings.adhoc_requests_open}
+                    onDataChanged={handleDataChanged}
                   />
                 ) : (
                   appSettings.tna_window_open && (

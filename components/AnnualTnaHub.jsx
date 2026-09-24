@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { PlusSquare, Users2, Folder, History } from 'lucide-react';
+import { sb } from '../lib/supabase';
+import { showToast } from '../lib/toast';
 import { matchesOwnScope } from '../lib/helpers';
 import AnnualTnaForm from './AnnualTnaForm';
 import AnnualTnaActiveReview from './AnnualTnaActiveReview';
@@ -22,8 +24,21 @@ import TnaCompletionTracker from './TnaCompletionTracker';
 // of managers reporting to YOU) only makes sense one level up the chain, so
 // it stays dept-manager/L&D only. None of this reuses L&D's company-wide
 // data-fetching logic — only the tab/nav layout.
-export default function AnnualTnaHub({ profile, team, requests, planYear, tnaWindowOpen, onDataChanged }) {
+export default function AnnualTnaHub({ profile, team, requests, planYear, tnaWindowOpen, adhocRequestsOpen, onDataChanged }) {
   const isLd = profile.role === 'ld';
+  const [togglingAdhoc, setTogglingAdhoc] = useState(false);
+
+  // L&D-only in-app switch for app_settings.adhoc_requests_open, so this no
+  // longer needs manual SQL each time the annual TNA window opens/closes —
+  // a direct UPDATE to the single id=1 settings row, same as every other
+  // app_settings read/write in this app.
+  async function toggleAdhocOpen() {
+    setTogglingAdhoc(true);
+    const { error } = await sb.from('app_settings').update({ adhoc_requests_open: !adhocRequestsOpen }).eq('id', 1);
+    setTogglingAdhoc(false);
+    if (error) { showToast('Xəta: ' + error.message, 'error'); return; }
+    if (onDataChanged) onDataChanged();
+  }
   const isScopedManager = !isLd && profile.role === 'manager' && team && team.length > 0;
   const isDeptManager = isScopedManager && profile.scope_level === 'dept';
 
@@ -91,6 +106,18 @@ export default function AnnualTnaHub({ profile, team, requests, planYear, tnaWin
             ))}
           </div>
         </div>
+
+        {isLd && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 13, cursor: togglingAdhoc ? 'default' : 'pointer', width: 'fit-content' }}>
+            <input
+              type="checkbox"
+              checked={!!adhocRequestsOpen}
+              disabled={togglingAdhoc}
+              onChange={toggleAdhocOpen}
+            />
+            İl ortası (ad-hoc) sorğulara icazə ver
+          </label>
+        )}
       </div>
 
       <div className="page">
