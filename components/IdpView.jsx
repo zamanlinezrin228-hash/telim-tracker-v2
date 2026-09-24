@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
-  UserSquare2, Download, FileText, BookOpen, Wallet, Timer, CheckCircle2, Search, Map as MapIcon,
+  UserSquare2, Download, FileText, BookOpen, Wallet, Timer, CheckCircle2, Search, Map as MapIcon, ClipboardCheck,
 } from 'lucide-react';
 import { sb } from '../lib/supabase';
-import { fmtMoney } from '../lib/helpers';
+import { fmtMoney, fmtDateTime } from '../lib/helpers';
 import { ReqStatusBadge, PriorityBadge, TrainingStatusBadge } from './Badges';
 import EmptyState from './EmptyState';
+import TrainingEvaluationModal from './TrainingEvaluationModal';
 
 function employeeKey(name, dept) {
   return `${name}|||${dept || ''}`;
@@ -20,10 +21,29 @@ function normalizeSkill(s) {
   return (s || '').toLocaleLowerCase('az').replace(/\s+/g, ' ').trim();
 }
 
-export default function IdpView({ requests, trainings }) {
+// Same leading-digit comparison as TrainingEvaluationModal.jsx's verdict —
+// duplicated rather than imported since it's a 3-line pure function and
+// this read-only summary badge needs it independently of the modal being
+// open, same as LEVEL_OPTIONS is already duplicated across several forms
+// in this app rather than centralized.
+function leadingLevel(s) {
+  const n = parseInt(s, 10);
+  return Number.isNaN(n) ? null : n;
+}
+function evaluationVerdict(t) {
+  const requiredNum = leadingLevel(t.required_skill_level);
+  const newNum = leadingLevel(t.post_training_skill_level);
+  if (requiredNum === null || newNum === null) return null;
+  if (newNum > requiredNum) return { icon: '🌟', text: 'Tələb olunandan yüksək səviyyəyə çatıb', color: '#7c3aed' };
+  if (newNum === requiredNum) return { icon: '✅', text: 'Tələb olunan səviyyəyə çatıb', color: '#059669' };
+  return { icon: '⚠️', text: 'Hələ tələb olunan səviyyəyə çatmayıb', color: '#d97706' };
+}
+
+export default function IdpView({ requests, trainings, profile, team, onDataChanged }) {
   const [selectedKey, setSelectedKey] = useState('');
   const [selectedYear, setSelectedYear] = useState('all');
   const [library, setLibrary] = useState([]);
+  const [evalTraining, setEvalTraining] = useState(null);
 
   useEffect(() => {
     sb.from('competency_library').select('category, competency, sub_competency').then(({ data }) => {
@@ -86,6 +106,16 @@ export default function IdpView({ requests, trainings }) {
 
   const employee = employees.find((e) => e.key === selectedKey) || null;
 
+  // `team` is already exactly "profiles whose manager_id === my id" (see
+  // pages/index.js's afterLogin) — the same direct-report relationship the
+  // task asks for, not the wider dept/şöbə scope a manager can otherwise
+  // see. An L&D/HR viewer who also happens to directly manage someone
+  // (e.g. a şöbə lead whose own team sits inside L&D/HR) gets this too,
+  // same dual-role handling as the İllik TNA hub.
+  const isDirectManager = !!employee && !!team && team.some(
+    (t) => t.full_name_az === employee.name && (t.dept || '') === (employee.dept || '')
+  );
+
   const employeeRequests = useMemo(() => {
     if (!employee) return [];
     return requests
@@ -113,6 +143,14 @@ export default function IdpView({ requests, trainings }) {
 
   function exportPdf() {
     window.print();
+  }
+
+  function closeEvalModal() {
+    setEvalTraining(null);
+  }
+  async function handleEvalSaved() {
+    setEvalTraining(null);
+    if (onDataChanged) await onDataChanged();
   }
 
   return (
@@ -261,14 +299,27 @@ export default function IdpView({ requests, trainings }) {
                 <table>
                   <thead>
                     <tr>
-                      <th>İl</th><th>Təlim</th><th>Cari səviyyə</th><th>Tələb olunan</th><th>Əhəmiyyət</th><th>Prioritet</th><th>Provayder</th><th>Status</th><th>Başlama</th><th>Bitmə</th><th>Saat</th><th>Büdcə</th>
+                      <th>İl</th><th>Təlim</th><th>Cari səviyyə</th><th>Tələb olunan</th><th>Əhəmiyyət</th><th>Prioritet</th><th>Provayder</th><th>Status</th><th>Başlama</th><th>Bitmə</th><th>Saat</th><th>Büdcə</th><th className="no-print">Qiymətləndirmə</th>
                     </tr>
                   </thead>
                   <tbody>
                     {employeeTrainings.map((t) => {
                       const mapping = competencyMappingFor(t.skill);
+                      const verdict = evaluationVerdict(t);
+                      const canEvaluate = isDirectManager && t.status === 'Completed';
+                      // `team` only ever holds the viewer's DIRECT REPORTS
+                      // (see pages/index.js), never the viewer's own
+                      // profile — so the most common case (the evaluator
+                      // IS whoever is currently looking at this page) has
+                      // to be resolved from `profile` first, falling back
+                      // to `team` for the rarer case of an L&D/HR viewer
+                      // looking at an evaluation a different manager left.
+                      const evaluator = !t.evaluated_by ? null
+                        : t.evaluated_by === profile?.id ? profile
+                        : (team || []).find((m) => m.id === t.evaluated_by);
                       return (
-                      <tr key={t.id}>
+                      <Fragment key={t.id}>
+                      <tr>
                         <td>{t.plan_year || '—'}</td>
                         <td style={{ fontWeight: 600 }}>
                           {t.skill}
@@ -293,7 +344,54 @@ export default function IdpView({ requests, trainings }) {
                         <td>{t.end_date || t.end_raw || '—'}</td>
                         <td>{t.man_hours ?? '—'}</td>
                         <td>{fmtMoney(t.budget)}</td>
+                        <td className="no-print">
+                          {t.evaluated_at ? (
+                            <span style={{ fontSize: 11, fontWeight: 700, color: verdict?.color || 'var(--ink-500)', whiteSpace: 'nowrap' }}>
+                              {verdict ? `${verdict.icon} Qiymətləndirilib` : 'Qiymətləndirilib'}
+                            </span>
+                          ) : canEvaluate ? (
+                            <button onClick={() => setEvalTraining(t)} className="btn btn-outline btn-sm">
+                              <ClipboardCheck size={12} strokeWidth={2.2} /> Qiymətləndir
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: 11, color: 'var(--ink-400)' }}>—</span>
+                          )}
+                        </td>
                       </tr>
+                      {t.evaluated_at && (
+                        <tr key={t.id + '-eval'} className="idp-eval-row">
+                          <td colSpan={13} style={{ padding: 0 }}>
+                            <div className="idp-eval-block" style={{ '--eval-color': verdict?.color || 'var(--ink-400)' }}>
+                              <div className="idp-eval-header">
+                                <ClipboardCheck size={14} strokeWidth={2.2} />
+                                Post-Təlim Qiymətləndirməsi
+                                {isDirectManager && (
+                                  <button onClick={() => setEvalTraining(t)} className="btn btn-outline btn-sm no-print" style={{ marginLeft: 'auto' }}>
+                                    Redaktə et
+                                  </button>
+                                )}
+                              </div>
+                              <div className="req-field-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginBottom: verdict || t.evaluation_comment ? 10 : 0 }}>
+                                <div><div className="req-field-label">Yenilənmiş cari səviyyə</div><div className="req-field-value">{t.post_training_skill_level || '—'}</div></div>
+                                <div><div className="req-field-label">Qiymətləndirən</div><div className="req-field-value">{evaluator?.full_name_az || '—'}</div></div>
+                                <div><div className="req-field-label">Tarix</div><div className="req-field-value">{fmtDateTime(t.evaluated_at)}</div></div>
+                              </div>
+                              {verdict && (
+                                <div className="idp-eval-verdict" style={{ color: verdict.color, background: `color-mix(in srgb, ${verdict.color} 10%, transparent)`, borderColor: verdict.color }}>
+                                  {verdict.icon} {verdict.text}
+                                </div>
+                              )}
+                              {t.evaluation_comment && (
+                                <div className="req-field-note" style={{ marginTop: 10 }}>
+                                  <div className="req-field-label">Rəhbərin şərhi</div>
+                                  <div className="req-field-value">{t.evaluation_comment}</div>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
                       );})}
                   </tbody>
                 </table>
@@ -304,6 +402,10 @@ export default function IdpView({ requests, trainings }) {
           </div>
         )}
       </div>
+
+      {evalTraining && (
+        <TrainingEvaluationModal training={evalTraining} onClose={closeEvalModal} onSaved={handleEvalSaved} />
+      )}
     </div>
   );
 }

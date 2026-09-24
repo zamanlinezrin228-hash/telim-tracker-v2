@@ -54,11 +54,13 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
     });
   }
 
-  if (isReviewer) {
+  if (isReviewer || hasTeam) {
     cards.push({
       key: 'idp',
       title: 'Fərdi İnkişaf Planı (IDP)',
-      desc: 'Bir əməkdaşın bütün təlim sorğularını və nəticələrini vahid, çap edilə bilən sənəddə görün.',
+      desc: hasTeam && !isReviewer
+        ? 'Komanda üzvlərinizin təlim tarixçəsinə baxın və tamamlanmış təlimləri qiymətləndirin.'
+        : 'Bir əməkdaşın bütün təlim sorğularını və nəticələrini vahid, çap edilə bilən sənəddə görün.',
       Icon: UserSquare2,
       accent: '#7c3aed',
       linkLabel: 'Plan yarat',
