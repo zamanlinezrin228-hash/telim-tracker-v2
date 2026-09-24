@@ -2,7 +2,9 @@ import { useState, useMemo } from 'react';
 import { Folder, Clock, Search, CheckCircle2, XCircle, CalendarDays, ChevronDown, ChevronRight, RotateCcw } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import { showToast } from '../lib/toast';
+import { fmtDateTime, isDecidedStatus, reqStatusMeta } from '../lib/helpers';
 import { ReqStatusBadge, PriorityBadge } from './Badges';
+import ApprovalStepper from './ApprovalStepper';
 import EmptyState from './EmptyState';
 import NoteModal from './NoteModal';
 import CountUp from './CountUp';
@@ -19,9 +21,16 @@ function scrollToDept(dept) {
 // "Departament üzrə baxış" tab content — the currently-active (Pending /
 // In Review) Manager Survey requests, grouped by department, with the
 // take-into-review / approve / revise / reject actions.
+const STATUS_FILTERS = [
+  { key: 'all', label: 'Hamısı' },
+  { key: 'Pending', label: 'Analiz gözləyir' },
+  { key: 'In Review', label: 'Baxılır' },
+];
+
 export default function AnnualTnaActiveReview({ profile, requests, onDataChanged }) {
   const [noteAction, setNoteAction] = useState(null);
   const [expandedDepts, setExpandedDepts] = useState(new Set());
+  const [statusFilter, setStatusFilter] = useState('all');
   // The `requests` prop only catches up once the parent's app-wide refresh
   // (several sequential queries) finishes — without this, a just-decided
   // row sits there looking untouched and invites clicking it again.
@@ -32,13 +41,18 @@ export default function AnnualTnaActiveReview({ profile, requests, onDataChanged
     [requests, locallyUpdated]
   );
 
+  const activeRequests = useMemo(
+    () => surveyRequests.filter((r) => r.status === 'Pending' || r.status === 'In Review'),
+    [surveyRequests]
+  );
+
   const grouped = useMemo(() => {
     const g = {};
-    surveyRequests.filter((r) => r.status === 'Pending' || r.status === 'In Review').forEach((r) => {
+    activeRequests.filter((r) => statusFilter === 'all' || r.status === statusFilter).forEach((r) => {
       (g[r.dept] = g[r.dept] || []).push(r);
     });
     return g;
-  }, [surveyRequests]);
+  }, [activeRequests, statusFilter]);
 
   const decided = surveyRequests.filter((r) => r.status === 'Approved' || r.status === 'Rejected' || r.status === 'Needs Revision');
 
@@ -116,6 +130,21 @@ export default function AnnualTnaActiveReview({ profile, requests, onDataChanged
         ))}
       </div>
 
+      <div className="subtab-nav" style={{ marginBottom: 16 }}>
+        {STATUS_FILTERS.map((f) => {
+          const count = f.key === 'all' ? activeRequests.length : activeRequests.filter((r) => r.status === f.key).length;
+          return (
+            <button
+              key={f.key}
+              className={'subtab-pill' + (statusFilter === f.key ? ' active' : '')}
+              onClick={() => setStatusFilter(f.key)}
+            >
+              {f.label} <span className="badge-count">{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {activeDepts.length > 1 && (
         <div className="dept-jump-nav">
           {activeDepts.map((dept) => (
@@ -137,7 +166,7 @@ export default function AnnualTnaActiveReview({ profile, requests, onDataChanged
             {isOpen && (
               <div className="req-list" style={{ marginTop: 14 }}>
                 {grouped[dept].map((r) => (
-                  <div className="req-card" key={r.id}>
+                  <div className="req-card" key={r.id} style={{ '--state-color': reqStatusMeta(r.status).color }}>
                     <div className="req-card-top">
                       <div>
                         <div className="req-card-name">
@@ -151,6 +180,13 @@ export default function AnnualTnaActiveReview({ profile, requests, onDataChanged
                         <ReqStatusBadge status={r.status} />
                       </div>
                     </div>
+
+                    <div className="req-timestamps">
+                      <span><b>Göndərilib:</b> {fmtDateTime(r.created_at)}</span>
+                      {isDecidedStatus(r.status) && <span><b>Qərar:</b> {fmtDateTime(r.updated_at)}</span>}
+                    </div>
+
+                    <ApprovalStepper request={r} profile={profile} />
 
                     {r.reason && (
                       <div className="req-field-highlight">

@@ -61,7 +61,11 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
 
     let payloads;
     if (forWhom === 'team') {
-      const needsUpwardReview = profile.scope_level === 'sube' && !!profile.manager_id;
+      // Same rule as the "self" branch below and AnnualTnaForm.jsx's
+      // computeForwardStatus(): any manager with their own manager_id set
+      // forwards up one level first, dept-level or şöbə-level alike — not
+      // just şöbə managers (see Task 6 bug fix).
+      const needsUpwardReview = !!profile.manager_id;
       payloads = selectedIds.map((id) => {
         const m = team.find((t) => t.id === id);
         return {
