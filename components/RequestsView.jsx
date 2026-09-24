@@ -10,10 +10,12 @@ import RequestFormModal from './RequestFormModal';
 import NoteModal from './NoteModal';
 import AddToPlanModal from './AddToPlanModal';
 import ResubmitModal from './ResubmitModal';
+import AdhocClosedModal from './AdhocClosedModal';
 import CountUp from './CountUp';
 
-export default function RequestsView({ profile, team, requests, planYear, adhocRequestsOpen, onDataChanged }) {
+export default function RequestsView({ profile, team, requests, planYear, adhocRequestsOpen, onDataChanged, setView }) {
   const [showForm, setShowForm] = useState(false);
+  const [showClosedNotice, setShowClosedNotice] = useState(false);
   const [noteAction, setNoteAction] = useState(null);
   const [addToPlanRequest, setAddToPlanRequest] = useState(null);
   const [resubmitRequest, setResubmitRequest] = useState(null);
@@ -218,9 +220,12 @@ export default function RequestsView({ profile, team, requests, planYear, adhocR
             <h1>Təlim Sorğuları</h1>
             <p>Yeni sorğu göndər, komandanın sorğularına bax və qərar ver.</p>
           </div>
-          {canCreateAdhoc && (
-            <button onClick={() => setShowForm(true)} className="btn btn-primary"><Plus size={15} strokeWidth={2.4} /> Yeni Sorğu</button>
-          )}
+          <button
+            onClick={() => (canCreateAdhoc ? setShowForm(true) : setShowClosedNotice(true))}
+            className="btn btn-primary"
+          >
+            <Plus size={15} strokeWidth={2.4} /> Yeni Sorğu
+          </button>
         </div>
       </div>
 
@@ -519,6 +524,13 @@ export default function RequestsView({ profile, team, requests, planYear, adhocR
 
         {resubmitRequest && (
           <ResubmitModal request={resubmitRequest} profile={profile} onClose={() => setResubmitRequest(null)} onSubmitted={refresh} />
+        )}
+
+        {showClosedNotice && (
+          <AdhocClosedModal
+            onClose={() => setShowClosedNotice(false)}
+            onGoToAnnualTna={setView ? () => { setShowClosedNotice(false); setView('annual-tna'); } : undefined}
+          />
         )}
       </div>
     </div>
