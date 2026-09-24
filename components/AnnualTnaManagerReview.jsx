@@ -9,12 +9,14 @@ import EmptyState from './EmptyState';
 import NoteModal from './NoteModal';
 import TnaRowEditModal from './TnaRowEditModal';
 
-// "Departament üzrə baxış" tab content for a dept-level manager. Unlike
-// L&D's company-wide AnnualTnaActiveReview (which shows every dept's
-// Pending/In Review ad-hoc-stage rows), this only ever reads rows where
-// reviewing_manager_id = profile.id — the şöbə-manager batches forwarded
-// specifically to THIS dept manager — so it is scoped by construction and
-// never widened to dept-wide or company-wide data.
+// "Departament üzrə baxış" tab content for ANY manager with direct reports
+// — dept-level or şöbə-level alike. Unlike L&D's company-wide
+// AnnualTnaActiveReview (which shows every dept's Pending/In Review
+// ad-hoc-stage rows), this only ever reads rows where reviewing_manager_id
+// = profile.id — whatever's currently addressed to THIS manager, whether
+// that's a plain employee's own submission or another manager's forwarded
+// batch — so it is scoped by construction and never widened to dept-wide
+// or company-wide data.
 export default function AnnualTnaManagerReview({ profile, team, requests, onDataChanged }) {
   const [noteAction, setNoteAction] = useState(null);
   const [editingRequest, setEditingRequest] = useState(null);
