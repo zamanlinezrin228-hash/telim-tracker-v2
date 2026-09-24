@@ -11,14 +11,17 @@ import TnaCompletionTracker from './TnaCompletionTracker';
 // reports — dept-level (scope_level='dept') or şöbə-level (scope_level=
 // 'sube') alike — gets the exact same four-tab pill layout, but every tab's
 // DATA stays scoped to just their own dept/şöbə: "Departament üzrə baxış"
-// renders AnnualTnaManagerReview, which only ever reads rows addressed to
-// this manager (reviewing_manager_id = profile.id) regardless of level,
-// never L&D's company-wide AnnualTnaActiveReview; "Qərarlar tarixçəsi"
-// pre-filters to this manager's own dept/şöbə before handing rows to the
-// purely-presentational AnnualTnaDecisionHistory. "Statuslar" (completion
-// tracking of managers reporting to YOU) only makes sense one level up the
-// chain, so it stays dept-manager/L&D only. None of this reuses L&D's
-// company-wide data-fetching logic — only the tab/nav layout.
+// renders AnnualTnaManagerReview, which shows both what's currently
+// addressed to this manager (reviewing_manager_id = profile.id) AND a full
+// history of every request in their dept/şöbə at its live current stage —
+// so a request an earlier-hop manager approved and forwarded stays visible
+// to them, not just to whoever needs to act on it right now — never L&D's
+// company-wide AnnualTnaActiveReview; "Qərarlar tarixçəsi" pre-filters to
+// this manager's own dept/şöbə before handing rows to the purely-
+// presentational AnnualTnaDecisionHistory. "Statuslar" (completion tracking
+// of managers reporting to YOU) only makes sense one level up the chain, so
+// it stays dept-manager/L&D only. None of this reuses L&D's company-wide
+// data-fetching logic — only the tab/nav layout.
 export default function AnnualTnaHub({ profile, team, requests, planYear, tnaWindowOpen, onDataChanged }) {
   const isLd = profile.role === 'ld';
   const isScopedManager = !isLd && profile.role === 'manager' && team && team.length > 0;

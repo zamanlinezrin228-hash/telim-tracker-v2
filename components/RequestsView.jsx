@@ -1,11 +1,10 @@
 import { useState, useMemo } from 'react';
 import { Plus, Folder, Clock, Search, CheckCircle2, XCircle, FileText, CheckCheck, ListPlus, RotateCcw, Pencil } from 'lucide-react';
 import { sb } from '../lib/supabase';
-import { reqStatusMeta, groupByEmployee, fmtDateTime, isDecidedStatus, deriveApprovalStage } from '../lib/helpers';
+import { reqStatusMeta, groupByEmployee, fmtDateTime, isDecidedStatus, deriveApprovalStage, matchesOwnScope } from '../lib/helpers';
 import { showToast } from '../lib/toast';
 import { ReqStatusBadge, PriorityBadge } from './Badges';
 import ApprovalStepper from './ApprovalStepper';
-import StageMeta from './StageMeta';
 import EmptyState from './EmptyState';
 import RequestFormModal from './RequestFormModal';
 import NoteModal from './NoteModal';
@@ -35,23 +34,36 @@ export default function RequestsView({ profile, team, requests, planYear, adhocR
   const myRequests = mergedRequests.filter((r) => r.requested_by === profile.id);
   const toReview = mergedRequests.filter((r) => r.reviewing_manager_id === profile.id && r.status === 'Pending Manager Review');
 
+  // Everyone who has ever touched a request keeps seeing it, at its CURRENT
+  // real stage — not just the person who needs to act on it right now.
+  // scopeHistory used to drop any row still at 'Pending Manager Review' the
+  // moment it moved on to a different reviewing_manager_id, which is exactly
+  // why an approving manager lost visibility into their own request the
+  // instant they forwarded it. Now it keeps everything in this manager's own
+  // dept/şöbə (matchesOwnScope — case/whitespace-normalized, same helper
+  // Dashboard uses), minus only the items currently awaiting THIS manager's
+  // own decision (those already show above, in "Baxılmalı Komanda Sorğuları").
   const scopeHistory = useMemo(() => {
     if (!hasTeam) return [];
-    const inScope = (r) => profile.scope_level === 'dept' ? r.dept === profile.dept : r.sube === profile.sube;
-    return mergedRequests.filter((r) => r.status !== 'Pending Manager Review' && inScope(r));
+    const isAwaitingMe = (r) => r.reviewing_manager_id === profile.id && r.status === 'Pending Manager Review';
+    return mergedRequests.filter((r) => matchesOwnScope(r, profile) && !isAwaitingMe(r));
   }, [mergedRequests, hasTeam, profile]);
 
+  // Same fix for L&D/HR: used to exclude anything still at ANY manager
+  // stage, so a request sat invisible to L&D until it fully arrived. L&D's
+  // RLS access already covers every row regardless of stage — only the
+  // in-flight-vs-decided split matters here, not status specifics, so this
+  // now includes 'Pending Manager Review' rows too (read-only until they
+  // actually reach L&D's own stage).
   const reviewerGrouped = useMemo(() => {
     if (!isReviewer) return {};
-    const visible = mergedRequests.filter((r) => r.status !== 'Pending Manager Review' && r.source !== 'Manager Survey');
+    const visible = mergedRequests.filter((r) => !isDecidedStatus(r.status) && r.source !== 'Manager Survey');
     const grouped = {};
     visible.forEach((r) => { (grouped[r.dept] = grouped[r.dept] || []).push(r); });
     return grouped;
   }, [mergedRequests, isReviewer]);
 
-  const reviewerActive = isReviewer
-    ? Object.fromEntries(Object.entries(reviewerGrouped).map(([d, list]) => [d, list.filter((r) => r.status === 'Pending' || r.status === 'In Review')]).filter(([, list]) => list.length))
-    : {};
+  const reviewerActive = reviewerGrouped;
   const reviewerDecided = isReviewer ? mergedRequests.filter((r) => (r.status === 'Approved' || r.status === 'Rejected' || r.status === 'Needs Revision') && r.source !== 'Manager Survey') : [];
   const pendingCount = isReviewer ? mergedRequests.filter((r) => r.status === 'Pending').length : 0;
 
@@ -142,39 +154,61 @@ export default function RequestsView({ profile, team, requests, planYear, adhocR
     refresh();
   }
 
-  function RequestTable({ list, showNotes }) {
-    const colCount = showNotes ? 8 : 6;
+  // A brand-new employee's very first request must look identical — same
+  // ApprovalStepper, no exceptions — to what a manager or L&D sees, so this
+  // is a req-card list, not a dense table with a different, compact status
+  // style.
+  function MyRequestsList({ list }) {
+    if (!list.length) {
+      return <div className="card"><EmptyState icon={FileText}>Hələ sorğu yoxdur</EmptyState></div>;
+    }
     return (
-      <table>
-        <thead>
-          <tr>
-            <th>Təlim</th><th>Prioritet</th><th>Status</th><th>Göndərilib</th><th>Qərar tarixi</th>
-            {showNotes && <><th>Manager qeydi</th><th>L&D qeydi</th></>}
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {list.length ? list.map((r) => (
-            <tr key={r.id}>
-              <td>{r.training_title}</td>
-              <td><PriorityBadge priority={r.priority} /></td>
-              <td><ReqStatusBadge status={r.status} /><StageMeta request={r} profile={profile} team={team} /></td>
-              <td style={{ fontSize: 12.5 }}>{fmtDateTime(r.created_at)}</td>
-              <td style={{ fontSize: 12.5 }}>{isDecidedStatus(r.status) ? fmtDateTime(r.updated_at) : '—'}</td>
-              {showNotes && (<><td style={{ fontSize: 12.5 }}>{r.manager_note || '—'}</td><td style={{ fontSize: 12.5 }}>{r.reviewer_note || '—'}</td></>)}
-              <td>
-                {r.status === 'Needs Revision' && (
-                  <button onClick={() => setResubmitRequest(r)} className="btn btn-warning btn-sm">
-                    <Pencil size={12} strokeWidth={2.2} /> Redaktə et
-                  </button>
+      <div className="card">
+        <div className="req-list">
+          {list.map((r) => {
+            const stage = deriveApprovalStage(r, { profile, team });
+            return (
+              <div className="req-card" key={r.id} style={{ '--state-color': reqStatusMeta(r.status).color }}>
+                <div className="req-card-top">
+                  <div>
+                    <div className="req-card-name">{r.training_title}</div>
+                  </div>
+                  <div className="req-card-badges">
+                    <PriorityBadge priority={r.priority} />
+                    <ReqStatusBadge status={r.status} />
+                  </div>
+                </div>
+
+                <div className="req-timestamps">
+                  <span><b>Göndərilib:</b> {fmtDateTime(r.created_at)}</span>
+                  {isDecidedStatus(r.status) && <span><b>Qərar:</b> {fmtDateTime(r.updated_at)}</span>}
+                </div>
+
+                <ApprovalStepper request={r} profile={profile} team={team} />
+
+                {r.manager_note && (
+                  <div style={{ fontSize: 12, color: 'var(--ink-500)', marginTop: 6 }}>
+                    <b>{stage.decisionBy?.role === 'Rəhbər' ? (stage.decisionBy.name || 'Rəhbər') : 'Manager'}:</b> {r.manager_note}
+                  </div>
                 )}
-              </td>
-            </tr>
-          )) : (
-            <tr><td colSpan={colCount}><EmptyState icon={FileText}>Hələ sorğu yoxdur</EmptyState></td></tr>
-          )}
-        </tbody>
-      </table>
+                {r.reviewer_note && (
+                  <div style={{ fontSize: 12, color: 'var(--ink-500)', marginTop: 4 }}>
+                    <b>{stage.decisionBy?.role === 'L&D' ? (stage.decisionBy.name || 'L&D') : 'L&D'}:</b> {r.reviewer_note}
+                  </div>
+                )}
+
+                {r.status === 'Needs Revision' && (
+                  <div className="req-card-footer">
+                    <button onClick={() => setResubmitRequest(r)} className="btn btn-warning btn-sm">
+                      <Pencil size={12} strokeWidth={2.2} /> Redaktə et
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     );
   }
 
@@ -442,7 +476,7 @@ export default function RequestsView({ profile, team, requests, planYear, adhocR
         )}
 
         <div className="section-head"><div className="section-title">Mənim Göndərdiklərim</div></div>
-        <div className="card"><RequestTable list={myRequests} showNotes /></div>
+        <MyRequestsList list={myRequests} />
 
         {showForm && (
           <RequestFormModal profile={profile} team={team} onClose={() => setShowForm(false)} onSubmitted={refresh} />

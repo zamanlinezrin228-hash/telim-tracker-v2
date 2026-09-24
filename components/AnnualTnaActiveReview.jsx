@@ -18,11 +18,18 @@ function scrollToDept(dept) {
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-// "Departament üzrə baxış" tab content — the currently-active (Pending /
-// In Review) Manager Survey requests, grouped by department, with the
-// take-into-review / approve / revise / reject actions.
+// "Departament üzrə baxış" tab content — every Manager Survey request that
+// isn't yet terminally decided, grouped by department. L&D's RLS access
+// already covers every row regardless of stage, so this includes requests
+// still sitting at a manager hop ('Pending Manager Review') too — L&D can
+// see a request exists and its current stage from the moment it's
+// submitted, not only once it actually reaches L&D's own queue. The
+// take-into-review / approve / revise / reject actions only ever appear
+// once a row has actually reached L&D (Pending/In Review); a still-at-
+// manager-stage row is read-only here.
 const STATUS_FILTERS = [
   { key: 'all', label: 'Hamısı' },
+  { key: 'Pending Manager Review', label: 'Rəhbər səviyyəsində' },
   { key: 'Pending', label: 'Analiz gözləyir' },
   { key: 'In Review', label: 'Baxılır' },
 ];
@@ -42,7 +49,7 @@ export default function AnnualTnaActiveReview({ profile, requests, onDataChanged
   );
 
   const activeRequests = useMemo(
-    () => surveyRequests.filter((r) => r.status === 'Pending' || r.status === 'In Review'),
+    () => surveyRequests.filter((r) => !isDecidedStatus(r.status)),
     [surveyRequests]
   );
 
