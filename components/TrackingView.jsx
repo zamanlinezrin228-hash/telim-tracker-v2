@@ -132,6 +132,31 @@ function clearSavedFilterState() {
   }
 }
 
+// Visible/hidden column selection (the "Sütunlar" picker) survives a page
+// refresh too, independently of the filter state above — ALL_COLUMNS is a
+// fixed static list (unlike filter values, which depend on the loaded
+// data), so no intersect-with-available-values step is needed here.
+const COLUMNS_STORAGE_KEY = 'tna-tracking-columns';
+
+function loadSavedHiddenCols() {
+  try {
+    const raw = localStorage.getItem(COLUMNS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? new Set(parsed) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveHiddenCols(hiddenCols) {
+  try {
+    localStorage.setItem(COLUMNS_STORAGE_KEY, JSON.stringify([...hiddenCols]));
+  } catch {
+    // localStorage unavailable — selection just won't persist this session
+  }
+}
+
 const NUMERIC_KEYS = new Set(['budget', 'used_budget', 'man_hours', 'plan_year', 'weighted_gap', 'cgi']);
 function sortValue(t, key) {
   if (NUMERIC_KEYS.has(key)) return Number(t[key]) || 0;
@@ -216,7 +241,7 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
   const [deleting, setDeleting] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [hiddenCols, setHiddenCols] = useState(DEFAULT_HIDDEN);
+  const [hiddenCols, setHiddenCols] = useState(() => loadSavedHiddenCols() ?? DEFAULT_HIDDEN);
   const [sortCriteria, setSortCriteria] = useState([]);
   const [groupByDept, setGroupByDept] = useState(false);
 
@@ -333,6 +358,7 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
     setHiddenCols((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
+      saveHiddenCols(next);
       return next;
     });
   }
