@@ -403,8 +403,8 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
         <Lightbulb size={15} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
         <span>
           Əməkdaş seçdikdən sonra onun şöbəsinə (şöbə yoxdursa departamentinə) uyğun səriştə sahəsinin bütün səriştələri —
-          vəzifədən asılı olmayaraq — Kateqoriya → Səriştə → Alt səriştə siyahılarında görünəcək. Sahəni &quot;Sahə&quot; siyahısından
-          dəyişə, ya da özünüz tamamilə fərqli bir şey yaza bilərsiniz.
+          vəzifədən asılı olmayaraq — Kateqoriya → Səriştə → Alt səriştə siyahılarında görünəcək. Siyahıda yoxdursa, özünüz tamamilə
+          fərqli bir şey yaza bilərsiniz.
         </span>
       </div>
       {compError && (
@@ -471,15 +471,6 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                   </td>
                   <td style={{ minWidth: 230, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                      <select
-                        value={r.area} onChange={(e) => updateRow(idx, 'area', e.target.value)}
-                        onFocus={focusIn} onBlur={focusOut} style={{ ...miniInputStyle, fontWeight: 600, color: 'var(--blue)' }}
-                        title="Səriştə sahəsi — əməkdaşın şöbəsinə görə avtomatik seçilir"
-                      >
-                        <option value="">{autoArea ? `Sahə: ${areaLabel.get(autoArea) || autoArea} (avtomatik)` : 'Sahə: bütün sahələr (avtomatik)'}</option>
-                        <option value="*">Bütün sahələr</option>
-                        {comp.areas.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
-                      </select>
                       <input
                         type="text" value={r.category} onChange={(e) => updateRow(idx, 'category', e.target.value)}
                         onFocus={focusIn} onBlur={focusOut} style={miniInputStyle}
