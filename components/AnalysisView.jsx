@@ -15,9 +15,9 @@ const FIELD_LABELS = {
 const DIMENSION_FIELDS = Object.keys(FIELD_LABELS);
 
 const METRIC_LABELS = {
-  budget: 'Büdcənin cəmi', used_budget: 'İstifadə olunmuş büdcənin cəmi', count: 'Təlim sayı', man_hours: 'Saatın cəmi',
+  budget: 'Planlanmış Büdcə (cəmi)', used_budget: 'İstifadə Olunmuş Büdcə (cəmi)', count: 'Təlim sayı', man_hours: 'Saatın cəmi',
   avg_budget: 'Orta büdcə', avg_hours: 'Orta saat', completion_rate: 'Tamamlanma faizi',
-  participants: 'İştirakçı sayı (unikal)', saved_cost: 'Qənaət (Büdcə − İstifadə)',
+  participants: 'İştirakçı sayı (unikal)', saved_cost: 'Qənaət (Planlanmış − İstifadə, yalnız Completed)',
 };
 const METRIC_OPTIONS = Object.keys(METRIC_LABELS);
 
