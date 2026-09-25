@@ -14,6 +14,7 @@ import AnnualTnaForm from '../components/AnnualTnaForm';
 import AnnualTnaHub from '../components/AnnualTnaHub';
 import IdpView from '../components/IdpView';
 import ProcessGuideView from '../components/ProcessGuideView';
+import CompetencyMapView from '../components/CompetencyMapView';
 import ToastHost from '../components/ToastHost';
 
 const NOTIFY_POLL_MS = 60000;
@@ -213,7 +214,7 @@ export default function Home() {
               <HomeScreen profile={profile} team={team} setView={setView} tnaWindowOpen={appSettings.tna_window_open} planYear={appSettings.tna_plan_year} canSeeDashboard={canSeeDashboard} requestsNotifCount={requestsNotifCount} />
             )}
             {view === 'dashboard' && canSeeDashboard && (
-              <DashboardView trainings={allTrainings} profile={profile} team={team} requests={requests} restrictToOwnScope={!hasDashboardFullAccess} />
+              <DashboardView trainings={allTrainings} ownScopeTrainings={trainings} profile={profile} team={team} requests={requests} restrictToOwnScope={!hasDashboardFullAccess} />
             )}
             {view === 'tracking' && <TrackingView trainings={trainings} profile={profile} onDataChanged={handleDataChanged} />}
             {view === 'requests' && (
@@ -239,6 +240,7 @@ export default function Home() {
             {view === 'idp' && showIdp && (
               <IdpView requests={requests} trainings={trainings} profile={profile} team={team} onDataChanged={handleDataChanged} />
             )}
+            {view === 'competency-map' && <CompetencyMapView profile={profile} />}
             {view === 'guide' && <ProcessGuideView />}
           </div>
         </div>
