@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs';
 import {
   BookOpen, Users, CheckCircle2, RefreshCw, Timer, Wallet, TrendingUp, Percent,
   XCircle, AlertTriangle, PauseCircle, CalendarClock, Building2, Trophy, Target,
-  Sparkles, ThumbsUp, ShieldAlert, Award, GraduationCap, Download, Printer, PiggyBank,
+  Sparkles, ThumbsUp, ShieldAlert, Award, GraduationCap, Download, Printer, PiggyBank, Banknote,
 } from 'lucide-react';
 import { fmtMoney, statusMeta, matchesOwnScope } from '../lib/helpers';
 import { styleHeaderRow, downloadWorkbook } from '../lib/excelExport';
@@ -21,9 +21,10 @@ const KPI_EXPORT_ROWS = [
   ['Tamamlanma Faizi', (k) => `${k.completionRate}%`],
   ['Davam Edən', (k) => k.inProgress],
   ['Ümumi Təlim Saatı', (k) => k.totalHours],
-  ['Ümumi Büdcə', (k) => fmtMoney(k.totalBudget)],
-  ['İstifadə Olunmuş Büdcə', (k) => fmtMoney(k.totalUsedBudget)],
-  ['Ümumi Qənaət', (k) => fmtMoney(k.totalSavedCost)],
+  ['Planlanmış Büdcə', (k) => fmtMoney(k.plannedBudget)],
+  ['İstifadə Olunmuş Büdcə (yalnız Completed)', (k) => fmtMoney(k.usedBudgetCompleted)],
+  ['Qənaət (Planlanmış − İstifadə, status önəmsiz)', (k) => fmtMoney(k.totalSavedCost)],
+  ['Real Büdcə (Canceled xaric)', (k) => fmtMoney(k.realBudget)],
   ['Büdcə İstifadəsi', (k) => `${k.budgetUtilization}%`],
   ['Orta Büdcə / Təlim', (k) => fmtMoney(k.avgBudget)],
   ['Saat Başına Xərc', (k) => fmtMoney(k.costPerHour)],
@@ -51,11 +52,32 @@ const LEARNING_STATS = [
 // budget), unlike every other KPI here which has one fixed color — so its
 // `color` is a function of the raw KPI values instead of a plain string;
 // StatGroup below checks for that and calls it.
+//
+// The four budget KPIs (plannedBudget/usedBudgetCompleted/totalSavedCost/
+// realBudget) are deliberately four DIFFERENT populations of rows — see
+// lib/analytics.js's computeKPIs comments for the exact definition of
+// each. They will not arithmetically reconcile with each other (e.g.
+// plannedBudget − usedBudgetCompleted ≠ totalSavedCost) — that's expected,
+// not a bug, which is why each one carries its own one-line `subtitle`
+// here instead of being shown as if they were parts of one equation.
 const FINANCIAL_STATS = [
-  { key: 'totalBudget', label: 'Ümumi Büdcə', Icon: Wallet, color: '#0f766e', format: fmtMoney },
-  { key: 'totalUsedBudget', label: 'İstifadə Olunmuş Büdcə', Icon: Wallet, color: '#0369a1', format: fmtMoney },
-  { key: 'totalSavedCost', label: 'Ümumi Qənaət', Icon: PiggyBank, color: (k) => (k.totalSavedCost >= 0 ? '#059669' : '#dc2626'), format: fmtMoney },
-  { key: 'budgetUtilization', label: 'Büdcə İstifadəsi', Icon: Percent, color: '#7c3aed', format: (n) => `${n}%` },
+  {
+    key: 'plannedBudget', label: 'Planlanmış Büdcə', Icon: Wallet, color: '#0f766e', format: fmtMoney,
+    subtitle: 'Bütün sətirlər üzrə planlanmış büdcə cəmi (status önəmli deyil)',
+  },
+  {
+    key: 'usedBudgetCompleted', label: 'İstifadə Olunmuş Büdcə', Icon: Wallet, color: '#0369a1', format: fmtMoney,
+    subtitle: 'Yalnız tamamlanmış (Completed) təlimlər üçün real xərc',
+  },
+  {
+    key: 'totalSavedCost', label: 'Qənaət', Icon: PiggyBank, color: (k) => (k.totalSavedCost >= 0 ? '#059669' : '#dc2626'), format: fmtMoney,
+    subtitle: 'Planlanmış − İstifadə, hər statusdan (Completed-ə məhdudlaşmır)',
+  },
+  {
+    key: 'realBudget', label: 'Real Büdcə', Icon: Banknote, color: '#7c3aed', format: fmtMoney,
+    subtitle: 'Planlanmış büdcə, ləğv edilmiş (Canceled) sətirlər çıxılmaqla',
+  },
+  { key: 'budgetUtilization', label: 'Büdcə İstifadəsi', Icon: Percent, color: '#7c3aed', format: (n) => `${n}%`, subtitle: 'İstifadə Olunmuş / Planlanmış' },
   { key: 'avgBudget', label: 'Orta Büdcə / Təlim', Icon: TrendingUp, color: '#ea580c', format: fmtMoney },
   { key: 'costPerHour', label: 'Saat Başına Xərc', Icon: Percent, color: '#b45309', format: fmtMoney },
   { key: 'budgetedShare', label: 'Büdcələnmiş Pay', Icon: CheckCircle2, color: '#059669', format: (n) => `${n}%` },
@@ -87,6 +109,7 @@ function StatGroup({ title, stats, raw, i0 }) {
               <div className="stat-value" style={{ color }}>
                 <CountUp value={raw[s.key]} format={s.format} />
               </div>
+              {s.subtitle && <div className="stat-subtitle">{s.subtitle}</div>}
             </div>
           );
         })}

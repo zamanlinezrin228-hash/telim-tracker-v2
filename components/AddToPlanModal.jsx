@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ListPlus } from 'lucide-react';
 import { sb } from '../lib/supabase';
-import { computeBudgetStatus } from '../lib/helpers';
+import { computeBudgetStatus, computeGapMetrics } from '../lib/helpers';
 
 const COMP_CAT_OPTIONS = ['Hard Skills', 'Soft Skills'];
 
@@ -27,6 +27,14 @@ export default function AddToPlanModal({ request, planYear, onClose, onSubmitted
   async function handleSubmit() {
     setSaving(true);
     setError('');
+    // training_requests has no weighted_gap/cgi/cgi_priority_full columns
+    // (see lib/helpers.js's computeGapMetrics) — this is the first point
+    // those derived fields ever get computed and stored, from whichever
+    // of the three source levels the request carries. priority here is
+    // the CGI-derived one (matches what the rest of İzləmə Cədvəli means
+    // by "priority"), not request.priority — that field is the requester's
+    // own manually-set urgency at submission time, a different concept.
+    const gap = computeGapMetrics(request.current_skill_level, request.required_skill_level, request.importance_level);
     const trainingPayload = {
       dept: request.dept, sube: request.sube || null, employee_name: request.employee_name,
       position: request.position || null, skill: request.training_title,
@@ -38,7 +46,9 @@ export default function AddToPlanModal({ request, planYear, onClose, onSubmitted
       importance_level: request.importance_level || null,
       current_skill_level: request.current_skill_level || null,
       required_skill_level: request.required_skill_level || null,
-      priority: request.priority, category: category || null, budget_status: budgetStatus,
+      weighted_gap: gap.weighted_gap, cgi: gap.cgi, cgi_priority_full: gap.cgi_priority_full,
+      priority: gap.priority ?? request.priority,
+      category: category || null, budget_status: budgetStatus,
       transformation_area: transformationArea.trim() || null,
       learning_method: learningMethod.trim() || null,
       activity_duration: activityDuration.trim() || null,
