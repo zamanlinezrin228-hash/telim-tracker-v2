@@ -1,4 +1,4 @@
-import { LayoutDashboard, ClipboardList, FileText, CalendarDays, UserSquare2, ArrowRight } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, FileText, CalendarDays, UserSquare2, ArrowRight, Target } from 'lucide-react';
 
 export default function HomeScreen({ profile, team, setView, tnaWindowOpen, planYear, canSeeDashboard, requestsNotifCount }) {
   const hasTeam = team && team.length > 0;
@@ -36,6 +36,14 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
       accent: '#d97706',
       linkLabel: 'Sorğu göndər',
       badge: requestsNotifCount,
+    },
+    {
+      key: 'competency-map',
+      title: 'Səriştə Xəritəsi',
+      desc: 'Departament və vəzifə seçin — səriştələri, tələb olunan səviyyəni və kritikliyi görün.',
+      Icon: Target,
+      accent: '#0f766e',
+      linkLabel: 'Xəritəyə bax',
     },
   );
 
