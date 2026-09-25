@@ -22,8 +22,8 @@ const KPI_EXPORT_ROWS = [
   ['Davam Edən', (k) => k.inProgress],
   ['Ümumi Təlim Saatı', (k) => k.totalHours],
   ['Planlanmış Büdcə', (k) => fmtMoney(k.plannedBudget)],
-  ['İstifadə Olunmuş Büdcə (yalnız Completed)', (k) => fmtMoney(k.usedBudgetCompleted)],
-  ['Qənaət (Planlanmış − İstifadə, status önəmsiz)', (k) => fmtMoney(k.totalSavedCost)],
+  ['İstifadə Olunmuş Büdcə (yalnız tamamlanmış)', (k) => fmtMoney(k.usedBudgetCompleted)],
+  ['Qənaət', (k) => fmtMoney(k.totalSavedCost)],
   ['Real Büdcə (Canceled xaric)', (k) => fmtMoney(k.realBudget)],
   ['Büdcə İstifadəsi', (k) => `${k.budgetUtilization}%`],
   ['Orta Büdcə / Təlim', (k) => fmtMoney(k.avgBudget)],
@@ -63,15 +63,13 @@ const LEARNING_STATS = [
 const FINANCIAL_STATS = [
   {
     key: 'plannedBudget', label: 'Planlanmış Büdcə', Icon: Wallet, color: '#0f766e', format: fmtMoney,
-    subtitle: 'Bütün sətirlər üzrə planlanmış büdcə cəmi (status önəmli deyil)',
   },
   {
     key: 'usedBudgetCompleted', label: 'İstifadə Olunmuş Büdcə', Icon: Wallet, color: '#0369a1', format: fmtMoney,
-    subtitle: 'Yalnız tamamlanmış (Completed) təlimlər üçün real xərc',
+    subtitle: 'Yalnız tamamlanmış təlimlər üçün real xərc',
   },
   {
     key: 'totalSavedCost', label: 'Qənaət', Icon: PiggyBank, color: (k) => (k.totalSavedCost >= 0 ? '#059669' : '#dc2626'), format: fmtMoney,
-    subtitle: 'Planlanmış − İstifadə, hər statusdan (Completed-ə məhdudlaşmır)',
   },
   {
     key: 'realBudget', label: 'Real Büdcə', Icon: Banknote, color: '#7c3aed', format: fmtMoney,
