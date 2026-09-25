@@ -1,0 +1,893 @@
+diff --git a/components/AnnualTnaForm.jsx b/components/AnnualTnaForm.jsx
+index d7cfed4..8beadc3 100644
+--- a/components/AnnualTnaForm.jsx
++++ b/components/AnnualTnaForm.jsx
+@@ -1,9 +1,10 @@
+-import { useState, useEffect, useRef } from 'react';
++import { useState, useEffect, useRef, useMemo } from 'react';
+ import ExcelJS from 'exceljs';
+ import { CheckCircle2, Plus, X, Send, Lightbulb, Download, RotateCcw } from 'lucide-react';
+ import { sb } from '../lib/supabase';
+ import { computeForward, computeGapMetrics } from '../lib/helpers';
+ import { styleGroupedTable, downloadWorkbook } from '../lib/excelExport';
++import { loadCompetencyData, resolveArea, roleStatsByCatalogId, uniqueInOrder, normText, CRITICALITY_LABELS } from '../lib/competency';
+ import { GROUP_BG, GROUP_TEXT } from '../lib/tableGroups';
+ 
+ const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical'];
+@@ -71,7 +72,7 @@ function focusOut(e) { e.target.style.borderColor = 'var(--ink-200)'; e.target.s
+ function emptyRow(defaultEmployeeId = '') {
+   return {
+     sourceRequestId: null,
+-    employeeId: defaultEmployeeId, manualName: '', position: '', category: '', competency: '', skill: '', needReason: '',
++    employeeId: defaultEmployeeId, manualName: '', position: '', area: '', category: '', competency: '', skill: '', needReason: '',
+     priority: 'Medium', importance: '', currentLevel: '', requiredLevel: '',
+     compCat: '', vendor: '', manHours: '', budget: '',
+     transformationArea: '', learningMethod: '', activityDuration: '', learningGoal: '',
+@@ -79,62 +80,6 @@ function emptyRow(defaultEmployeeId = '') {
+   };
+ }
+ 
+-// The competency_library rows carry real dept/position names, entered inconsistently
+-// (mixed Az/En, "Departamenti" vs "Department" vs bare names, occasional typos).
+-// normalize() handles case (Azerbaijani-aware, so İ -> i correctly) and punctuation;
+-// textMatch() is exact-or-substring in either direction, which is strict enough not
+-// to conflate unrelated positions/departments. deptMatch() additionally strips a
+-// handful of common noise words (departamenti/department/şöbəsi/idarəedilməsi/...)
+-// so e.g. "İnzibati Şöbə" (profiles) still matches "İnzibati İşlər Departamenti"
+-// (library) even though neither is a literal substring of the other.
+-function normalize(s) {
+-  return (s || '')
+-    .toLocaleLowerCase('az')
+-    .replace(/[().,/&\-]/g, ' ')
+-    .replace(/\s+/g, ' ')
+-    .trim();
+-}
+-
+-const DEPT_NOISE_WORDS = ['departamenti', 'department', 'şöbəsi', 'regional', 'idarəedilməsi', 'zəncirinin', 'işlər', 'ltd', 'mmc'];
+-function coreDept(s) {
+-  let n = ' ' + normalize(s) + ' ';
+-  DEPT_NOISE_WORDS.forEach((w) => { n = n.split(' ' + w + ' ').join(' '); });
+-  return n.replace(/\s+/g, ' ').trim();
+-}
+-
+-function textMatch(a, b) {
+-  const na = normalize(a), nb = normalize(b);
+-  if (!na || !nb) return false;
+-  return na === nb || na.includes(nb) || nb.includes(na);
+-}
+-
+-// A handful of departments are named in different languages between the two
+-// tables (e.g. profiles has "İnformasiya texnologiyaları şöbəsi", the library
+-// has "ERP / IT & Digital") with no shared substring at all — bridged here.
+-const DEPT_SYNONYM_PAIRS = [['informasiya', 'erp'], ['informasiya', 'digital'], ['texnologiya', 'erp'], ['texnologiya', 'digital']];
+-
+-function deptMatch(a, b) {
+-  if (textMatch(a, b)) return true;
+-  const ca = coreDept(a), cb = coreDept(b);
+-  if (ca && cb && (ca === cb || ca.includes(cb) || cb.includes(ca))) return true;
+-  const na = normalize(a), nb = normalize(b);
+-  if (!na || !nb) return false;
+-  return DEPT_SYNONYM_PAIRS.some(([x, y]) => (na.includes(x) && nb.includes(y)) || (na.includes(y) && nb.includes(x)));
+-}
+-
+-// Shows the full breadth of the employee's department — not narrowed to
+-// their specific position — so managers can browse every competency
+-// recorded for that department, not just the ones tagged to a matching
+-// position string in the library.
+-function matchesForRow(library, dept) {
+-  if (!dept) return [];
+-  return library.filter((row) => deptMatch(row.dept, dept));
+-}
+-
+-function uniqueSorted(values) {
+-  return [...new Set(values.filter(Boolean))].sort();
+-}
+-
+ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) {
+   const hasTeam = team && team.length > 0;
+   const self = { id: profile.id, full_name_az: profile.full_name_az || '', dept: profile.dept, sube: profile.sube, position: profile.position };
+@@ -144,14 +89,15 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted })
+   const [submitting, setSubmitting] = useState(false);
+   const [error, setError] = useState('');
+   const [done, setDone] = useState(false);
+-  const [library, setLibrary] = useState([]);
++  const [comp, setComp] = useState({ areas: [], catalog: [], rules: [], roleMap: [] });
++  const [compError, setCompError] = useState('');
+   const mergedPendingRef = useRef(false);
+ 
+   useEffect(() => {
+-    sb.from('competency_library').select('dept, position, category, competency, sub_competency, criticality, required_level').then(({ data }) => {
+-      setLibrary(data || []);
+-    });
++    loadCompetencyData(sb).then(setComp).catch((e) => setCompError(e.message));
+   }, []);
++  const roleStats = useMemo(() => roleStatsByCatalogId(comp.roleMap), [comp.roleMap]);
++  const areaLabel = useMemo(() => new Map(comp.areas.map((a) => [a.key, a.label])), [comp.areas]);
+ 
+   function mapIncomingRow(r) {
+     const submitter = selectableEmployees.find((e) => e.full_name_az === r.employee_name);
+@@ -161,7 +107,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted })
+       employeeId: submitter ? submitter.id : '',
+       manualName: submitter ? '' : (r.employee_name || ''),
+       position: r.position || '',
+-      category: '', competency: '',
++      area: '', category: '', competency: '',
+       skill: r.training_title || '',
+       needReason: r.reason || '',
+       priority: r.priority || 'Medium',
+@@ -198,12 +144,12 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted })
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, [profile.id]);
+ 
+-  function deptForRow(r) {
+-    if (r.employeeId) {
+-      const m = selectableEmployees.find((t) => t.id === r.employeeId);
+-      if (m?.dept) return m.dept;
+-    }
+-    return profile.dept;
++  // Şöbə first, then department (see lib/competency.js resolveArea) — the
++  // employee's own org unit decides the area, not their position, and every
++  // competency in that area is offered.
++  function autoAreaForRow(r) {
++    const m = r.employeeId ? selectableEmployees.find((t) => t.id === r.employeeId) : null;
++    return m ? resolveArea(comp.rules, m.dept, m.sube) : resolveArea(comp.rules, profile.dept, profile.sube);
+   }
+ 
+   function fieldsFor(r) {
+@@ -260,7 +206,8 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted })
+       }
+       // Changing employee/position/category resets the levels below it, since
+       // the previously-picked values may no longer be valid for the new scope.
+-      if (field === 'employeeId' || field === 'position') {
++      if (field === 'employeeId') next[idx].area = '';
++      if (field === 'employeeId' || field === 'position' || field === 'area') {
+         next[idx].category = ''; next[idx].competency = ''; next[idx].skill = '';
+       }
+       if (field === 'category') { next[idx].competency = ''; next[idx].skill = ''; }
+@@ -455,10 +402,16 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted })
+       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 12.5, color: 'var(--blue)', marginBottom: profile.role === 'ld' ? 18 : 8 }}>
+         <Lightbulb size={15} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
+         <span>
+-          Əməkdaş seçdikdən sonra Kateqoriya → Səriştə → Alt səriştə sahələrində onun departamentinə aid bütün səriştə
+-          siyahısı görünəcək (istəyə bağlı — özünüz də tamamilə fərqli bir şey yaza bilərsiniz).
++          Əməkdaş seçdikdən sonra onun şöbəsinə (şöbə yoxdursa departamentinə) uyğun səriştə sahəsinin bütün səriştələri —
++          vəzifədən asılı olmayaraq — Kateqoriya → Səriştə → Alt səriştə siyahılarında görünəcək. Sahəni &quot;Sahə&quot; siyahısından
++          dəyişə, ya da özünüz tamamilə fərqli bir şey yaza bilərsiniz.
+         </span>
+       </div>
++      {compError && (
++        <div className="notice notice-error" style={{ marginBottom: 10 }}>
++          Səriştə kataloqu yüklənmədi ({compError}). Siyahılar boş görünəcək — sahələri əl ilə yaza bilərsiniz.
++        </div>
++      )}
+       <div className="tna-table" style={{ border: '2px solid var(--ink-200)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-xs)', marginBottom: 16 }}>
+         <style jsx>{`
+           .tna-table th, .tna-table td { border-right: 1.5px solid var(--ink-200); font-size: 13px; }
+@@ -484,13 +437,16 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted })
+             </thead>
+             <tbody>
+               {rows.map((r, idx) => {
+-                const matched = matchesForRow(library, deptForRow(r));
+-                const categoryOptions = uniqueSorted(matched.map((m) => m.category));
+-                const scopedByCategory = r.category ? matched.filter((m) => normalize(m.category) === normalize(r.category)) : matched;
+-                const competencyOptions = uniqueSorted(scopedByCategory.map((m) => m.competency));
+-                const scopedByCompetency = r.competency ? scopedByCategory.filter((m) => normalize(m.competency) === normalize(r.competency)) : scopedByCategory;
+-                const subOptions = uniqueSorted(scopedByCompetency.map((m) => m.sub_competency));
+-                const matchedSub = matched.find((m) => normalize(m.sub_competency) === normalize(r.skill) && m.sub_competency);
++                const autoArea = autoAreaForRow(r);
++                const area = r.area === '' ? autoArea : (r.area === '*' ? null : r.area);
++                const matched = area ? comp.catalog.filter((m) => m.area === area) : comp.catalog;
++                const categoryOptions = uniqueInOrder(matched.map((m) => m.category));
++                const scopedByCategory = r.category ? matched.filter((m) => normText(m.category) === normText(r.category)) : matched;
++                const competencyOptions = uniqueInOrder(scopedByCategory.map((m) => m.competency));
++                const scopedByCompetency = r.competency ? scopedByCategory.filter((m) => normText(m.competency) === normText(r.competency)) : scopedByCategory;
++                const subOptions = uniqueInOrder(scopedByCompetency.map((m) => m.sub_competency));
++                const matchedSub = r.skill ? matched.find((m) => normText(m.sub_competency) === normText(r.skill)) : null;
++                const subStats = matchedSub ? roleStats.get(matchedSub.id) : null;
+ 
+                 return (
+                 <tr key={idx} style={{ background: idx % 2 === 0 ? 'var(--surface)' : 'var(--ink-50)' }}>
+@@ -515,6 +471,15 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted })
+                   </td>
+                   <td style={{ minWidth: 230, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
+                     <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
++                      <select
++                        value={r.area} onChange={(e) => updateRow(idx, 'area', e.target.value)}
++                        onFocus={focusIn} onBlur={focusOut} style={{ ...miniInputStyle, fontWeight: 600, color: 'var(--blue)' }}
++                        title="Səriştə sahəsi — əməkdaşın şöbəsinə görə avtomatik seçilir"
++                      >
++                        <option value="">{autoArea ? `Sahə: ${areaLabel.get(autoArea) || autoArea} (avtomatik)` : 'Sahə: bütün sahələr (avtomatik)'}</option>
++                        <option value="*">Bütün sahələr</option>
++                        {comp.areas.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
++                      </select>
+                       <input
+                         type="text" value={r.category} onChange={(e) => updateRow(idx, 'category', e.target.value)}
+                         onFocus={focusIn} onBlur={focusOut} style={miniInputStyle}
+@@ -540,10 +505,13 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted })
+                         Aşağıdakı siyahıdan uyğun səriştəni seçə bilərsiniz. Əgər axtardığınız burada yoxdursa, sərbəst şəkildə özünüz yaza bilərsiniz.
+                       </div>
+ 
+-                      {matchedSub && (matchedSub.required_level || matchedSub.criticality) && (
+-                        <div style={{ fontSize: 10.5, color: 'var(--ink-400)', lineHeight: 1.35 }}>
+-                          {matchedSub.required_level && <div>Tələb olunan səviyyə: {matchedSub.required_level}</div>}
+-                          {matchedSub.criticality && <div>Kritiklik: {matchedSub.criticality}</div>}
++                      {subStats && (
++                        <div style={{ fontSize: 10.5, color: 'var(--ink-500)', lineHeight: 1.35, background: 'var(--ink-50)', borderRadius: 6, padding: '4px 6px' }}>
++                          <div>PDP üzrə {subStats.positions} vəzifədə tələb olunur</div>
++                          {subStats.minReq != null && (
++                            <div>Tələb olunan səviyyə: {subStats.minReq === subStats.maxReq ? subStats.minReq : `${subStats.minReq}–${subStats.maxReq}`}</div>
++                          )}
++                          {subStats.maxCrit != null && <div>Kritiklik (maks.): {subStats.maxCrit} – {CRITICALITY_LABELS[subStats.maxCrit]}</div>}
+                         </div>
+                       )}
+                     </div>
+diff --git a/components/CompetencyMapView.jsx b/components/CompetencyMapView.jsx
+new file mode 100644
+index 0000000..63d4c9d
+--- /dev/null
++++ b/components/CompetencyMapView.jsx
+@@ -0,0 +1,351 @@
++import { useEffect, useMemo, useState } from 'react';
++import { Printer, Search, ListTree, Grid3x3, Info } from 'lucide-react';
++import { sb } from '../lib/supabase';
++import {
++  loadCompetencyData, resolveArea, normText, uniqueInOrder,
++  CRITICALITY_LABELS, LEVEL_LABELS, CRITICALITY_COLORS,
++} from '../lib/competency';
++
++const ALL = '__all__';
++const LEVEL_COLOR = '#2563eb';
++
++function CritChip({ value, prefix }) {
++  if (value == null) return <span className="cm-muted">—</span>;
++  const c = CRITICALITY_COLORS[value];
++  return (
++    <span className="cm-chip" style={{ color: c, background: `${c}1a`, borderColor: `${c}55` }}>
++      {prefix}{value} · {CRITICALITY_LABELS[value]}
++    </span>
++  );
++}
++
++function LevelMeter({ min, max }) {
++  if (max == null) return <span className="cm-muted">—</span>;
++  const lo = min ?? max;
++  return (
++    <div>
++      <div className="cm-meter" aria-label={`Tələb olunan səviyyə ${lo === max ? max : `${lo}–${max}`}`}>
++        {[1, 2, 3, 4, 5].map((n) => (
++          <i key={n} style={{ background: n <= lo ? LEVEL_COLOR : n <= max ? `${LEVEL_COLOR}66` : undefined }} />
++        ))}
++      </div>
++      <div className="cm-meter-label">
++        {lo === max ? `${max} – ${LEVEL_LABELS[max]}` : `${lo}–${max} (${LEVEL_LABELS[lo]} → ${LEVEL_LABELS[max]})`}
++      </div>
++    </div>
++  );
++}
++
++function DistBars({ title, counts, labels, colorFor }) {
++  const total = counts.reduce((a, b) => a + b, 0) || 1;
++  return (
++    <div className="cm-dist">
++      <div className="cm-dist-title">{title}</div>
++      {[5, 4, 3, 2, 1].map((n) => (
++        <div className="cm-dist-row" key={n}>
++          <span className="cm-dist-label">{n} · {labels[n]}</span>
++          <span className="cm-dist-track"><span style={{ width: `${(counts[n - 1] / total) * 100}%`, background: colorFor(n) }} /></span>
++          <span className="cm-dist-val">{counts[n - 1]}</span>
++        </div>
++      ))}
++    </div>
++  );
++}
++
++export default function CompetencyMapView({ profile }) {
++  const [data, setData] = useState(null);
++  const [error, setError] = useState('');
++  const [area, setArea] = useState('');
++  const [position, setPosition] = useState(ALL);
++  const [mode, setMode] = useState('profile');
++  const [query, setQuery] = useState('');
++  const [showEn, setShowEn] = useState(false);
++
++  useEffect(() => {
++    loadCompetencyData(sb)
++      .then((d) => {
++        setData(d);
++        const own = resolveArea(d.rules, profile?.dept, profile?.sube);
++        setArea(own || d.areas[0]?.key || '');
++      })
++      .catch((e) => setError(e.message));
++  }, [profile?.dept, profile?.sube]);
++
++  const areaMeta = useMemo(() => data?.areas.find((a) => a.key === area), [data, area]);
++  const areaCatalog = useMemo(() => (data ? data.catalog.filter((c) => c.area === area) : []), [data, area]);
++  const areaRoles = useMemo(() => (data ? data.roleMap.filter((r) => r.area === area) : []), [data, area]);
++  const orgUnitLabel = areaRoles[0]?.dept_label || areaMeta?.label || '';
++  const positions = useMemo(
++    () => uniqueInOrder(areaRoles.map((r) => r.position)).sort((a, b) => a.localeCompare(b, 'az')),
++    [areaRoles]
++  );
++
++  function changeArea(key) {
++    setArea(key);
++    setPosition(ALL);
++  }
++
++  // Per catalog row: its values for the selected position, or — for "all
++  // positions" — the range across every position the PDP map ties it to.
++  const rows = useMemo(() => {
++    const byCatalog = new Map();
++    areaRoles.forEach((r) => {
++      if (position !== ALL && r.position !== position) return;
++      const s = byCatalog.get(r.catalog_id) || { positions: [], crit: null, minReq: null, maxReq: null };
++      s.positions.push(r.position);
++      if (r.criticality != null) s.crit = Math.max(s.crit ?? 0, r.criticality);
++      if (r.required_level != null) {
++        s.minReq = Math.min(s.minReq ?? 9, r.required_level);
++        s.maxReq = Math.max(s.maxReq ?? 0, r.required_level);
++      }
++      byCatalog.set(r.catalog_id, s);
++    });
++    const q = normText(query);
++    return areaCatalog
++      .map((c) => ({ ...c, stats: byCatalog.get(c.id) || null }))
++      .filter((c) => (position === ALL ? true : !!c.stats))
++      .filter((c) => !q || normText([c.category, c.competency, c.sub_competency, c.sub_competency_en, c.competency_en].join(' ')).includes(q));
++  }, [areaCatalog, areaRoles, position, query]);
++
++  const groups = useMemo(() => {
++    const out = [];
++    rows.forEach((r) => {
++      let g = out[out.length - 1];
++      if (!g || g.category !== r.category) { g = { category: r.category, category_en: r.category_en, comps: [] }; out.push(g); }
++      let c = g.comps[g.comps.length - 1];
++      if (!c || c.competency !== r.competency) { c = { competency: r.competency, competency_en: r.competency_en, rows: [] }; g.comps.push(c); }
++      c.rows.push(r);
++    });
++    return out;
++  }, [rows]);
++
++  const summary = useMemo(() => {
++    const mapped = rows.filter((r) => r.stats);
++    const crits = mapped.map((r) => r.stats.crit).filter((v) => v != null);
++    const reqs = mapped.map((r) => r.stats.maxReq).filter((v) => v != null);
++    const dist = (vals) => [1, 2, 3, 4, 5].map((n) => vals.filter((v) => v === n).length);
++    const avg = (vals) => (vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1) : '—');
++    return {
++      total: rows.length, mapped: mapped.length,
++      avgCrit: avg(crits), avgReq: avg(reqs),
++      highCrit: crits.filter((v) => v >= 4).length,
++      critDist: dist(crits), reqDist: dist(reqs),
++    };
++  }, [rows]);
++
++  // Matrix: every sub-competency that at least one position in this area
++  // needs, against every position — cell = required level, tint = criticality.
++  const matrix = useMemo(() => {
++    const cell = new Map();
++    areaRoles.forEach((r) => cell.set(`${r.catalog_id}|${r.position}`, r));
++    const q = normText(query);
++    const mappedIds = new Set(areaRoles.map((r) => r.catalog_id));
++    const mrows = areaCatalog
++      .filter((c) => mappedIds.has(c.id))
++      .filter((c) => !q || normText([c.competency, c.sub_competency, c.sub_competency_en].join(' ')).includes(q));
++    return { cell, rows: mrows };
++  }, [areaCatalog, areaRoles, query]);
++
++  if (error) {
++    return (
++      <div className="page">
++        <div className="notice notice-error">
++          Səriştə kataloqu yüklənmədi: {error}. (sql/2026-09-26_competency_catalog.sql işə salınıbmı?)
++        </div>
++      </div>
++    );
++  }
++  if (!data) {
++    return <div className="page"><div className="skel skel-block" /></div>;
++  }
++
++  const positionTitle = position === ALL ? 'Bütün vəzifələr' : position;
++
++  return (
++    <div>
++      <div className="page-header">
++        <div className="page-header-row">
++          <div>
++            <h1>Səriştə Xəritəsi</h1>
++            <p>Departament və vəzifə üzrə səriştələr, tələb olunan səviyyə və kritiklik — yalnız baxış və analiz üçün.</p>
++          </div>
++          <div className="no-print">
++            <button onClick={() => window.print()} className="btn btn-outline" style={{ height: 40 }}>
++              <Printer size={14} strokeWidth={2.2} /> Çap / PDF
++            </button>
++          </div>
++        </div>
++      </div>
++
++      <div className="page">
++        <div className="card no-print cm-controls">
++          <div className="cm-control">
++            <div className="filter-label">Departament / sahə</div>
++            <select value={area} onChange={(e) => changeArea(e.target.value)}>
++              {data.areas.map((a) => {
++                const unit = data.roleMap.find((r) => r.area === a.key)?.dept_label;
++                return <option key={a.key} value={a.key}>{a.label}{unit && unit !== a.label ? ` — ${unit}` : ''}</option>;
++              })}
++            </select>
++          </div>
++          <div className="cm-control">
++            <div className="filter-label">Vəzifə</div>
++            <select value={position} onChange={(e) => setPosition(e.target.value)} disabled={mode === 'matrix'}>
++              <option value={ALL}>Bütün vəzifələr (sahənin tam kataloqu)</option>
++              {positions.map((p) => <option key={p} value={p}>{p}</option>)}
++            </select>
++          </div>
++          <div className="cm-control cm-control-grow">
++            <div className="filter-label">Axtar</div>
++            <div className="cm-search">
++              <Search size={14} strokeWidth={2} />
++              <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Səriştə və ya alt səriştə…" />
++            </div>
++          </div>
++          <div className="cm-control">
++            <div className="filter-label">Görünüş</div>
++            <div className="cm-toggle" role="tablist">
++              <button className={mode === 'profile' ? 'active' : ''} onClick={() => setMode('profile')}><ListTree size={14} /> Profil</button>
++              <button className={mode === 'matrix' ? 'active' : ''} onClick={() => { setMode('matrix'); setPosition(ALL); }}><Grid3x3 size={14} /> Matris</button>
++            </div>
++          </div>
++          <label className="cm-en-toggle">
++            <input type="checkbox" checked={showEn} onChange={(e) => setShowEn(e.target.checked)} /> İngiliscə orijinalı göstər
++          </label>
++        </div>
++
++        <div className="cm-hero">
++          <div>
++            <div className="cm-hero-eyebrow">Səriştə profili</div>
++            <div className="cm-hero-title">{mode === 'matrix' ? 'Vəzifələr üzrə matris' : positionTitle}</div>
++            <div className="cm-hero-sub">{areaMeta?.label}{orgUnitLabel && orgUnitLabel !== areaMeta?.label ? ` · ${orgUnitLabel}` : ''} · {positions.length} vəzifə PDP-də xəritələnib</div>
++          </div>
++          <div className="cm-hero-stats">
++            <div className="cm-hero-stat"><b>{mode === 'matrix' ? matrix.rows.length : summary.total}</b><span>{position === ALL && mode !== 'matrix' ? 'alt səriştə (kataloq)' : 'alt səriştə'}</span></div>
++            <div className="cm-hero-stat"><b>{summary.avgReq}</b><span>orta tələb olunan səviyyə</span></div>
++            <div className="cm-hero-stat"><b>{summary.avgCrit}</b><span>orta kritiklik</span></div>
++            <div className="cm-hero-stat"><b>{summary.highCrit}</b><span>kritik / strateji</span></div>
++          </div>
++        </div>
++
++        {mode === 'profile' && (
++          <>
++            {summary.mapped > 0 && (
++              <div className="card cm-dist-card">
++                <DistBars title="Kritiklik paylanması" counts={summary.critDist} labels={CRITICALITY_LABELS} colorFor={(n) => CRITICALITY_COLORS[n]} />
++                <DistBars title="Tələb olunan səviyyə paylanması" counts={summary.reqDist} labels={LEVEL_LABELS} colorFor={() => LEVEL_COLOR} />
++              </div>
++            )}
++
++            {position === ALL && (
++              <div className="cm-note">
++                <Info size={14} strokeWidth={2.2} />
++                <span>
++                  Sahənin bütün kataloqu göstərilir. Kritiklik və səviyyə sütunları PDP-də bu səriştəni tələb edən vəzifələr üzrə
++                  maksimum / aralıqdır; heç bir vəzifəyə bağlanmayan səriştələr &quot;—&quot; ilə göstərilir. Konkret vəzifəni seçərək onun PDP profilinə baxın.
++                </span>
++              </div>
++            )}
++
++            {groups.length === 0 && <div className="card cm-empty">Bu seçim üzrə səriştə tapılmadı.</div>}
++
++            {groups.map((g) => (
++              <section className="cm-group" key={g.category}>
++                <header className="cm-group-head">
++                  <div>
++                    {g.category}
++                    {showEn && <div className="cm-en">{g.category_en}</div>}
++                  </div>
++                  <span className="cm-group-count">{g.comps.reduce((a, c) => a + c.rows.length, 0)}</span>
++                </header>
++                <div className="cm-row cm-row-head">
++                  <span>Kod</span><span>Alt səriştə</span><span>Kritiklik</span><span>Tələb olunan səviyyə</span>
++                </div>
++                {g.comps.map((c) => (
++                  <div key={c.competency}>
++                    <div className="cm-comp-head">
++                      {c.competency}
++                      {showEn && <span className="cm-en"> · {c.competency_en}</span>}
++                    </div>
++                    {c.rows.map((r) => (
++                      <div className={'cm-row' + (r.stats ? '' : ' cm-row-unmapped')} key={r.id}>
++                        <span className="cm-code">{r.code}</span>
++                        <div>
++                          <div className="cm-sub">{r.sub_competency.replace(/^\s*\d+(\.\d+)+\s*/, '')}</div>
++                          {showEn && <div className="cm-en">{r.sub_competency_en?.replace(/^\s*\d+(\.\d+)+\s*/, '')}</div>}
++                          {position === ALL && r.stats && (
++                            <div className="cm-positions" title={r.stats.positions.join('\n')}>
++                              {r.stats.positions.length} vəzifədə tələb olunur
++                            </div>
++                          )}
++                        </div>
++                        <div className="cm-col-crit"><CritChip value={r.stats?.crit ?? null} prefix={position === ALL && r.stats && r.stats.positions.length > 1 ? 'maks. ' : ''} /></div>
++                        <div className="cm-col-level"><LevelMeter min={r.stats?.minReq ?? null} max={r.stats?.maxReq ?? null} /></div>
++                      </div>
++                    ))}
++                  </div>
++                ))}
++              </section>
++            ))}
++          </>
++        )}
++
++        {mode === 'matrix' && (
++          <>
++            <div className="cm-legend">
++              <span>Xanadakı rəqəm — tələb olunan səviyyə (1–5); rəng — kritiklik:</span>
++              {[1, 2, 3, 4, 5].map((n) => (
++                <span key={n} className="cm-legend-item"><i style={{ background: CRITICALITY_COLORS[n] }} />{CRITICALITY_LABELS[n]}</span>
++              ))}
++              <span className="cm-muted">Vəzifə başlığına klikləyin → həmin vəzifənin profili açılır.</span>
++            </div>
++            {matrix.rows.length === 0 ? (
++              <div className="card cm-empty">Bu sahədə PDP vəzifə xəritəsi yoxdur.</div>
++            ) : (
++              <div className="table-wrap cm-matrix">
++                <table>
++                  <thead>
++                    <tr>
++                      <th className="sticky-col cm-matrix-first">Alt səriştə</th>
++                      {positions.map((p) => (
++                        <th key={p} className="cm-vert-th">
++                          <button className="cm-vert" onClick={() => { setPosition(p); setMode('profile'); }} title={p}>{p}</button>
++                        </th>
++                      ))}
++                    </tr>
++                  </thead>
++                  <tbody>
++                    {matrix.rows.map((c) => (
++                      <tr key={c.id}>
++                        <td className="sticky-col cm-matrix-first">
++                          <span className="cm-code">{c.code}</span> {c.sub_competency.replace(/^\s*\d+(\.\d+)+\s*/, '')}
++                          <div className="cm-matrix-comp">{c.competency}</div>
++                        </td>
++                        {positions.map((p) => {
++                          const r = matrix.cell.get(`${c.id}|${p}`);
++                          if (!r) return <td key={p} className="cm-matrix-cell" />;
++                          const col = CRITICALITY_COLORS[r.criticality] || '#94a3b8';
++                          return (
++                            <td key={p} className="cm-matrix-cell">
++                              <span
++                                className="cm-cell"
++                                style={{ background: `${col}22`, color: col, borderColor: `${col}66` }}
++                                title={`${p}\nTələb olunan: ${r.required_level ?? '—'} · Kritiklik: ${r.criticality ?? '—'}${r.criticality ? ' (' + CRITICALITY_LABELS[r.criticality] + ')' : ''}`}
++                              >
++                                {r.required_level ?? '·'}
++                              </span>
++                            </td>
++                          );
++                        })}
++                      </tr>
++                    ))}
++                  </tbody>
++                </table>
++              </div>
++            )}
++          </>
++        )}
++      </div>
++    </div>
++  );
++}
+diff --git a/components/DashboardView.jsx b/components/DashboardView.jsx
+index 8cbbc4d..4ebf459 100644
+--- a/components/DashboardView.jsx
++++ b/components/DashboardView.jsx
+@@ -5,7 +5,7 @@ import {
+   XCircle, AlertTriangle, PauseCircle, CalendarClock, Building2, Trophy, Target,
+   Sparkles, ThumbsUp, ShieldAlert, Award, GraduationCap, Download, Printer, PiggyBank, Banknote,
+ } from 'lucide-react';
+-import { fmtMoney, statusMeta, matchesOwnScope } from '../lib/helpers';
++import { fmtMoney, statusMeta } from '../lib/helpers';
+ import { styleHeaderRow, downloadWorkbook } from '../lib/excelExport';
+ import {
+   computeKPIs, departmentBreakdown, departmentSavedCostBreakdown, monthlyTrend, topBy, topLearners,
+@@ -137,7 +137,7 @@ function RankList({ items, renderValue, emptyLabel }) {
+   );
+ }
+ 
+-export default function DashboardView({ trainings, profile, team, restrictToOwnScope }) {
++export default function DashboardView({ trainings, ownScopeTrainings, profile, team, restrictToOwnScope }) {
+   const years = useMemo(() => {
+     const set = new Set(trainings.map((t) => t.plan_year).filter(Boolean));
+     return [...set].sort((a, b) => b - a);
+@@ -159,11 +159,16 @@ export default function DashboardView({ trainings, profile, team, restrictToOwnS
+   // scopeHistory already use for a manager's own visibility scope.
+   const ownScopeLabel = profile?.scope_level === 'sube' ? 'Yalnız öz şöbəm' : 'Yalnız öz departamentim';
+ 
++  // "Own scope" rows come from the RLS-scoped trainings fetch (the same one
++  // İzləmə Cədvəli uses), which picks the manager's people via profiles
++  // (dept, or dept+şöbə for a şöbə head) and matches trainings by employee.
++  // Filtering by the training row's own dept/sube instead left şöbə heads
++  // with an empty dashboard: imported training rows carry no şöbə at all.
+   const scoped = useMemo(() => {
+     const forceOwn = restrictToOwnScope && hasTeam;
+     if (!forceOwn && (!canScopeFilter || scopeMode !== 'own')) return trainings;
+-    return trainings.filter((t) => matchesOwnScope(t, profile));
+-  }, [trainings, canScopeFilter, scopeMode, profile, restrictToOwnScope, hasTeam]);
++    return ownScopeTrainings || [];
++  }, [trainings, ownScopeTrainings, canScopeFilter, scopeMode, restrictToOwnScope, hasTeam]);
+ 
+   const filtered = useMemo(() => {
+     if (selectedYear === 'all') return scoped;
+diff --git a/components/HomeScreen.jsx b/components/HomeScreen.jsx
+index 3ac040e..6e40d8e 100644
+--- a/components/HomeScreen.jsx
++++ b/components/HomeScreen.jsx
+@@ -1,4 +1,4 @@
+-import { LayoutDashboard, ClipboardList, FileText, CalendarDays, UserSquare2, ArrowRight } from 'lucide-react';
++import { LayoutDashboard, ClipboardList, FileText, CalendarDays, UserSquare2, ArrowRight, Target } from 'lucide-react';
+ 
+ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, planYear, canSeeDashboard, requestsNotifCount }) {
+   const hasTeam = team && team.length > 0;
+@@ -37,6 +37,14 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
+       linkLabel: 'Sorğu göndər',
+       badge: requestsNotifCount,
+     },
++    {
++      key: 'competency-map',
++      title: 'Səriştə Xəritəsi',
++      desc: 'Departament və vəzifə seçin — səriştələri, tələb olunan səviyyəni və kritikliyi görün.',
++      Icon: Target,
++      accent: '#0f766e',
++      linkLabel: 'Xəritəyə bax',
++    },
+   );
+ 
+   if (tnaWindowOpen || profile.role === 'ld') {
+diff --git a/components/IdpView.jsx b/components/IdpView.jsx
+index 2647f84..1c91a7a 100644
+--- a/components/IdpView.jsx
++++ b/components/IdpView.jsx
+@@ -3,6 +3,7 @@ import {
+   UserSquare2, Download, FileText, BookOpen, Wallet, Timer, CheckCircle2, Search, Map as MapIcon, ClipboardCheck,
+ } from 'lucide-react';
+ import { sb } from '../lib/supabase';
++import { loadCompetencyData } from '../lib/competency';
+ import { fmtMoney, fmtDateTime } from '../lib/helpers';
+ import { ReqStatusBadge, PriorityBadge, TrainingStatusBadge } from './Badges';
+ import EmptyState from './EmptyState';
+@@ -43,8 +44,13 @@ export default function IdpView({ requests, trainings, profile, team, onDataChan
+   const [ambiguousNames, setAmbiguousNames] = useState(new Set());
+ 
+   useEffect(() => {
+-    sb.from('competency_library').select('category, competency, sub_competency').then(({ data }) => {
+-      setLibrary(data || []);
++    // Old library kept so earlier TNA rows (written with its wording) still
++    // resolve; the new catalog covers everything submitted from now on.
++    Promise.all([
++      sb.from('competency_library').select('category, competency, sub_competency'),
++      loadCompetencyData(sb).catch(() => ({ catalog: [] })),
++    ]).then(([{ data }, { catalog }]) => {
++      setLibrary([...(catalog || []), ...(data || [])]);
+     });
+     // A handful of names are shared by two genuinely different people in
+     // this org (confirmed live: e.g. two different "Tural Əhmədov"
+diff --git a/components/Sidebar.jsx b/components/Sidebar.jsx
+index 2b10e36..04ac2cd 100644
+--- a/components/Sidebar.jsx
++++ b/components/Sidebar.jsx
+@@ -1,10 +1,11 @@
+-import { GraduationCap, Home, LayoutDashboard, ClipboardList, FileText, CalendarDays, UserSquare2, Compass, LogOut } from 'lucide-react';
++import { GraduationCap, Home, LayoutDashboard, ClipboardList, FileText, CalendarDays, UserSquare2, Compass, LogOut, Target } from 'lucide-react';
+ import { sb } from '../lib/supabase';
+ import ThemeToggle from './ThemeToggle';
+ 
+ const NAV_ITEMS = [
+   { key: 'tracking', label: 'İzləmə Cədvəli', Icon: ClipboardList },
+   { key: 'requests', label: 'Təlim Sorğuları', Icon: FileText },
++  { key: 'competency-map', label: 'Səriştə Xəritəsi', Icon: Target },
+   { key: 'guide', label: 'Bələdçi', Icon: Compass },
+ ];
+ 
+diff --git a/lib/competency.js b/lib/competency.js
+new file mode 100644
+index 0000000..860bfcf
+--- /dev/null
++++ b/lib/competency.js
+@@ -0,0 +1,82 @@
++// Shared access to the competency catalog (sql/2026-09-26_competency_catalog.sql):
++// 13 areas, the full sub-competency catalog per area, the PDP position map,
++// and the şöbə/dept -> area rules. Fetched once per page load and cached.
++
++export const CRITICALITY_LABELS = { 1: 'Aşağı', 2: 'Orta', 3: 'Yüksək', 4: 'Kritik', 5: 'Strateji' };
++export const LEVEL_LABELS = { 1: 'Fundamental', 2: 'İnkişaf edən', 3: 'Yetərli', 4: 'İrəli', 5: 'Ekspert' };
++export const CRITICALITY_COLORS = { 1: '#64748b', 2: '#0891b2', 3: '#d97706', 4: '#ea580c', 5: '#dc2626' };
++
++// Must stay identical to public.competency_norm() in the SQL file.
++export function normText(s) {
++  return (s || '')
++    .replace(/[İIı]/g, 'i')
++    .toLocaleLowerCase('az')
++    .replace(/\s+/g, ' ')
++    .trim();
++}
++
++// Şöbə rules always win over dept rules — an ERP şöbəsi that sits inside the
++// Maliyyə departamenti gets ERP/İT competencies, not Finance ones. Mirrors
++// public.resolve_competency_area(). Returns null when nothing matches (e.g.
++// top management), in which case callers show every area.
++export function resolveArea(rules, dept, sube) {
++  const s = normText(sube), d = normText(dept);
++  const ordered = [...rules].sort((a, b) => (a.match_on === b.match_on ? a.priority - b.priority : a.match_on === 'sube' ? -1 : 1));
++  for (const r of ordered) {
++    const target = r.match_on === 'sube' ? s : d;
++    if (target && target.includes(normText(r.pattern))) return r.area || null;
++  }
++  return null;
++}
++
++async function fetchAll(sb, table, columns, order) {
++  const PAGE = 1000;
++  const out = [];
++  for (let from = 0; ; from += PAGE) {
++    let q = sb.from(table).select(columns).range(from, from + PAGE - 1);
++    order.forEach((col) => { q = q.order(col); });
++    const { data, error } = await q;
++    if (error) throw error;
++    out.push(...(data || []));
++    if (!data || data.length < PAGE) break;
++  }
++  return out;
++}
++
++let cache = null;
++export function loadCompetencyData(sb) {
++  if (!cache) {
++    cache = Promise.all([
++      fetchAll(sb, 'competency_areas', 'key, label, label_en, sort_order', ['sort_order']),
++      fetchAll(sb, 'competency_catalog', 'id, area, sort_order, code, category, competency, sub_competency, category_en, competency_en, sub_competency_en', ['area', 'sort_order']),
++      fetchAll(sb, 'competency_area_rules', 'match_on, pattern, area, priority', ['priority']),
++      fetchAll(sb, 'competency_role_map', 'area, dept_label, position, catalog_id, criticality, required_level', ['id']),
++    ]).then(([areas, catalog, rules, roleMap]) => ({ areas, catalog, rules, roleMap }))
++      .catch((e) => { cache = null; throw e; });
++  }
++  return cache;
++}
++
++// Per catalog_id: range of criticality/required level across every position
++// that the PDP map ties to it — a position-independent hint for the TNA form.
++export function roleStatsByCatalogId(roleMap) {
++  const m = new Map();
++  roleMap.forEach((r) => {
++    const s = m.get(r.catalog_id) || { positions: 0, maxCrit: null, minReq: null, maxReq: null };
++    s.positions += 1;
++    if (r.criticality != null) s.maxCrit = Math.max(s.maxCrit ?? 0, r.criticality);
++    if (r.required_level != null) {
++      s.minReq = Math.min(s.minReq ?? 9, r.required_level);
++      s.maxReq = Math.max(s.maxReq ?? 0, r.required_level);
++    }
++    m.set(r.catalog_id, s);
++  });
++  return m;
++}
++
++export function uniqueInOrder(values) {
++  const seen = new Set();
++  const out = [];
++  values.forEach((v) => { if (v && !seen.has(v)) { seen.add(v); out.push(v); } });
++  return out;
++}
+diff --git a/pages/index.js b/pages/index.js
+index 530bd27..4c089d6 100644
+--- a/pages/index.js
++++ b/pages/index.js
+@@ -14,6 +14,7 @@ import AnnualTnaForm from '../components/AnnualTnaForm';
+ import AnnualTnaHub from '../components/AnnualTnaHub';
+ import IdpView from '../components/IdpView';
+ import ProcessGuideView from '../components/ProcessGuideView';
++import CompetencyMapView from '../components/CompetencyMapView';
+ import ToastHost from '../components/ToastHost';
+ 
+ const NOTIFY_POLL_MS = 60000;
+@@ -213,7 +214,7 @@ export default function Home() {
+               <HomeScreen profile={profile} team={team} setView={setView} tnaWindowOpen={appSettings.tna_window_open} planYear={appSettings.tna_plan_year} canSeeDashboard={canSeeDashboard} requestsNotifCount={requestsNotifCount} />
+             )}
+             {view === 'dashboard' && canSeeDashboard && (
+-              <DashboardView trainings={allTrainings} profile={profile} team={team} requests={requests} restrictToOwnScope={!hasDashboardFullAccess} />
++              <DashboardView trainings={allTrainings} ownScopeTrainings={trainings} profile={profile} team={team} requests={requests} restrictToOwnScope={!hasDashboardFullAccess} />
+             )}
+             {view === 'tracking' && <TrackingView trainings={trainings} profile={profile} onDataChanged={handleDataChanged} />}
+             {view === 'requests' && (
+@@ -239,6 +240,7 @@ export default function Home() {
+             {view === 'idp' && showIdp && (
+               <IdpView requests={requests} trainings={trainings} profile={profile} team={team} onDataChanged={handleDataChanged} />
+             )}
++            {view === 'competency-map' && <CompetencyMapView profile={profile} />}
+             {view === 'guide' && <ProcessGuideView />}
+           </div>
+         </div>
+diff --git a/styles/globals.css b/styles/globals.css
+index 2b6e770..13dad73 100644
+--- a/styles/globals.css
++++ b/styles/globals.css
+@@ -919,3 +919,80 @@ tbody tr:hover td.sticky-col { background: var(--ink-200); }
+   }
+   .table-wrap { max-height: none !important; overflow: visible !important; }
+ }
++
++/* ---------- Səriştə Xəritəsi (CompetencyMapView) ---------- */
++.cm-controls { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 16px; }
++.cm-control select { min-width: 240px; max-width: 100%; }
++.cm-control-grow { flex: 1 1 220px; }
++.cm-search { display: flex; align-items: center; gap: 8px; border: 1px solid var(--ink-200); border-radius: 10px; padding: 0 12px; height: 40px; background: var(--surface); color: var(--ink-400); }
++.cm-search input { border: none; outline: none; background: transparent; flex: 1; font-size: 13.5px; color: var(--ink-900); height: 100%; min-width: 0; }
++.cm-toggle { display: inline-flex; border: 1px solid var(--ink-200); border-radius: 10px; overflow: hidden; height: 40px; }
++.cm-toggle button { display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; border: none; background: var(--surface); color: var(--ink-500); font-size: 13px; font-weight: 600; cursor: pointer; }
++.cm-toggle button + button { border-left: 1px solid var(--ink-200); }
++.cm-toggle button.active { background: var(--blue); color: #fff; }
++.cm-en-toggle { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-500); height: 40px; cursor: pointer; }
++
++.cm-hero { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; padding: 22px 24px; margin-bottom: 16px; border-radius: var(--radius-lg); color: #fff; background: linear-gradient(135deg, #0b2545 0%, #123a68 60%, #0f766e 140%); box-shadow: var(--shadow-md); }
++.cm-hero-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; opacity: .7; }
++.cm-hero-title { font-size: 22px; font-weight: 800; margin-top: 4px; line-height: 1.25; }
++.cm-hero-sub { font-size: 13px; opacity: .8; margin-top: 5px; }
++.cm-hero-stats { display: flex; gap: 10px; flex-wrap: wrap; }
++.cm-hero-stat { min-width: 112px; padding: 10px 14px; border-radius: 12px; background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .18); }
++.cm-hero-stat b { display: block; font-size: 21px; font-weight: 800; font-variant-numeric: tabular-nums; }
++.cm-hero-stat span { font-size: 11px; opacity: .78; }
++
++.cm-dist-card { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 22px; margin-bottom: 16px; }
++.cm-dist-title { font-size: 12px; font-weight: 700; color: var(--ink-500); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 8px; }
++.cm-dist-row { display: grid; grid-template-columns: 120px 1fr 32px; align-items: center; gap: 10px; margin: 5px 0; font-size: 12.5px; }
++.cm-dist-label { color: var(--ink-700); white-space: nowrap; }
++.cm-dist-track { height: 8px; border-radius: 99px; background: var(--ink-100); overflow: hidden; }
++.cm-dist-track span { display: block; height: 100%; border-radius: 99px; }
++.cm-dist-val { text-align: right; font-weight: 700; color: var(--ink-700); font-variant-numeric: tabular-nums; }
++
++.cm-note { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; line-height: 1.5; color: var(--blue); background: var(--blue-light); border: 1px solid var(--blue-border); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
++.cm-note svg { flex-shrink: 0; margin-top: 2px; }
++.cm-empty { text-align: center; color: var(--ink-500); padding: 32px; }
++
++.cm-group { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; margin-bottom: 16px; box-shadow: var(--shadow-xs); break-inside: avoid-page; }
++.cm-group-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 13px 16px; font-size: 14.5px; font-weight: 800; color: var(--ink-900); background: var(--blue-light); border-bottom: 1px solid var(--blue-border); }
++.cm-group-count { font-size: 12px; font-weight: 700; color: var(--blue); background: var(--surface); border: 1px solid var(--blue-border); border-radius: 99px; padding: 2px 10px; }
++.cm-comp-head { padding: 9px 16px; font-size: 13px; font-weight: 700; color: var(--ink-700); background: var(--ink-50); border-bottom: 1px solid var(--border); border-top: 1px solid var(--border); }
++.cm-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) 170px 200px; gap: 14px; align-items: center; padding: 11px 16px; border-bottom: 1px solid var(--ink-100); }
++.cm-row:last-child { border-bottom: none; }
++.cm-row-head { padding-top: 8px; padding-bottom: 8px; font-size: 10.5px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--ink-400); background: var(--surface); }
++.cm-row-unmapped .cm-sub { color: var(--ink-500); }
++.cm-code { font-size: 12px; font-weight: 700; color: var(--ink-400); font-variant-numeric: tabular-nums; }
++.cm-sub { font-size: 13.5px; line-height: 1.45; color: var(--ink-900); }
++.cm-en { font-size: 11.5px; font-weight: 400; color: var(--ink-400); margin-top: 2px; }
++.cm-positions { font-size: 11px; color: var(--teal); margin-top: 3px; font-weight: 600; cursor: help; }
++.cm-chip { display: inline-flex; align-items: center; padding: 3px 10px; border: 1px solid; border-radius: 99px; font-size: 12px; font-weight: 700; white-space: nowrap; }
++.cm-meter { display: flex; gap: 3px; }
++.cm-meter i { width: 20px; height: 8px; border-radius: 3px; background: var(--ink-200); }
++.cm-meter-label { font-size: 11.5px; color: var(--ink-500); margin-top: 4px; }
++.cm-muted { font-size: 12px; color: var(--ink-400); }
++
++.cm-legend { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: 12.5px; color: var(--ink-500); margin-bottom: 10px; }
++.cm-legend-item { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-700); font-weight: 600; }
++.cm-legend-item i { width: 12px; height: 12px; border-radius: 4px; display: inline-block; }
++.cm-matrix table { border-collapse: separate; border-spacing: 0; }
++.cm-matrix th, .cm-matrix td { border-bottom: 1px solid var(--ink-100); }
++.cm-matrix-first { min-width: 320px; max-width: 420px; font-size: 12.5px; line-height: 1.4; text-align: left; }
++.cm-matrix-comp { font-size: 11px; color: var(--ink-400); margin-top: 2px; }
++.cm-vert-th { vertical-align: bottom; padding: 8px 2px !important; }
++.cm-vert { writing-mode: vertical-rl; transform: rotate(180deg); max-height: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: none; background: none; font-size: 11.5px; font-weight: 600; color: var(--ink-700); cursor: pointer; padding: 2px; }
++.cm-vert:hover { color: var(--blue); }
++.cm-matrix-cell { text-align: center; padding: 5px 4px !important; }
++.cm-cell { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; border: 1px solid; font-size: 12.5px; font-weight: 800; }
++
++@media (max-width: 760px) {
++  .cm-control, .cm-control select { width: 100%; min-width: 0; }
++  .cm-row { grid-template-columns: 48px minmax(0, 1fr); row-gap: 8px; }
++  .cm-row-head { display: none; }
++  .cm-col-crit, .cm-col-level { grid-column: 2; }
++  .cm-hero-stat { min-width: calc(50% - 5px); }
++  .cm-matrix-first { min-width: 220px; }
++}
++@media print {
++  .cm-hero { box-shadow: none; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
++  .cm-group { box-shadow: none; }
++}
