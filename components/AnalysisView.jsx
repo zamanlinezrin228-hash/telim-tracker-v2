@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import ExcelJS from 'exceljs';
 import { ArrowLeftRight, Download } from 'lucide-react';
-import { statusMeta, priorityMeta, fmtMoney } from '../lib/helpers';
+import { statusMeta, priorityMeta } from '../lib/helpers';
 import { hasSavedCost } from '../lib/analytics';
 import { styleHeaderRow, downloadWorkbook } from '../lib/excelExport';
 import MultiSelectFilter from './MultiSelectFilter';
@@ -80,20 +80,37 @@ function displayVal(v) {
   return v === null || v === undefined || v === '' ? '—' : String(v);
 }
 // Row/column header labels for fields being used as a GROUPING key (not
-// the aggregated metric value) — e.g. budget=1000 as a dimension shows
-// the literal "1,000 ₼" group label, distinct from budget summed as the
-// Dəyər metric across a whole group of rows.
+// the aggregated metric value) — e.g. status='Completed' as a dimension
+// shows the "Tamamlandı" group label. budget/used_budget never reach here
+// as a real per-row value any more (see VALUE_FIELDS/groupKeyFor/
+// groupLabelFor below) — they always collapse to a single bucket instead
+// of fanning out one column/row per distinct amount.
 function labelFor(field, v) {
   if (v === '—') return v;
   if (field === 'status') return statusMeta(v).label;
   if (field === 'priority') return priorityMeta(v).label;
-  if (field === 'budget' || field === 'used_budget') return fmtMoney(Number(v));
   if (field === 'man_hours') return `${v} saat`;
   if (field === 'start_date' || field === 'end_date') {
     const d = new Date(v);
     return Number.isNaN(d.getTime()) ? v : d.toLocaleDateString('az-AZ', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }
   return v;
+}
+
+// budget/used_budget are continuous currency amounts, not a finite set of
+// categories — used as a row/column dimension they must NOT fan out one
+// bucket per distinct amount (that produced a column per training,
+// literally unreadable). Instead every row collapses into a SINGLE bucket
+// for that axis, labeled with just the field's plain title, and the cell
+// shows the (summed, since effectiveMetric already resolves to that field)
+// value directly — exactly what was asked: "sütün hissəsində sadəcə
+// başlığa seçilən sütünün başlığının adı qeyd olunsun".
+const VALUE_FIELDS = new Set(['budget', 'used_budget']);
+function groupKeyFor(field, t) {
+  return VALUE_FIELDS.has(field) ? field : displayVal(t[field]);
+}
+function groupLabelFor(field, key) {
+  return VALUE_FIELDS.has(field) ? FIELD_LABELS[field] : labelFor(field, key);
 }
 
 function newAgg() {
@@ -229,13 +246,15 @@ export default function AnalysisView({ trainings }) {
     const grandAgg = newAgg();
 
     sliced.forEach((t) => {
-      const r = displayVal(t[rowField]);
+      const r = groupKeyFor(rowField, t);
       // Composite key so multiple column fields collapse into one combined
       // column — e.g. colFieldsArr = ['status', 'dept'] produces keys like
       // "Approved|||Maliyyə departamenti". Field values themselves never
       // contain '|||', same assumption the row|||col cellAgg key below
-      // already relies on.
-      const c = colFieldsArr.map((f) => displayVal(t[f])).join('|||');
+      // already relies on. A budget/used_budget entry always contributes
+      // its constant groupKeyFor token instead of the row's own amount, so
+      // it never splits the composite key further (see groupKeyFor above).
+      const c = colFieldsArr.map((f) => groupKeyFor(f, t)).join('|||');
       rowSet.add(r); colSet.add(c);
       const key = r + '||||||' + c;
       if (!cellAgg[key]) cellAgg[key] = newAgg();
@@ -260,7 +279,7 @@ export default function AnalysisView({ trainings }) {
   // e.g. "Approved|||Maliyyə departamenti" -> "Təsdiqləndi / Maliyyə departamenti".
   function colLabel(key) {
     const parts = key.split('|||');
-    return colFieldsArr.map((f, i) => labelFor(f, parts[i])).join(' / ');
+    return colFieldsArr.map((f, i) => groupLabelFor(f, parts[i])).join(' / ');
   }
 
   function fmt(n) {
@@ -338,7 +357,7 @@ export default function AnalysisView({ trainings }) {
     ws.columns = columns;
 
     rowKeys.forEach((r) => {
-      const rowData = { rowLabel: labelFor(rowField, r) };
+      const rowData = { rowLabel: groupLabelFor(rowField, r) };
       colKeys.forEach((c, i) => { rowData[`c${i}`] = metricValue(cellAgg[r + '||||||' + c]); });
       rowData.total = metricValue(rowAgg[r]);
       ws.addRow(rowData);
@@ -494,7 +513,7 @@ export default function AnalysisView({ trainings }) {
           <tbody>
             {rowKeys.map((r) => (
               <tr key={r}>
-                <td style={{ fontWeight: 600 }}>{labelFor(rowField, r)}</td>
+                <td style={{ fontWeight: 600 }}>{groupLabelFor(rowField, r)}</td>
                 {colKeys.map((c) => {
                   const agg = cellAgg[r + '||||||' + c];
                   return (
