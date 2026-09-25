@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Send } from 'lucide-react';
 import { sb } from '../lib/supabase';
-import { computeBudgetStatus, computeForward } from '../lib/helpers';
+import { computeBudgetStatus, computeForward, computeGapMetrics, priorityMeta } from '../lib/helpers';
 
 const IMPORTANCE_OPTIONS = [
   '1 – Aşağı (minimal təsir)', '2 – Orta (əsas işə təsir edir)',
@@ -228,6 +228,19 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
               </select>
             </div>
           </div>
+          {(() => {
+            // Live preview only — training_requests has no weighted_gap/cgi
+            // columns; the real computed values are written once this
+            // request is added to the plan (see AddToPlanModal.jsx).
+            const gap = computeGapMetrics(currentLevel, requiredLevel, importance);
+            if (gap.cgi == null) return null;
+            const meta = priorityMeta(gap.priority);
+            return (
+              <div style={{ fontSize: 11.5, color: meta.color, fontWeight: 600, marginTop: 4 }}>
+                WG={gap.weighted_gap} · CGI={gap.cgi.toFixed(2)} · Prioritet: {meta.label}
+              </div>
+            );
+          })()}
           <div style={{ marginTop: 10 }}>
             <label>Vendor (istəyə bağlı)</label>
             <input type="text" value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder="Tövsiyə etdiyiniz provayder (istəyə bağlı)" />

@@ -1,18 +1,36 @@
 import { useState, useMemo, useEffect } from 'react';
 import ExcelJS from 'exceljs';
 import { ArrowLeftRight, Download } from 'lucide-react';
-import { statusMeta, priorityMeta } from '../lib/helpers';
+import { statusMeta, priorityMeta, fmtMoney } from '../lib/helpers';
 import { hasSavedCost } from '../lib/analytics';
 import { styleHeaderRow, downloadWorkbook } from '../lib/excelExport';
 import MultiSelectFilter from './MultiSelectFilter';
 
+// Every column TrackingView.jsx's İzləmə Cədvəli table shows (its
+// ALL_COLUMNS list) has a matching entry here, so nothing visible there is
+// unavailable as a row/column dimension here. budget and used_budget are
+// included deliberately — see the metric-select effect below for how
+// picking one of them as a dimension shows its value directly without
+// also requiring a "Dəyər" pick.
 const FIELD_LABELS = {
-  dept: 'Departament', sube: 'Şöbə', position: 'Vəzifə', category: 'Vəzifə Kateqoriyası',
-  skill: 'Təlimin Adı', comp_cat: 'Səriştə Kateqoriyası', transformation_area: 'Transformation Capability Area',
-  vendor: 'Provayder', status: 'Status', priority: 'Prioritet', budget_status: 'Büdcə Statusu',
-  employee_name: 'Ad Soyad', plan_year: 'İl',
+  plan_year: 'İl', dept: 'Departament', sube: 'Şöbə', employee_name: 'Ad Soyad', position: 'Vəzifə',
+  category: 'Vəzifə Kateqoriyası', comp_cat: 'Səriştə Kateqoriyası', learning_goal: 'Öyrənmə Məqsədi',
+  skill: 'Təlimin Adı', vendor: 'Provayder', man_hours: 'Müddət (Man Hours)',
+  used_budget: 'İstifadə Olunmuş Büdcə', budget: 'Planlanmış Büdcə', status: 'Status',
+  start_date: 'Planlaşdırılan Başlama Tarixi', end_date: 'Planlaşdırılan Bitmə Tarixi',
+  transformation_area: 'Transformation Capability Area', importance_level: 'Müvafiq Səriştənin Əhəmiyyətlilik dərəcəsi',
+  current_skill_level: 'Mövcud Bacarıq Səviyyəsi', required_skill_level: 'Tələb Olunan Bacarıq Səviyyəsi',
+  learning_method: 'Öyrənmə metodu', activity_duration: 'Təlim/İnkişaf Aktivliyinin Müddəti',
+  need_reason: 'Təlim və inkişaf ehtiyacının yaranma səbəbi', weighted_gap: 'WG (Weighted Gap)',
+  cgi: 'CGI (Competency Gap Index)', cgi_priority_full: 'Competency GAP Index (Priority)',
+  priority: 'Prioritet', budget_status: 'Büdcə Statusu',
 };
 const DIMENSION_FIELDS = Object.keys(FIELD_LABELS);
+// Free-text/long fields where grouping still works but produces one row
+// per distinct value (near-unique per training) rather than a handful of
+// meaningful buckets — kept selectable since TrackingView shows them too,
+// but the "Tövsiyə olunan analizlər" presets never default to these.
+const HIGH_CARDINALITY_FIELDS = new Set(['learning_goal', 'need_reason', 'cgi_priority_full']);
 
 // '' (no metric chosen yet) is deliberately first so the table doesn't
 // show numbers nobody asked for until the user actively picks a "Dəyər"
@@ -21,7 +39,7 @@ const METRIC_LABELS = {
   '': '— Seçilməyib —',
   budget: 'Planlanmış Büdcə (cəmi)', used_budget: 'İstifadə Olunmuş Büdcə (cəmi)', count: 'Təlim sayı', man_hours: 'Saatın cəmi',
   avg_budget: 'Orta büdcə', avg_hours: 'Orta saat', completion_rate: 'Tamamlanma faizi',
-  participants: 'İştirakçı sayı (unikal)', saved_cost: 'Qənaət (Planlanmış − İstifadə, yalnız Completed)',
+  participants: 'İştirakçı sayı (unikal)', saved_cost: 'Qənaət (Planlanmış − İstifadə, status önəmli deyil)',
 };
 const METRIC_OPTIONS = Object.keys(METRIC_LABELS);
 
@@ -61,9 +79,20 @@ const PRESETS = [
 function displayVal(v) {
   return v === null || v === undefined || v === '' ? '—' : String(v);
 }
+// Row/column header labels for fields being used as a GROUPING key (not
+// the aggregated metric value) — e.g. budget=1000 as a dimension shows
+// the literal "1,000 ₼" group label, distinct from budget summed as the
+// Dəyər metric across a whole group of rows.
 function labelFor(field, v) {
+  if (v === '—') return v;
   if (field === 'status') return statusMeta(v).label;
   if (field === 'priority') return priorityMeta(v).label;
+  if (field === 'budget' || field === 'used_budget') return fmtMoney(Number(v));
+  if (field === 'man_hours') return `${v} saat`;
+  if (field === 'start_date' || field === 'end_date') {
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? v : d.toLocaleDateString('az-AZ', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
   return v;
 }
 
@@ -149,6 +178,19 @@ export default function AnalysisView({ trainings }) {
       && p.colFields.every((f) => colFieldsArr.includes(f));
   }
 
+  // What actually gets computed/shown when the user hasn't explicitly
+  // picked a "Dəyər": rather than an empty table, this defaults to a
+  // plain row/column match count — UNLESS budget or used_budget is one of
+  // the chosen dimensions, in which case that field's own sum is shown
+  // directly (its literal value "on its own", without a separate metric
+  // pick, per the explicit ask). An explicit metric pick always wins.
+  const effectiveMetric = useMemo(() => {
+    if (metric) return metric;
+    if (colFieldsArr.includes('budget') || rowField === 'budget') return 'budget';
+    if (colFieldsArr.includes('used_budget') || rowField === 'used_budget') return 'used_budget';
+    return 'count';
+  }, [metric, rowField, colFieldsArr]);
+
   const uniqueValsByField = useMemo(() => {
     const map = {};
     DIMENSION_FIELDS.forEach((f) => { map[f] = [...new Set(trainings.map((t) => displayVal(t[f])))].filter((v) => v !== '—').sort(); });
@@ -167,7 +209,7 @@ export default function AnalysisView({ trainings }) {
 
   function metricValue(agg) {
     if (!agg) return 0;
-    switch (metric) {
+    switch (effectiveMetric) {
       case 'count': return agg.count;
       case 'budget': return agg.budgetSum;
       case 'used_budget': return agg.usedBudgetSum;
@@ -222,15 +264,15 @@ export default function AnalysisView({ trainings }) {
   }
 
   function fmt(n) {
-    if (metric === 'count' || metric === 'participants') return Math.round(n).toLocaleString('az-AZ');
-    if (metric === 'man_hours' || metric === 'avg_hours') return (Math.round(n * 10) / 10).toLocaleString('az-AZ') + ' saat';
-    if (metric === 'completion_rate') return Math.round(n) + '%';
+    if (effectiveMetric === 'count' || effectiveMetric === 'participants') return Math.round(n).toLocaleString('az-AZ');
+    if (effectiveMetric === 'man_hours' || effectiveMetric === 'avg_hours') return (Math.round(n * 10) / 10).toLocaleString('az-AZ') + ' saat';
+    if (effectiveMetric === 'completion_rate') return Math.round(n) + '%';
     return Math.round(n).toLocaleString('az-AZ') + ' ₼';
   }
 
   function cellDisplay(agg, rowTotalAgg) {
     const raw = metricValue(agg);
-    if (showPct && metric !== 'completion_rate' && metric !== 'participants') {
+    if (showPct && effectiveMetric !== 'completion_rate' && effectiveMetric !== 'participants') {
       const rowTotal = metricValue(rowTotalAgg);
       const pct = rowTotal ? Math.round((raw / rowTotal) * 100) : 0;
       return `${pct}%`;
@@ -242,15 +284,16 @@ export default function AnalysisView({ trainings }) {
   // qənaət" means nothing without knowing it's the gap between which two
   // bigger numbers. So whichever of the three budget metrics is selected,
   // the OTHER two show as a small context line under the main value:
-  //  - saved_cost -> Planlanmış/İstifadə (only the Completed rows counted
-  //    into the saved-cost total itself — see addToAgg's savedCost*Sum)
+  //  - saved_cost -> Planlanmış/İstifadə (only rows where BOTH are set,
+  //    any status — see addToAgg's savedCost*Sum / lib/analytics.js's
+  //    hasSavedCost)
   //  - budget -> İstifadə (plain total across every row, same population
   //    the budget metric itself sums)
   //  - used_budget -> Planlanmış (same, plain total)
   // Skipped in percent mode, where the context would clutter more than help.
   function budgetContextDetail(agg) {
     if (showPct || !agg) return null;
-    if (metric === 'saved_cost') {
+    if (effectiveMetric === 'saved_cost') {
       if (!agg.savedCostBudgetSum && !agg.savedCostUsedSum) return null;
       return (
         <div style={{ fontSize: 10.5, color: 'var(--ink-400)', fontWeight: 400, marginTop: 2, whiteSpace: 'nowrap' }}>
@@ -258,14 +301,14 @@ export default function AnalysisView({ trainings }) {
         </div>
       );
     }
-    if (metric === 'budget' && agg.usedBudgetSum) {
+    if (effectiveMetric === 'budget' && agg.usedBudgetSum) {
       return (
         <div style={{ fontSize: 10.5, color: 'var(--ink-400)', fontWeight: 400, marginTop: 2, whiteSpace: 'nowrap' }}>
           İstifadə: {fmt(agg.usedBudgetSum)}
         </div>
       );
     }
-    if (metric === 'used_budget' && agg.budgetSum) {
+    if (effectiveMetric === 'used_budget' && agg.budgetSum) {
       return (
         <div style={{ fontSize: 10.5, color: 'var(--ink-400)', fontWeight: 400, marginTop: 2, whiteSpace: 'nowrap' }}>
           Planlanmış: {fmt(agg.budgetSum)}
@@ -307,9 +350,9 @@ export default function AnalysisView({ trainings }) {
     const totalRow = ws.addRow(totalRowData);
     totalRow.font = { bold: true };
 
-    const numFmt = metric === 'budget' || metric === 'used_budget' || metric === 'saved_cost' || metric === 'avg_budget' ? '#,##0 "₼"'
-      : metric === 'completion_rate' ? '0"%"'
-      : metric === 'man_hours' || metric === 'avg_hours' ? '#,##0.0'
+    const numFmt = effectiveMetric === 'budget' || effectiveMetric === 'used_budget' || effectiveMetric === 'saved_cost' || effectiveMetric === 'avg_budget' ? '#,##0 "₼"'
+      : effectiveMetric === 'completion_rate' ? '0"%"'
+      : effectiveMetric === 'man_hours' || effectiveMetric === 'avg_hours' ? '#,##0.0'
       : '#,##0';
     columns.forEach((col) => { if (col.key !== 'rowLabel') ws.getColumn(col.key).numFmt = numFmt; });
 
@@ -385,14 +428,13 @@ export default function AnalysisView({ trainings }) {
               {METRIC_OPTIONS.map((m) => <option key={m} value={m}>{METRIC_LABELS[m]}</option>)}
             </select>
           </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, height: 40, cursor: metric ? 'pointer' : 'default', opacity: metric ? 1 : 0.5 }}>
-            <input type="checkbox" checked={showPct} disabled={!metric} onChange={(e) => setShowPct(e.target.checked)} />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, height: 40, cursor: 'pointer' }}>
+            <input type="checkbox" checked={showPct} onChange={(e) => setShowPct(e.target.checked)} />
             Faizlə göstər (sətir üzrə)
           </label>
           <button
             onClick={exportPivot}
             className="btn btn-success"
-            disabled={!metric}
             style={{ height: 40, marginLeft: 'auto' }}
           >
             <Download size={14} strokeWidth={2.2} /> Excel-ə ixrac et
@@ -400,16 +442,16 @@ export default function AnalysisView({ trainings }) {
         </div>
 
         <div style={{ fontSize: 13, color: 'var(--ink-600)', background: 'var(--ink-50)', borderRadius: 8, padding: '8px 12px', marginBottom: 4 }}>
-          {metric ? (
-            <>
-              Hazırda göstərilir: <strong>{FIELD_LABELS[rowField]}</strong> üzrə sətirlər,{' '}
-              <strong>{colFieldsArr.map((f) => FIELD_LABELS[f]).join(' / ')}</strong> görə sütunlar — dəyər:{' '}
-              <strong>{METRIC_LABELS[metric]}</strong>.
-            </>
-          ) : (
-            <>Cədvəli görmək üçün yuxarıdan bir <strong>Dəyər</strong> seçin, ya da hazır analizlərdən birini seçin.</>
-          )}
+          Hazırda göstərilir: <strong>{FIELD_LABELS[rowField]}</strong> üzrə sətirlər,{' '}
+          <strong>{colFieldsArr.map((f) => FIELD_LABELS[f]).join(' / ')}</strong> görə sütunlar — dəyər:{' '}
+          <strong>{METRIC_LABELS[effectiveMetric]}</strong>
+          {!metric && <> (dəyər seçilməyib, standart olaraq {colFieldsArr.includes('budget') || colFieldsArr.includes('used_budget') || rowField === 'budget' || rowField === 'used_budget' ? 'seçilmiş büdcə sahəsi' : 'sayı'} göstərilir)</>}.
         </div>
+        {(HIGH_CARDINALITY_FIELDS.has(rowField) || colFieldsArr.some((f) => HIGH_CARDINALITY_FIELDS.has(f))) && (
+          <div style={{ fontSize: 12, color: 'var(--amber-700, #b45309)', marginBottom: 4 }}>
+            Diqqət: seçilmiş sahə(lər) sərbəst mətndir — hər təlim demək olar unikal qiymətə malikdir, ona görə cədvəldə çox sayda sətir/sütun görünə bilər.
+          </div>
+        )}
 
         <button
           onClick={() => setShowSlicers((v) => !v)}
@@ -440,11 +482,6 @@ export default function AnalysisView({ trainings }) {
         )}
       </div>
 
-      {!metric ? (
-        <div className="card" style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--ink-500)' }}>
-          Hələ dəyər seçilməyib — cədvəl bundan sonra görünəcək.
-        </div>
-      ) : (
       <div className="table-wrap">
         <table>
           <thead>
@@ -489,7 +526,6 @@ export default function AnalysisView({ trainings }) {
           </tbody>
         </table>
       </div>
-      )}
     </div>
   );
 }

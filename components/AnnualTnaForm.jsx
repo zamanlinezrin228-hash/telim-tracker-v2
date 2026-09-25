@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import ExcelJS from 'exceljs';
 import { CheckCircle2, Plus, X, Send, Lightbulb, Download, RotateCcw } from 'lucide-react';
 import { sb } from '../lib/supabase';
-import { computeForward } from '../lib/helpers';
+import { computeForward, computeGapMetrics } from '../lib/helpers';
 import { styleGroupedTable, downloadWorkbook } from '../lib/excelExport';
 import { GROUP_BG, GROUP_TEXT } from '../lib/tableGroups';
 
@@ -592,6 +592,19 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                     <select value={r.requiredLevel} onChange={(e) => updateRow(idx, 'requiredLevel', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
                       <option value="">—</option>{LEVEL_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
+                    {(() => {
+                      // Live preview only — training_requests has no
+                      // weighted_gap/cgi columns to persist this into; the
+                      // real computed values get written once this request
+                      // is added to the plan (see AddToPlanModal.jsx).
+                      const gap = computeGapMetrics(r.currentLevel, r.requiredLevel, r.importance);
+                      if (gap.cgi == null) return null;
+                      return (
+                        <div style={{ fontSize: 10.5, color: PRIORITY_COLORS[gap.priority] || 'var(--ink-400)', marginTop: 3, whiteSpace: 'nowrap' }}>
+                          WG={gap.weighted_gap} · CGI={gap.cgi.toFixed(2)} ({PRIORITY_LABELS[gap.priority]})
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td style={{ minWidth: 190, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <select value={r.learningMethod} onChange={(e) => updateRow(idx, 'learningMethod', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>

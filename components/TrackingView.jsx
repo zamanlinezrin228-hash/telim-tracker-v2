@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import ExcelJS from 'exceljs';
 import { Search, Download, FilterX, Pencil, Trash2, Save, Columns3, Layers, ArrowUp, ArrowDown, Folder } from 'lucide-react';
 import { sb } from '../lib/supabase';
-import { fmtMoney, statusMeta, priorityMeta } from '../lib/helpers';
+import { fmtMoney, statusMeta, priorityMeta, computeGapMetrics } from '../lib/helpers';
 import { styleGroupedTable, downloadWorkbook } from '../lib/excelExport';
 import { GROUP_BG, GROUP_TEXT } from '../lib/tableGroups';
 import { TrainingStatusBadge, PriorityBadge, BudgetStatusBadge } from './Badges';
@@ -121,6 +121,14 @@ function saveFilterState(search, filters) {
     localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({ search, filters: filtersOut }));
   } catch {
     // localStorage unavailable — filters just won't persist this session
+  }
+}
+
+function clearSavedFilterState() {
+  try {
+    localStorage.removeItem(FILTER_STORAGE_KEY);
+  } catch {
+    // localStorage unavailable — nothing to clear
   }
 }
 
@@ -285,6 +293,10 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
     FILTER_FIELDS.forEach((f) => { reset[f] = new Set(uniqueValsByField[f]); });
     setFilters(reset);
     setSearch('');
+    // Explicit removal, not just relying on the save-effect to overwrite
+    // with the reset state on its next run — makes "start fresh" immediate
+    // and unambiguous rather than dependent on the effect firing correctly.
+    clearSavedFilterState();
   }
 
   const sorted = useMemo(() => {
@@ -389,7 +401,24 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
   }
 
   function openEdit(row) { setError(''); setEditing({ ...row }); }
-  function upd(field, value) { setEditing((e) => ({ ...e, [field]: value })); }
+  const GAP_SOURCE_FIELDS = new Set(['current_skill_level', 'required_skill_level', 'importance_level']);
+  function upd(field, value) {
+    setEditing((e) => {
+      const next = { ...e, [field]: value };
+      // weighted_gap/cgi/priority/cgi_priority_full are derived, read-only
+      // fields (see the form below) — recomputed live from whichever of
+      // the three source fields changed, so they can never drift out of
+      // sync with a hand-typed value the way free text edits used to allow.
+      if (GAP_SOURCE_FIELDS.has(field)) {
+        const gap = computeGapMetrics(next.current_skill_level, next.required_skill_level, next.importance_level);
+        next.weighted_gap = gap.weighted_gap;
+        next.cgi = gap.cgi;
+        next.priority = gap.priority;
+        next.cgi_priority_full = gap.cgi_priority_full;
+      }
+      return next;
+    });
+  }
 
   async function saveEdit() {
     setSaving(true); setError('');
@@ -589,19 +618,19 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
                 <label>{FIELD_LABELS.need_reason}</label>
                 <textarea rows={2} value={editing.need_reason || ''} onChange={(e) => upd('need_reason', e.target.value)} />
               </div>
-              <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+              <div style={{ display: 'flex', gap: 10, marginBottom: 6 }}>
                 <div style={{ flex: 1 }}>
-                  <label>{FIELD_LABELS.weighted_gap}</label>
-                  <input type="number" value={editing.weighted_gap ?? ''} onChange={(e) => upd('weighted_gap', Number(e.target.value))} />
+                  <label>{FIELD_LABELS.weighted_gap} <span style={{ fontWeight: 400, color: 'var(--ink-400)' }}>(avtomatik)</span></label>
+                  <input type="number" value={editing.weighted_gap ?? ''} disabled />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label>{FIELD_LABELS.cgi}</label>
-                  <input type="number" step="0.01" value={editing.cgi ?? ''} onChange={(e) => upd('cgi', Number(e.target.value))} />
+                  <label>{FIELD_LABELS.cgi} <span style={{ fontWeight: 400, color: 'var(--ink-400)' }}>(avtomatik)</span></label>
+                  <input type="number" step="0.01" value={editing.cgi ?? ''} disabled />
                 </div>
               </div>
               <div style={{ marginBottom: 14 }}>
-                <label>{FIELD_LABELS.cgi_priority_full}</label>
-                <textarea rows={2} value={editing.cgi_priority_full || ''} onChange={(e) => upd('cgi_priority_full', e.target.value)} />
+                <label>{FIELD_LABELS.cgi_priority_full} <span style={{ fontWeight: 400, color: 'var(--ink-400)' }}>(avtomatik)</span></label>
+                <textarea rows={2} value={editing.cgi_priority_full || ''} disabled />
               </div>
 
               <div className="filter-label" style={{ margin: '4px 0 10px' }}>Status, tarixlər və büdcə</div>
@@ -613,8 +642,8 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
                   </select>
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label>Prioritet</label>
-                  <select value={editing.priority || ''} onChange={(e) => upd('priority', e.target.value)}>
+                  <label>Prioritet <span style={{ fontWeight: 400, color: 'var(--ink-400)' }}>(avtomatik — Əhəmiyyət/Cari/Tələb olunan səviyyədən hesablanır)</span></label>
+                  <select value={editing.priority || ''} disabled>
                     {PRIORITY_OPTIONS.map((o) => <option key={o} value={o}>{priorityMeta(o).label}</option>)}
                   </select>
                 </div>
