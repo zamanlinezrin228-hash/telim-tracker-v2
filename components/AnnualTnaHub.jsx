@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { PlusSquare, Users2, Folder, History } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import { showToast } from '../lib/toast';
-import { matchesOwnScope } from '../lib/helpers';
+import { matchesOwnScope, inNotificationScope, isUnseenRequest } from '../lib/helpers';
 import AnnualTnaForm from './AnnualTnaForm';
 import AnnualTnaActiveReview from './AnnualTnaActiveReview';
 import AnnualTnaManagerReview from './AnnualTnaManagerReview';
@@ -24,7 +24,7 @@ import TnaCompletionTracker from './TnaCompletionTracker';
 // of managers reporting to YOU) only makes sense one level up the chain, so
 // it stays dept-manager/L&D only. None of this reuses L&D's company-wide
 // data-fetching logic — only the tab/nav layout.
-export default function AnnualTnaHub({ profile, team, requests, planYear, tnaWindowOpen, adhocRequestsOpen, onDataChanged }) {
+export default function AnnualTnaHub({ profile, team, requests, planYear, tnaWindowOpen, adhocRequestsOpen, onDataChanged, unseenSince }) {
   const isLd = profile.role === 'ld';
   const [togglingAdhoc, setTogglingAdhoc] = useState(false);
 
@@ -85,11 +85,23 @@ export default function AnnualTnaHub({ profile, team, requests, planYear, tnaWin
     : surveyRequests;
   const decidedCount = decisionHistoryRequests.filter((r) => r.status === 'Approved' || r.status === 'Rejected' || r.status === 'Needs Revision').length;
 
+  // Red "new" counters per tab — items that arrived or changed since this
+  // user's previous visit to İllik TNA (unseenSince is captured by
+  // pages/index.js just before it marks the page as seen).
+  const isReviewer = profile.role === 'ld' || profile.role === 'hr';
+  const ACTIVE = ['Pending Manager Review', 'Pending', 'In Review'];
+  const DECIDED = ['Approved', 'Rejected', 'Needs Revision'];
+  const newInScope = surveyRequests.filter(
+    (r) => inNotificationScope(r, profile, { isReviewer, hasTeam }) && isUnseenRequest(r, unseenSince)
+  );
+  const newActiveCount = newInScope.filter((r) => ACTIVE.includes(r.status)).length;
+  const newDecidedCount = newInScope.filter((r) => DECIDED.includes(r.status)).length;
+
   const tabs = [
     ...(showSorgu ? [{ key: 'sorgu', label: 'Sorğu yarat', Icon: PlusSquare }] : []),
     ...(showStatuslar ? [{ key: 'statuslar', label: 'Statuslar', Icon: Users2 }] : []),
-    { key: 'departament', label: 'Departament üzrə baxış', Icon: Folder, count: activeCount },
-    { key: 'qerarlar', label: 'Qərarlar tarixçəsi', Icon: History, count: decidedCount },
+    { key: 'departament', label: 'Departament üzrə baxış', Icon: Folder, count: activeCount, newCount: newActiveCount },
+    { key: 'qerarlar', label: 'Qərarlar tarixçəsi', Icon: History, count: decidedCount, newCount: newDecidedCount },
   ];
 
   const [tab, setTab] = useState(tabs[0].key);
@@ -118,6 +130,7 @@ export default function AnnualTnaHub({ profile, team, requests, planYear, tnaWin
               >
                 <t.Icon size={14} strokeWidth={2.2} /> {t.label}
                 {typeof t.count === 'number' && <span className="badge-count">{t.count}</span>}
+                {!!t.newCount && <span className="badge-new" title="Son baxışınızdan sonra yeni və ya dəyişmiş">{t.newCount > 99 ? '99+' : t.newCount} yeni</span>}
               </button>
             ))}
           </div>

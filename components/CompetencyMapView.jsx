@@ -52,7 +52,7 @@ function DistBars({ title, counts, labels, colorFor }) {
   );
 }
 
-export default function CompetencyMapView({ profile }) {
+export default function CompetencyMapView({ profile, fullAccess = false, scopeProfiles = [] }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [area, setArea] = useState('');
@@ -63,13 +63,41 @@ export default function CompetencyMapView({ profile }) {
 
   useEffect(() => {
     loadCompetencyData(sb)
-      .then((d) => {
-        setData(d);
-        const own = resolveArea(d.rules, profile?.dept, profile?.sube);
-        setArea(own || d.areas[0]?.key || '');
-      })
+      .then((d) => setData(d))
       .catch((e) => setError(e.message));
-  }, [profile?.dept, profile?.sube]);
+  }, []);
+
+  // Who sees which areas: L&D / full-access users (Nazrin, Tural, Leyla) see
+  // every area. Everyone else sees only the area(s) resolved for their own
+  // şöbə/department — a dept/şöbə manager also gets every area that occurs
+  // anywhere in their reporting tree (e.g. Maliyyə dept head also sees ERP,
+  // because the ERP şöbəsi sits inside Maliyyə). If nothing resolves (e.g.
+  // top management), fall back to all areas.
+  const visibleAreas = useMemo(() => {
+    if (!data) return [];
+    if (fullAccess) return data.areas;
+    const people = [profile, ...(scopeProfiles || [])].filter(Boolean);
+    const keys = new Set(people.map((p) => resolveArea(data.rules, p.dept, p.sube)).filter(Boolean));
+    if (keys.size === 0) return data.areas;
+    return data.areas.filter((a) => keys.has(a.key));
+  }, [data, fullAccess, profile, scopeProfiles]);
+
+  const scopeText = fullAccess
+    ? 'Bütün şirkət'
+    : profile?.scope_level === 'dept'
+      ? (profile?.dept || 'Öz departamentim')
+      : (profile?.sube || profile?.dept || 'Öz şöbəm');
+
+  // Default to the user's own area; keep the selection inside visibleAreas.
+  useEffect(() => {
+    if (!data || visibleAreas.length === 0) return;
+    if (visibleAreas.some((a) => a.key === area)) return;
+    const own = resolveArea(data.rules, profile?.dept, profile?.sube);
+    const pick = visibleAreas.find((a) => a.key === own) || visibleAreas[0];
+    setArea(pick.key);
+    setPosition(ALL);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, visibleAreas]);
 
   const areaMeta = useMemo(() => data?.areas.find((a) => a.key === area), [data, area]);
   const areaCatalog = useMemo(() => (data ? data.catalog.filter((c) => c.area === area) : []), [data, area]);
@@ -168,6 +196,7 @@ export default function CompetencyMapView({ profile }) {
           <div>
             <h1>Səriştə Xəritəsi</h1>
             <p>Departament və vəzifə üzrə səriştələr, tələb olunan səviyyə və kritiklik — yalnız baxış və analiz üçün.</p>
+            <span className="scope-label">Görünüş: {scopeText}</span>
           </div>
           <div className="no-print">
             <button onClick={() => window.print()} className="btn btn-outline" style={{ height: 40 }}>
@@ -182,7 +211,7 @@ export default function CompetencyMapView({ profile }) {
           <div className="cm-control">
             <div className="filter-label">Departament / sahə</div>
             <select value={area} onChange={(e) => changeArea(e.target.value)}>
-              {data.areas.map((a) => {
+              {visibleAreas.map((a) => {
                 const unit = data.roleMap.find((r) => r.area === a.key)?.dept_label;
                 return <option key={a.key} value={a.key}>{a.label}{unit && unit !== a.label ? ` — ${unit}` : ''}</option>;
               })}

@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import Head from 'next/head';
 import { sb } from '../lib/supabase';
 import { showToast } from '../lib/toast';
-import { countUnseenRequests } from '../lib/helpers';
+import { countUnseenRequests, normalizeName } from '../lib/helpers';
 import LoginScreen from '../components/LoginScreen';
 import SignupScreen from '../components/SignupScreen';
 import Sidebar from '../components/Sidebar';
@@ -30,6 +30,12 @@ export default function Home() {
   const [requests, setRequests] = useState([]);
   const [appSettings, setAppSettings] = useState({ tna_window_open: false, tna_plan_year: new Date().getFullYear(), adhoc_requests_open: false });
   const [view, setView] = useState('home');
+  // Everyone below this user in the manager_id tree (all levels), from
+  // get_my_scope_profiles() — see sql/2026-09-27_subtree_scope_and_tna_notifications.sql.
+  const [scopeProfiles, setScopeProfiles] = useState([]);
+  // İllik TNA 'last seen' value from BEFORE the current visit, so the
+  // hub's tabs can still highlight what's new while the user is on the page.
+  const [tnaUnseenSince, setTnaUnseenSince] = useState(null);
 
   const loadData = useCallback(async () => {
     const { data: tData } = await sb.from('trainings').select('*').order('id');
@@ -51,7 +57,16 @@ export default function Home() {
   const afterLogin = useCallback(async () => {
     const { data: { user } } = await sb.auth.getUser();
     const { data: prof } = await sb.from('profiles').select('*').eq('id', user.id).single();
-    setProfile(prof);
+    // Whole reporting tree (not just direct reports). Fails harmlessly
+    // (empty list → old dept/şöbə-only behaviour) until the SQL is applied.
+    let scopeList = [];
+    const { data: scopeData, error: scopeErr } = await sb.rpc('get_my_scope_profiles');
+    if (!scopeErr && Array.isArray(scopeData)) scopeList = scopeData;
+    setScopeProfiles(scopeList);
+    const scopeNameSet = new Set(
+      [prof.full_name_az, ...scopeList.map((p) => p.full_name_az)].filter(Boolean).map(normalizeName)
+    );
+    setProfile({ ...prof, scope_name_set: scopeNameSet });
     // scope_level/role are needed to tell a şöbə-level manager's own
     // forwarded batch apart from a plain employee's single-row submission
     // when both land in this same manager's queue (see AnnualTnaForm.jsx's
@@ -132,9 +147,19 @@ export default function Home() {
   // surface overlapping training_requests rows for a manager, and a
   // separate per-page count would let a user "read" something on one page
   // while the other still claims it's unread.
+  // Separate counts: ad-hoc requests → "Təlim Sorğuları", annual TNA
+  // (source='Manager Survey') → "İllik TNA". Each page has its own "last
+  // seen" timestamp; if the last_seen_tna_at column doesn't exist yet (SQL
+  // not applied), İllik TNA falls back to last_seen_requests_at.
+  const hasTnaSeenColumn = !!profile && Object.prototype.hasOwnProperty.call(profile, 'last_seen_tna_at');
+  const tnaLastSeen = profile ? (hasTnaSeenColumn ? profile.last_seen_tna_at : profile.last_seen_requests_at) : null;
   const requestsNotifCount = useMemo(
-    () => countUnseenRequests(requests, profile, { isReviewer, hasTeam }),
+    () => countUnseenRequests(requests, profile, { isReviewer, hasTeam }, 'adhoc'),
     [requests, profile, isReviewer, hasTeam]
+  );
+  const tnaNotifCount = useMemo(
+    () => countUnseenRequests(requests, profile, { isReviewer, hasTeam }, 'tna', tnaLastSeen),
+    [requests, profile, isReviewer, hasTeam, tnaLastSeen]
   );
 
   // Visiting either page that surfaces training_requests marks everything
@@ -146,15 +171,12 @@ export default function Home() {
   useEffect(() => {
     if (!loggedIn || !profile || (view !== 'requests' && view !== 'annual-tna')) return;
     const now = new Date().toISOString();
-    setProfile((p) => (p ? { ...p, last_seen_requests_at: now } : p));
-    sb.from('profiles').update({ last_seen_requests_at: now }).eq('id', profile.id);
+    const field = view === 'annual-tna' && hasTnaSeenColumn ? 'last_seen_tna_at' : 'last_seen_requests_at';
+    if (view === 'annual-tna') setTnaUnseenSince(tnaLastSeen || null);
+    setProfile((p) => (p ? { ...p, [field]: now } : p));
+    sb.from('profiles').update({ [field]: now }).eq('id', profile.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, loggedIn, profile?.id]);
-
-  const sidebarBadges = {
-    requests: requestsNotifCount,
-    ...(isReviewer ? { 'annual-tna': requests.filter((r) => r.status === 'Pending' && r.source === 'Manager Survey').length } : {}),
-  };
 
   if (loading) {
     return (
@@ -203,6 +225,11 @@ export default function Home() {
   // own team's rows (see IdpView.jsx's isDirectManager).
   const showIdp = isReviewer || hasTeam;
 
+  const sidebarBadges = {
+    requests: requestsNotifCount,
+    ...(showAnnualTna ? { 'annual-tna': tnaNotifCount } : {}),
+  };
+
   return (
     <>
       <Head><title>Təlim Tracker</title></Head>
@@ -211,7 +238,7 @@ export default function Home() {
         <div className="app-main">
           <div key={view} className="view-enter">
             {view === 'home' && (
-              <HomeScreen profile={profile} team={team} setView={setView} tnaWindowOpen={appSettings.tna_window_open} planYear={appSettings.tna_plan_year} canSeeDashboard={canSeeDashboard} requestsNotifCount={requestsNotifCount} />
+              <HomeScreen profile={profile} team={team} setView={setView} tnaWindowOpen={appSettings.tna_window_open} planYear={appSettings.tna_plan_year} canSeeDashboard={canSeeDashboard} requestsNotifCount={requestsNotifCount} tnaNotifCount={tnaNotifCount} showAnnualTna={showAnnualTna} />
             )}
             {view === 'dashboard' && canSeeDashboard && (
               <DashboardView trainings={allTrainings} ownScopeTrainings={trainings} profile={profile} team={team} requests={requests} restrictToOwnScope={!hasDashboardFullAccess} />
@@ -227,6 +254,7 @@ export default function Home() {
                     profile={profile} team={team} requests={requests} planYear={appSettings.tna_plan_year}
                     tnaWindowOpen={appSettings.tna_window_open} adhocRequestsOpen={appSettings.adhoc_requests_open}
                     onDataChanged={handleDataChanged}
+                    unseenSince={tnaUnseenSince}
                   />
                 ) : (
                   appSettings.tna_window_open && (
@@ -240,7 +268,7 @@ export default function Home() {
             {view === 'idp' && showIdp && (
               <IdpView requests={requests} trainings={trainings} profile={profile} team={team} onDataChanged={handleDataChanged} />
             )}
-            {view === 'competency-map' && <CompetencyMapView profile={profile} />}
+            {view === 'competency-map' && <CompetencyMapView profile={profile} fullAccess={hasDashboardFullAccess} scopeProfiles={scopeProfiles} />}
             {view === 'guide' && <ProcessGuideView />}
           </div>
         </div>

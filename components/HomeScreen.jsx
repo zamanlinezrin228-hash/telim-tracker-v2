@@ -1,6 +1,6 @@
 import { LayoutDashboard, ClipboardList, FileText, CalendarDays, UserSquare2, ArrowRight, Target } from 'lucide-react';
 
-export default function HomeScreen({ profile, team, setView, tnaWindowOpen, planYear, canSeeDashboard, requestsNotifCount }) {
+export default function HomeScreen({ profile, team, setView, tnaWindowOpen, planYear, canSeeDashboard, requestsNotifCount, tnaNotifCount, showAnnualTna }) {
   const hasTeam = team && team.length > 0;
   const isReviewer = profile.role === 'ld' || profile.role === 'hr';
 
@@ -47,7 +47,7 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
     },
   );
 
-  if (tnaWindowOpen || profile.role === 'ld') {
+  if (showAnnualTna ?? (tnaWindowOpen || profile.role === 'ld')) {
     cards.push({
       key: 'annual-tna',
       title: `İllik TNA — ${planYear}`,
@@ -55,10 +55,13 @@ export default function HomeScreen({ profile, team, setView, tnaWindowOpen, plan
         ? (hasTeam
             ? 'Öz təlim ehtiyacınızı və komandanızın ehtiyaclarını cədvəl formasında doldurun.'
             : 'Öz illik təlim ehtiyacınızı cədvəl formasında doldurun.')
-        : 'Pəncərə hazırda bağlıdır (yalnız L&D test məqsədilə görür).',
+        : (profile.role === 'ld'
+            ? 'Pəncərə hazırda bağlıdır (yalnız L&D test məqsədilə görür).'
+            : 'Komandanızın illik TNA sorğularını izləyin və qərar verin.'),
       Icon: CalendarDays,
       accent: '#dc2626',
       linkLabel: 'Formu doldur',
+      badge: tnaNotifCount,
     });
   }
 

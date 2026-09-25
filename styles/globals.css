@@ -996,3 +996,18 @@ tbody tr:hover td.sticky-col { background: var(--ink-200); }
   .cm-hero { box-shadow: none; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .cm-group { box-shadow: none; }
 }
+
+/* İllik TNA tab "new" counter — same red as the sidebar notification badge */
+.subtab-pill .badge-new {
+  font-size: 10.5px; font-weight: 800; background: #ef4444; color: #fff;
+  border-radius: 999px; padding: 1px 7px; line-height: 1.5;
+  animation: badgePop .3s cubic-bezier(.3,1.4,.4,1) both;
+}
+.subtab-pill.active .badge-new { background: #ef4444; color: #fff; }
+
+/* Scope label ("Görünüş: ...") on Dashboard / Səriştə Xəritəsi */
+.scope-label {
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 8px;
+  font-size: 12.5px; font-weight: 700; color: var(--ink-600, #475569);
+  background: var(--ink-100, #f1f5f9); border-radius: 999px; padding: 4px 12px;
+}
