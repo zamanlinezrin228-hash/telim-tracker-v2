@@ -21,6 +21,39 @@ const METRIC_LABELS = {
 };
 const METRIC_OPTIONS = Object.keys(METRIC_LABELS);
 
+// Ready-made row/column/dəyər combinations for the most common questions
+// this table gets used for — shown as one-click buttons above the manual
+// controls so a user doesn't have to guess which of the 13 dimension
+// fields to cross with which to get a specific, useful answer. Each one
+// is a real, named question ("hansı departament nə qədər qənaət edib?"),
+// not just a random field pairing.
+const PRESETS = [
+  {
+    label: 'Departament üzrə Qənaət', metric: 'saved_cost', rowField: 'dept', colFields: ['status'],
+    desc: 'Hər departamentin planlanmış və real xərc fərqini, statusa görə göstərir.',
+  },
+  {
+    label: 'Departament üzrə Planlanmış Büdcə', metric: 'budget', rowField: 'dept', colFields: ['status'],
+    desc: 'Hər departamentə ayrılan büdcəni statusa görə bölür.',
+  },
+  {
+    label: 'Status üzrə Təlim Sayı', metric: 'count', rowField: 'status', colFields: ['dept'],
+    desc: 'Neçə təlim hansı statusdadır — departament üzrə bölünmüş.',
+  },
+  {
+    label: 'Provayder üzrə Real Xərc', metric: 'used_budget', rowField: 'vendor', colFields: ['status'],
+    desc: 'Hansı provayderə faktiki nə qədər xərclənib.',
+  },
+  {
+    label: 'Prioritet üzrə Tamamlanma', metric: 'completion_rate', rowField: 'priority', colFields: ['dept'],
+    desc: 'Prioritet səviyyəsinə görə təlimlərin nə qədəri bitib.',
+  },
+  {
+    label: 'Əməkdaş üzrə Təlim Saatı', metric: 'man_hours', rowField: 'employee_name', colFields: ['comp_cat'],
+    desc: 'Kim nə qədər təlim saatı keçib — bacarıq növünə (Hard/Soft Skills) görə.',
+  },
+];
+
 function displayVal(v) {
   return v === null || v === undefined || v === '' ? '—' : String(v);
 }
@@ -70,6 +103,7 @@ export default function AnalysisView({ trainings }) {
   const [metric, setMetric] = useState('budget');
   const [catFilters, setCatFilters] = useState({});
   const [showPct, setShowPct] = useState(false);
+  const [showSlicers, setShowSlicers] = useState(false);
 
   const colFieldsArr = useMemo(
     () => DIMENSION_FIELDS.filter((f) => f !== rowField && colFields.has(f)),
@@ -97,6 +131,17 @@ export default function AnalysisView({ trainings }) {
     const other = colFieldsArr[0];
     setColFields(new Set([rowField]));
     setRowField(other);
+  }
+
+  function applyPreset(p) {
+    setRowField(p.rowField);
+    setColFields(new Set(p.colFields));
+    setMetric(p.metric);
+  }
+  function isActivePreset(p) {
+    return rowField === p.rowField && metric === p.metric
+      && colFieldsArr.length === p.colFields.length
+      && p.colFields.every((f) => colFieldsArr.includes(f));
   }
 
   const uniqueValsByField = useMemo(() => {
@@ -188,19 +233,41 @@ export default function AnalysisView({ trainings }) {
     return fmt(raw);
   }
 
-  // Qənaət alone is a difference of two other numbers, so a bare total is
-  // easy to misread without them — shown as a small sub-line under the main
-  // value, same budgetSum/usedBudgetSum the saved_cost total is already
-  // derived from (only ever accumulated from rows with both fields set —
-  // see addToAgg). Skipped in percent mode, where the context would clutter
-  // more than it clarifies.
-  function savedCostDetail(agg) {
-    if (metric !== 'saved_cost' || showPct || !agg || (!agg.savedCostBudgetSum && !agg.savedCostUsedSum)) return null;
-    return (
-      <div style={{ fontSize: 10.5, color: 'var(--ink-400)', fontWeight: 400, marginTop: 2, whiteSpace: 'nowrap' }}>
-        Planlanmış: {fmt(agg.savedCostBudgetSum)} · İstifadə: {fmt(agg.savedCostUsedSum)}
-      </div>
-    );
+  // Any budget-related number is easy to misread in isolation — "3,865 ₼
+  // qənaət" means nothing without knowing it's the gap between which two
+  // bigger numbers. So whichever of the three budget metrics is selected,
+  // the OTHER two show as a small context line under the main value:
+  //  - saved_cost -> Planlanmış/İstifadə (only the Completed rows counted
+  //    into the saved-cost total itself — see addToAgg's savedCost*Sum)
+  //  - budget -> İstifadə (plain total across every row, same population
+  //    the budget metric itself sums)
+  //  - used_budget -> Planlanmış (same, plain total)
+  // Skipped in percent mode, where the context would clutter more than help.
+  function budgetContextDetail(agg) {
+    if (showPct || !agg) return null;
+    if (metric === 'saved_cost') {
+      if (!agg.savedCostBudgetSum && !agg.savedCostUsedSum) return null;
+      return (
+        <div style={{ fontSize: 10.5, color: 'var(--ink-400)', fontWeight: 400, marginTop: 2, whiteSpace: 'nowrap' }}>
+          Planlanmış: {fmt(agg.savedCostBudgetSum)} · İstifadə: {fmt(agg.savedCostUsedSum)}
+        </div>
+      );
+    }
+    if (metric === 'budget' && agg.usedBudgetSum) {
+      return (
+        <div style={{ fontSize: 10.5, color: 'var(--ink-400)', fontWeight: 400, marginTop: 2, whiteSpace: 'nowrap' }}>
+          İstifadə: {fmt(agg.usedBudgetSum)}
+        </div>
+      );
+    }
+    if (metric === 'used_budget' && agg.budgetSum) {
+      return (
+        <div style={{ fontSize: 10.5, color: 'var(--ink-400)', fontWeight: 400, marginTop: 2, whiteSpace: 'nowrap' }}>
+          Planlanmış: {fmt(agg.budgetSum)}
+        </div>
+      );
+    }
+    return null;
   }
 
   function heatColor(agg) {
@@ -256,10 +323,32 @@ export default function AnalysisView({ trainings }) {
   return (
     <div style={{ marginTop: 8 }}>
       <div className="section-title">Ətraflı Analiz</div>
-      <div className="section-sub" style={{ marginBottom: 18 }}>Sahələri seçib canlı cədvəl analiz qurun</div>
+      <div className="section-sub" style={{ marginBottom: 18 }}>Hazır analizlərdən seçin, ya da sahələri özünüz qurun</div>
 
       <div className="card no-print" style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 16, alignItems: 'flex-end' }}>
+        <div className="filter-label" style={{ marginBottom: 10 }}>Tövsiyə olunan analizlər</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+          {PRESETS.map((p) => {
+            const active = isActivePreset(p);
+            return (
+              <button
+                key={p.label}
+                onClick={() => applyPreset(p)}
+                title={p.desc}
+                className={active ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm'}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--ink-500)', marginBottom: 4 }}>
+          {PRESETS.find(isActivePreset)?.desc || 'Aşağıdakı sahələrlə öz analizinizi qurdunuz.'}
+        </div>
+      </div>
+
+      <div className="card no-print" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12, alignItems: 'flex-end' }}>
           <div>
             <div className="filter-label">Sətir sahəsi</div>
             <select value={rowField} onChange={(e) => setRowField(e.target.value)} style={{ minWidth: 180 }}>
@@ -284,7 +373,6 @@ export default function AnalysisView({ trainings }) {
               onChange={(s) => setColFields(s)}
               labelFor={(f) => FIELD_LABELS[f]}
             />
-            <div style={{ fontSize: 11.5, color: 'var(--ink-500)', marginTop: 4 }}>{colFieldsArr.map((f) => FIELD_LABELS[f]).join(' / ')}</div>
           </div>
           <div>
             <div className="filter-label">Dəyər</div>
@@ -305,24 +393,39 @@ export default function AnalysisView({ trainings }) {
           </button>
         </div>
 
-        <div className="filter-label" style={{ marginBottom: 8 }}>
-          Slicer-lər (əlavə filtrlər) {activeSlicerCount > 0 && <span style={{ color: 'var(--blue)' }}>· {activeSlicerCount} aktiv</span>}
+        <div style={{ fontSize: 13, color: 'var(--ink-600)', background: 'var(--ink-50)', borderRadius: 8, padding: '8px 12px', marginBottom: 4 }}>
+          Hazırda göstərilir: <strong>{FIELD_LABELS[rowField]}</strong> üzrə sətirlər,{' '}
+          <strong>{colFieldsArr.map((f) => FIELD_LABELS[f]).join(' / ')}</strong> görə sütunlar — dəyər:{' '}
+          <strong>{METRIC_LABELS[metric]}</strong>.
         </div>
-        <div className="slicer-row">
-          {DIMENSION_FIELDS.map((f) => (
-            <MultiSelectFilter
-              key={f}
-              label={FIELD_LABELS[f]}
-              options={uniqueValsByField[f] || []}
-              selected={catFilters[f] || new Set(uniqueValsByField[f])}
-              onChange={(s) => setCatFilters((prev) => ({ ...prev, [f]: s }))}
-              labelFor={(v) => labelFor(f, v)}
-            />
-          ))}
-          {activeSlicerCount > 0 && (
-            <button onClick={clearAllSlicers} className="btn btn-outline btn-sm">Hamısını təmizlə</button>
-          )}
-        </div>
+
+        <button
+          onClick={() => setShowSlicers((v) => !v)}
+          className="btn btn-outline btn-sm"
+          style={{ marginTop: 8 }}
+        >
+          {showSlicers ? 'Əlavə filtrləri gizlət' : 'Əlavə filtrlər'} {activeSlicerCount > 0 && `(${activeSlicerCount} aktiv)`}
+        </button>
+
+        {showSlicers && (
+          <div style={{ marginTop: 10 }}>
+            <div className="slicer-row">
+              {DIMENSION_FIELDS.map((f) => (
+                <MultiSelectFilter
+                  key={f}
+                  label={FIELD_LABELS[f]}
+                  options={uniqueValsByField[f] || []}
+                  selected={catFilters[f] || new Set(uniqueValsByField[f])}
+                  onChange={(s) => setCatFilters((prev) => ({ ...prev, [f]: s }))}
+                  labelFor={(v) => labelFor(f, v)}
+                />
+              ))}
+              {activeSlicerCount > 0 && (
+                <button onClick={clearAllSlicers} className="btn btn-outline btn-sm">Hamısını təmizlə</button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="table-wrap">
@@ -343,13 +446,13 @@ export default function AnalysisView({ trainings }) {
                   return (
                     <td key={c} style={{ background: heatColor(agg) }}>
                       {cellDisplay(agg, rowAgg[r])}
-                      {savedCostDetail(agg)}
+                      {budgetContextDetail(agg)}
                     </td>
                   );
                 })}
                 <td style={{ fontWeight: 700 }}>
                   {fmt(metricValue(rowAgg[r]))}
-                  {savedCostDetail(rowAgg[r])}
+                  {budgetContextDetail(rowAgg[r])}
                 </td>
               </tr>
             ))}
@@ -358,12 +461,12 @@ export default function AnalysisView({ trainings }) {
               {colKeys.map((c) => (
                 <td key={c} style={{ fontWeight: 700 }}>
                   {fmt(metricValue(colAgg[c]))}
-                  {savedCostDetail(colAgg[c])}
+                  {budgetContextDetail(colAgg[c])}
                 </td>
               ))}
               <td style={{ fontWeight: 800 }}>
                 {fmt(metricValue(grandAgg))}
-                {savedCostDetail(grandAgg)}
+                {budgetContextDetail(grandAgg)}
               </td>
             </tr>
           </tbody>
