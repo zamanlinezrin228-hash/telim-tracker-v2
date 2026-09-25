@@ -3,6 +3,7 @@ import {
   UserSquare2, Download, FileText, BookOpen, Wallet, Timer, CheckCircle2, Search, Map as MapIcon, ClipboardCheck,
 } from 'lucide-react';
 import { sb } from '../lib/supabase';
+import { loadCompetencyData } from '../lib/competency';
 import { fmtMoney, fmtDateTime } from '../lib/helpers';
 import { ReqStatusBadge, PriorityBadge, TrainingStatusBadge } from './Badges';
 import EmptyState from './EmptyState';
@@ -43,8 +44,13 @@ export default function IdpView({ requests, trainings, profile, team, onDataChan
   const [ambiguousNames, setAmbiguousNames] = useState(new Set());
 
   useEffect(() => {
-    sb.from('competency_library').select('category, competency, sub_competency').then(({ data }) => {
-      setLibrary(data || []);
+    // Old library kept so earlier TNA rows (written with its wording) still
+    // resolve; the new catalog covers everything submitted from now on.
+    Promise.all([
+      sb.from('competency_library').select('category, competency, sub_competency'),
+      loadCompetencyData(sb).catch(() => ({ catalog: [] })),
+    ]).then(([{ data }, { catalog }]) => {
+      setLibrary([...(catalog || []), ...(data || [])]);
     });
     // A handful of names are shared by two genuinely different people in
     // this org (confirmed live: e.g. two different "Tural Əhmədov"
