@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import ExcelJS from 'exceljs';
 import { CheckCircle2, Plus, X, Send, Lightbulb, Download, RotateCcw } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import { computeForward, computeGapMetrics } from '../lib/helpers';
 import { styleGroupedTable, downloadWorkbook } from '../lib/excelExport';
+import { loadCompetencyData, resolveArea, roleStatsByCatalogId, uniqueInOrder, normText, CRITICALITY_LABELS } from '../lib/competency';
 import { GROUP_BG, GROUP_TEXT } from '../lib/tableGroups';
 
 const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical'];
@@ -71,68 +72,12 @@ function focusOut(e) { e.target.style.borderColor = 'var(--ink-200)'; e.target.s
 function emptyRow(defaultEmployeeId = '') {
   return {
     sourceRequestId: null,
-    employeeId: defaultEmployeeId, manualName: '', position: '', category: '', competency: '', skill: '', needReason: '',
+    employeeId: defaultEmployeeId, manualName: '', position: '', area: '', category: '', competency: '', skill: '', needReason: '',
     priority: 'Medium', importance: '', currentLevel: '', requiredLevel: '',
     compCat: '', vendor: '', manHours: '', budget: '',
     transformationArea: '', learningMethod: '', activityDuration: '', learningGoal: '',
     start: '', end: '',
   };
-}
-
-// The competency_library rows carry real dept/position names, entered inconsistently
-// (mixed Az/En, "Departamenti" vs "Department" vs bare names, occasional typos).
-// normalize() handles case (Azerbaijani-aware, so İ -> i correctly) and punctuation;
-// textMatch() is exact-or-substring in either direction, which is strict enough not
-// to conflate unrelated positions/departments. deptMatch() additionally strips a
-// handful of common noise words (departamenti/department/şöbəsi/idarəedilməsi/...)
-// so e.g. "İnzibati Şöbə" (profiles) still matches "İnzibati İşlər Departamenti"
-// (library) even though neither is a literal substring of the other.
-function normalize(s) {
-  return (s || '')
-    .toLocaleLowerCase('az')
-    .replace(/[().,/&\-]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-const DEPT_NOISE_WORDS = ['departamenti', 'department', 'şöbəsi', 'regional', 'idarəedilməsi', 'zəncirinin', 'işlər', 'ltd', 'mmc'];
-function coreDept(s) {
-  let n = ' ' + normalize(s) + ' ';
-  DEPT_NOISE_WORDS.forEach((w) => { n = n.split(' ' + w + ' ').join(' '); });
-  return n.replace(/\s+/g, ' ').trim();
-}
-
-function textMatch(a, b) {
-  const na = normalize(a), nb = normalize(b);
-  if (!na || !nb) return false;
-  return na === nb || na.includes(nb) || nb.includes(na);
-}
-
-// A handful of departments are named in different languages between the two
-// tables (e.g. profiles has "İnformasiya texnologiyaları şöbəsi", the library
-// has "ERP / IT & Digital") with no shared substring at all — bridged here.
-const DEPT_SYNONYM_PAIRS = [['informasiya', 'erp'], ['informasiya', 'digital'], ['texnologiya', 'erp'], ['texnologiya', 'digital']];
-
-function deptMatch(a, b) {
-  if (textMatch(a, b)) return true;
-  const ca = coreDept(a), cb = coreDept(b);
-  if (ca && cb && (ca === cb || ca.includes(cb) || cb.includes(ca))) return true;
-  const na = normalize(a), nb = normalize(b);
-  if (!na || !nb) return false;
-  return DEPT_SYNONYM_PAIRS.some(([x, y]) => (na.includes(x) && nb.includes(y)) || (na.includes(y) && nb.includes(x)));
-}
-
-// Shows the full breadth of the employee's department — not narrowed to
-// their specific position — so managers can browse every competency
-// recorded for that department, not just the ones tagged to a matching
-// position string in the library.
-function matchesForRow(library, dept) {
-  if (!dept) return [];
-  return library.filter((row) => deptMatch(row.dept, dept));
-}
-
-function uniqueSorted(values) {
-  return [...new Set(values.filter(Boolean))].sort();
 }
 
 export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) {
@@ -144,14 +89,15 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
-  const [library, setLibrary] = useState([]);
+  const [comp, setComp] = useState({ areas: [], catalog: [], rules: [], roleMap: [] });
+  const [compError, setCompError] = useState('');
   const mergedPendingRef = useRef(false);
 
   useEffect(() => {
-    sb.from('competency_library').select('dept, position, category, competency, sub_competency, criticality, required_level').then(({ data }) => {
-      setLibrary(data || []);
-    });
+    loadCompetencyData(sb).then(setComp).catch((e) => setCompError(e.message));
   }, []);
+  const roleStats = useMemo(() => roleStatsByCatalogId(comp.roleMap), [comp.roleMap]);
+  const areaLabel = useMemo(() => new Map(comp.areas.map((a) => [a.key, a.label])), [comp.areas]);
 
   function mapIncomingRow(r) {
     const submitter = selectableEmployees.find((e) => e.full_name_az === r.employee_name);
@@ -161,7 +107,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
       employeeId: submitter ? submitter.id : '',
       manualName: submitter ? '' : (r.employee_name || ''),
       position: r.position || '',
-      category: '', competency: '',
+      area: '', category: '', competency: '',
       skill: r.training_title || '',
       needReason: r.reason || '',
       priority: r.priority || 'Medium',
@@ -198,12 +144,12 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile.id]);
 
-  function deptForRow(r) {
-    if (r.employeeId) {
-      const m = selectableEmployees.find((t) => t.id === r.employeeId);
-      if (m?.dept) return m.dept;
-    }
-    return profile.dept;
+  // Şöbə first, then department (see lib/competency.js resolveArea) — the
+  // employee's own org unit decides the area, not their position, and every
+  // competency in that area is offered.
+  function autoAreaForRow(r) {
+    const m = r.employeeId ? selectableEmployees.find((t) => t.id === r.employeeId) : null;
+    return m ? resolveArea(comp.rules, m.dept, m.sube) : resolveArea(comp.rules, profile.dept, profile.sube);
   }
 
   function fieldsFor(r) {
@@ -260,7 +206,8 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
       }
       // Changing employee/position/category resets the levels below it, since
       // the previously-picked values may no longer be valid for the new scope.
-      if (field === 'employeeId' || field === 'position') {
+      if (field === 'employeeId') next[idx].area = '';
+      if (field === 'employeeId' || field === 'position' || field === 'area') {
         next[idx].category = ''; next[idx].competency = ''; next[idx].skill = '';
       }
       if (field === 'category') { next[idx].competency = ''; next[idx].skill = ''; }
@@ -455,10 +402,16 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 12.5, color: 'var(--blue)', marginBottom: profile.role === 'ld' ? 18 : 8 }}>
         <Lightbulb size={15} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
         <span>
-          Əməkdaş seçdikdən sonra Kateqoriya → Səriştə → Alt səriştə sahələrində onun departamentinə aid bütün səriştə
-          siyahısı görünəcək (istəyə bağlı — özünüz də tamamilə fərqli bir şey yaza bilərsiniz).
+          Əməkdaş seçdikdən sonra onun şöbəsinə (şöbə yoxdursa departamentinə) uyğun səriştə sahəsinin bütün səriştələri —
+          vəzifədən asılı olmayaraq — Kateqoriya → Səriştə → Alt səriştə siyahılarında görünəcək. Sahəni &quot;Sahə&quot; siyahısından
+          dəyişə, ya da özünüz tamamilə fərqli bir şey yaza bilərsiniz.
         </span>
       </div>
+      {compError && (
+        <div className="notice notice-error" style={{ marginBottom: 10 }}>
+          Səriştə kataloqu yüklənmədi ({compError}). Siyahılar boş görünəcək — sahələri əl ilə yaza bilərsiniz.
+        </div>
+      )}
       <div className="tna-table" style={{ border: '2px solid var(--ink-200)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-xs)', marginBottom: 16 }}>
         <style jsx>{`
           .tna-table th, .tna-table td { border-right: 1.5px solid var(--ink-200); font-size: 13px; }
@@ -484,13 +437,16 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
             </thead>
             <tbody>
               {rows.map((r, idx) => {
-                const matched = matchesForRow(library, deptForRow(r));
-                const categoryOptions = uniqueSorted(matched.map((m) => m.category));
-                const scopedByCategory = r.category ? matched.filter((m) => normalize(m.category) === normalize(r.category)) : matched;
-                const competencyOptions = uniqueSorted(scopedByCategory.map((m) => m.competency));
-                const scopedByCompetency = r.competency ? scopedByCategory.filter((m) => normalize(m.competency) === normalize(r.competency)) : scopedByCategory;
-                const subOptions = uniqueSorted(scopedByCompetency.map((m) => m.sub_competency));
-                const matchedSub = matched.find((m) => normalize(m.sub_competency) === normalize(r.skill) && m.sub_competency);
+                const autoArea = autoAreaForRow(r);
+                const area = r.area === '' ? autoArea : (r.area === '*' ? null : r.area);
+                const matched = area ? comp.catalog.filter((m) => m.area === area) : comp.catalog;
+                const categoryOptions = uniqueInOrder(matched.map((m) => m.category));
+                const scopedByCategory = r.category ? matched.filter((m) => normText(m.category) === normText(r.category)) : matched;
+                const competencyOptions = uniqueInOrder(scopedByCategory.map((m) => m.competency));
+                const scopedByCompetency = r.competency ? scopedByCategory.filter((m) => normText(m.competency) === normText(r.competency)) : scopedByCategory;
+                const subOptions = uniqueInOrder(scopedByCompetency.map((m) => m.sub_competency));
+                const matchedSub = r.skill ? matched.find((m) => normText(m.sub_competency) === normText(r.skill)) : null;
+                const subStats = matchedSub ? roleStats.get(matchedSub.id) : null;
 
                 return (
                 <tr key={idx} style={{ background: idx % 2 === 0 ? 'var(--surface)' : 'var(--ink-50)' }}>
@@ -515,6 +471,15 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                   </td>
                   <td style={{ minWidth: 230, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <select
+                        value={r.area} onChange={(e) => updateRow(idx, 'area', e.target.value)}
+                        onFocus={focusIn} onBlur={focusOut} style={{ ...miniInputStyle, fontWeight: 600, color: 'var(--blue)' }}
+                        title="Səriştə sahəsi — əməkdaşın şöbəsinə görə avtomatik seçilir"
+                      >
+                        <option value="">{autoArea ? `Sahə: ${areaLabel.get(autoArea) || autoArea} (avtomatik)` : 'Sahə: bütün sahələr (avtomatik)'}</option>
+                        <option value="*">Bütün sahələr</option>
+                        {comp.areas.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
+                      </select>
                       <input
                         type="text" value={r.category} onChange={(e) => updateRow(idx, 'category', e.target.value)}
                         onFocus={focusIn} onBlur={focusOut} style={miniInputStyle}
@@ -540,10 +505,13 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                         Aşağıdakı siyahıdan uyğun səriştəni seçə bilərsiniz. Əgər axtardığınız burada yoxdursa, sərbəst şəkildə özünüz yaza bilərsiniz.
                       </div>
 
-                      {matchedSub && (matchedSub.required_level || matchedSub.criticality) && (
-                        <div style={{ fontSize: 10.5, color: 'var(--ink-400)', lineHeight: 1.35 }}>
-                          {matchedSub.required_level && <div>Tələb olunan səviyyə: {matchedSub.required_level}</div>}
-                          {matchedSub.criticality && <div>Kritiklik: {matchedSub.criticality}</div>}
+                      {subStats && (
+                        <div style={{ fontSize: 10.5, color: 'var(--ink-500)', lineHeight: 1.35, background: 'var(--ink-50)', borderRadius: 6, padding: '4px 6px' }}>
+                          <div>PDP üzrə {subStats.positions} vəzifədə tələb olunur</div>
+                          {subStats.minReq != null && (
+                            <div>Tələb olunan səviyyə: {subStats.minReq === subStats.maxReq ? subStats.minReq : `${subStats.minReq}–${subStats.maxReq}`}</div>
+                          )}
+                          {subStats.maxCrit != null && <div>Kritiklik (maks.): {subStats.maxCrit} – {CRITICALITY_LABELS[subStats.maxCrit]}</div>}
                         </div>
                       )}
                     </div>
