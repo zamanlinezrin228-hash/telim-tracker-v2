@@ -14,7 +14,11 @@ const FIELD_LABELS = {
 };
 const DIMENSION_FIELDS = Object.keys(FIELD_LABELS);
 
+// '' (no metric chosen yet) is deliberately first so the table doesn't
+// show numbers nobody asked for until the user actively picks a "Dəyər"
+// or a preset — see the empty state in the render below.
 const METRIC_LABELS = {
+  '': '— Seçilməyib —',
   budget: 'Planlanmış Büdcə (cəmi)', used_budget: 'İstifadə Olunmuş Büdcə (cəmi)', count: 'Təlim sayı', man_hours: 'Saatın cəmi',
   avg_budget: 'Orta büdcə', avg_hours: 'Orta saat', completion_rate: 'Tamamlanma faizi',
   participants: 'İştirakçı sayı (unikal)', saved_cost: 'Qənaət (Planlanmış − İstifadə, yalnız Completed)',
@@ -100,7 +104,8 @@ export default function AnalysisView({ trainings }) {
   // colFieldsArr (below) derives the actual, deterministically-ordered list
   // to use, always excluding rowField so the same field can't sit on both axes.
   const [colFields, setColFields] = useState(() => new Set(['status']));
-  const [metric, setMetric] = useState('budget');
+  // Starts unselected on purpose — see METRIC_LABELS comment.
+  const [metric, setMetric] = useState('');
   const [catFilters, setCatFilters] = useState({});
   const [showPct, setShowPct] = useState(false);
   const [showSlicers, setShowSlicers] = useState(false);
@@ -380,13 +385,14 @@ export default function AnalysisView({ trainings }) {
               {METRIC_OPTIONS.map((m) => <option key={m} value={m}>{METRIC_LABELS[m]}</option>)}
             </select>
           </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, height: 40, cursor: 'pointer' }}>
-            <input type="checkbox" checked={showPct} onChange={(e) => setShowPct(e.target.checked)} />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, height: 40, cursor: metric ? 'pointer' : 'default', opacity: metric ? 1 : 0.5 }}>
+            <input type="checkbox" checked={showPct} disabled={!metric} onChange={(e) => setShowPct(e.target.checked)} />
             Faizlə göstər (sətir üzrə)
           </label>
           <button
             onClick={exportPivot}
             className="btn btn-success"
+            disabled={!metric}
             style={{ height: 40, marginLeft: 'auto' }}
           >
             <Download size={14} strokeWidth={2.2} /> Excel-ə ixrac et
@@ -394,9 +400,15 @@ export default function AnalysisView({ trainings }) {
         </div>
 
         <div style={{ fontSize: 13, color: 'var(--ink-600)', background: 'var(--ink-50)', borderRadius: 8, padding: '8px 12px', marginBottom: 4 }}>
-          Hazırda göstərilir: <strong>{FIELD_LABELS[rowField]}</strong> üzrə sətirlər,{' '}
-          <strong>{colFieldsArr.map((f) => FIELD_LABELS[f]).join(' / ')}</strong> görə sütunlar — dəyər:{' '}
-          <strong>{METRIC_LABELS[metric]}</strong>.
+          {metric ? (
+            <>
+              Hazırda göstərilir: <strong>{FIELD_LABELS[rowField]}</strong> üzrə sətirlər,{' '}
+              <strong>{colFieldsArr.map((f) => FIELD_LABELS[f]).join(' / ')}</strong> görə sütunlar — dəyər:{' '}
+              <strong>{METRIC_LABELS[metric]}</strong>.
+            </>
+          ) : (
+            <>Cədvəli görmək üçün yuxarıdan bir <strong>Dəyər</strong> seçin, ya da hazır analizlərdən birini seçin.</>
+          )}
         </div>
 
         <button
@@ -428,6 +440,11 @@ export default function AnalysisView({ trainings }) {
         )}
       </div>
 
+      {!metric ? (
+        <div className="card" style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--ink-500)' }}>
+          Hələ dəyər seçilməyib — cədvəl bundan sonra görünəcək.
+        </div>
+      ) : (
       <div className="table-wrap">
         <table>
           <thead>
@@ -472,6 +489,7 @@ export default function AnalysisView({ trainings }) {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }
