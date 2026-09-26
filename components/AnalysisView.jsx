@@ -1,549 +1,436 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import ExcelJS from 'exceljs';
-import { ArrowLeftRight, Download } from 'lucide-react';
-import { statusMeta, priorityMeta } from '../lib/helpers';
-import { hasSavedCost } from '../lib/analytics';
+import { Download, ArrowDown, ArrowUp } from 'lucide-react';
+import { statusMeta, priorityMeta, fmtMoney } from '../lib/helpers';
+import { hasSavedCost, rowSavedCost } from '../lib/analytics';
 import { styleHeaderRow, downloadWorkbook } from '../lib/excelExport';
 import MultiSelectFilter from './MultiSelectFilter';
 
-// Every column TrackingView.jsx's İzləmə Cədvəli table shows (its
-// ALL_COLUMNS list) has a matching entry here, so nothing visible there is
-// unavailable as a row/column dimension here. budget and used_budget are
-// included deliberately — see the metric-select effect below for how
-// picking one of them as a dimension shows its value directly without
-// also requiring a "Dəyər" pick.
-const FIELD_LABELS = {
-  plan_year: 'İl', dept: 'Departament', sube: 'Şöbə', employee_name: 'Ad Soyad', position: 'Vəzifə',
-  category: 'Vəzifə Kateqoriyası', comp_cat: 'Səriştə Kateqoriyası', learning_goal: 'Öyrənmə Məqsədi',
-  skill: 'Təlimin Adı', vendor: 'Provayder', man_hours: 'Müddət (Man Hours)',
-  used_budget: 'İstifadə Olunmuş Büdcə', budget: 'Planlanmış Büdcə', status: 'Status',
-  start_date: 'Planlaşdırılan Başlama Tarixi', end_date: 'Planlaşdırılan Bitmə Tarixi',
-  transformation_area: 'Transformation Capability Area', importance_level: 'Müvafiq Səriştənin Əhəmiyyətlilik dərəcəsi',
-  current_skill_level: 'Mövcud Bacarıq Səviyyəsi', required_skill_level: 'Tələb Olunan Bacarıq Səviyyəsi',
-  learning_method: 'Öyrənmə metodu', activity_duration: 'Təlim/İnkişaf Aktivliyinin Müddəti',
-  need_reason: 'Təlim və inkişaf ehtiyacının yaranma səbəbi', weighted_gap: 'WG (Weighted Gap)',
-  cgi: 'CGI (Competency Gap Index)', cgi_priority_full: 'Competency GAP Index (Priority)',
-  priority: 'Prioritet', budget_status: 'Büdcə Statusu',
-};
-const DIMENSION_FIELDS = Object.keys(FIELD_LABELS);
-// Free-text/long fields where grouping still works but produces one row
-// per distinct value (near-unique per training) rather than a handful of
-// meaningful buckets — kept selectable since TrackingView shows them too,
-// but the "Tövsiyə olunan analizlər" presets never default to these.
-const HIGH_CARDINALITY_FIELDS = new Set(['learning_goal', 'need_reason', 'cgi_priority_full']);
+// ---------------------------------------------------------------------------
+// Ətraflı Analiz — sual-yönümlü qurulub, sərbəst "hər sahəni hər sahə ilə"
+// pivot deyil:
+//  • Sətir (qruplaşdırma) yalnız mənalı ölçülərdən seçilir.
+//  • Sütun (bölgü) yalnız az dəyərli, müqayisəyə yararlı sahələrdir
+//    (status, prioritet, səriştə kateqoriyası ...) — "Təlim × Vəzifə" kimi
+//    yüzlərlə boş xanalı cədvəl yaranmır.
+//  • Sütun seçilməyəndə bir sətirdə bütün əsas göstəricilər (say, iştirakçı,
+//    saat, büdcə, qənaət, tamamlanma) yan-yana — ən çox lazım olan görünüş.
+//  • Filtrlər bir-birinə uyğunlaşır: hər filtrin siyahısı digər filtrlərdən
+//    sonra qalan məlumatdan qurulur, boş kombinasiya seçmək mümkün olmur.
+// ---------------------------------------------------------------------------
 
-// '' (no metric chosen yet) is deliberately first so the table doesn't
-// show numbers nobody asked for until the user actively picks a "Dəyər"
-// or a preset — see the empty state in the render below.
-const METRIC_LABELS = {
-  '': '— Seçilməyib —',
-  budget: 'Planlanmış Büdcə (cəmi)', used_budget: 'İstifadə Olunmuş Büdcə (cəmi)', count: 'Təlim sayı', man_hours: 'Saatın cəmi',
-  avg_budget: 'Orta büdcə', avg_hours: 'Orta saat', completion_rate: 'Tamamlanma faizi',
-  participants: 'İştirakçı sayı (unikal)', saved_cost: 'Qənaət (Planlanmış − İstifadə, status önəmli deyil)',
-};
-const METRIC_OPTIONS = Object.keys(METRIC_LABELS);
+const EMPTY = '—';
 
-// Ready-made row/column/dəyər combinations for the most common questions
-// this table gets used for — shown as one-click buttons above the manual
-// controls so a user doesn't have to guess which of the 13 dimension
-// fields to cross with which to get a specific, useful answer. Each one
-// is a real, named question ("hansı departament nə qədər qənaət edib?"),
-// not just a random field pairing.
+const STATUS_ORDER = ['Scheduled to Commence on Planned Date', 'In Progress', 'Postponed', 'Completed', 'Canceled'];
+const PRIORITY_ORDER = ['Critical', 'High', 'Medium', 'Low'];
+
+function monthKey(t) {
+  if (!t.start_date) return EMPTY;
+  const d = new Date(t.start_date);
+  if (Number.isNaN(d.getTime())) return EMPTY;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+const MONTHS = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'İyn', 'İyl', 'Avq', 'Sen', 'Okt', 'Noy', 'Dek'];
+
+// Qruplaşdırma (sətir) ölçüləri
+const DIMS = {
+  dept: { label: 'Departament', get: (t) => t.dept },
+  vendor: { label: 'Provayder', get: (t) => t.vendor, many: true },
+  skill: { label: 'Təlim', get: (t) => t.skill, many: true },
+  employee_name: { label: 'Əməkdaş', get: (t) => t.employee_name, many: true },
+  category: { label: 'Vəzifə kateqoriyası', get: (t) => t.category, small: true },
+  comp_cat: { label: 'Səriştə kateqoriyası', get: (t) => t.comp_cat, small: true },
+  priority: { label: 'Prioritet', get: (t) => t.priority, small: true, order: PRIORITY_ORDER, fmt: (v) => priorityMeta(v).label },
+  status: { label: 'Status', get: (t) => t.status, small: true, order: STATUS_ORDER, fmt: (v) => statusMeta(v).label },
+  budget_status: { label: 'Büdcə statusu', get: (t) => t.budget_status, small: true },
+  learning_method: { label: 'Öyrənmə metodu', get: (t) => t.learning_method, small: true },
+  month: {
+    label: 'Başlama ayı', get: monthKey, chrono: true,
+    fmt: (v) => { if (v === EMPTY) return v; const [y, m] = v.split('-'); return `${MONTHS[Number(m) - 1]} ${y}`; },
+  },
+};
+const ROW_DIMS = ['dept', 'vendor', 'skill', 'employee_name', 'category', 'comp_cat', 'priority', 'status', 'learning_method', 'month'];
+// Sütun (bölgü) — yalnız az dəyərli sahələr
+const COL_DIMS = ['status', 'priority', 'comp_cat', 'budget_status', 'category', 'learning_method'];
+
+// Göstəricilər — tərifləri Dashboard KPI-ları ilə eynidir
+const METRICS = {
+  count: { label: 'Təlim sayı', fmt: (n) => n.toLocaleString('az-AZ') },
+  participants: { label: 'İştirakçı', fmt: (n) => n.toLocaleString('az-AZ') },
+  hours: { label: 'Saat', fmt: (n) => Math.round(n).toLocaleString('az-AZ') },
+  planned: { label: 'Planlanmış büdcə', fmt: fmtMoney },
+  used: { label: 'İstifadə olunmuş', fmt: fmtMoney, hint: 'Yalnız tamamlanmış təlimlər' },
+  saved: { label: 'Qənaət', fmt: fmtMoney, signed: true },
+  completion: { label: 'Tamamlanma', fmt: (n) => `${n}%`, pct: true },
+};
+const SUMMARY_METRICS = ['count', 'participants', 'hours', 'planned', 'used', 'saved', 'completion'];
+
+// Hazır analizlər — hər biri real bir suala cavabdır
 const PRESETS = [
-  {
-    label: 'Departament üzrə Qənaət', metric: 'saved_cost', rowField: 'dept', colFields: ['status'],
-    desc: 'Hər departamentin planlanmış və real xərc fərqini, statusa görə göstərir.',
-  },
-  {
-    label: 'Departament üzrə Planlanmış Büdcə', metric: 'budget', rowField: 'dept', colFields: ['status'],
-    desc: 'Hər departamentə ayrılan büdcəni statusa görə bölür.',
-  },
-  {
-    label: 'Status üzrə Təlim Sayı', metric: 'count', rowField: 'status', colFields: ['dept'],
-    desc: 'Neçə təlim hansı statusdadır — departament üzrə bölünmüş.',
-  },
-  {
-    label: 'Provayder üzrə Real Xərc', metric: 'used_budget', rowField: 'vendor', colFields: ['status'],
-    desc: 'Hansı provayderə faktiki nə qədər xərclənib.',
-  },
-  {
-    label: 'Prioritet üzrə Tamamlanma', metric: 'completion_rate', rowField: 'priority', colFields: ['dept'],
-    desc: 'Prioritet səviyyəsinə görə təlimlərin nə qədəri bitib.',
-  },
-  {
-    label: 'Əməkdaş üzrə Təlim Saatı', metric: 'man_hours', rowField: 'employee_name', colFields: ['comp_cat'],
-    desc: 'Kim nə qədər təlim saatı keçib — bacarıq növünə (Hard/Soft Skills) görə.',
-  },
+  { label: 'Departamentlər üzrə icmal', row: 'dept', col: '', sort: 'planned', desc: 'Hər departament üzrə təlim sayı, iştirakçı, saat, büdcə, qənaət və tamamlanma faizi.' },
+  { label: 'Provayder performansı', row: 'vendor', col: '', sort: 'used', desc: 'Hansı provayderə nə qədər xərclənib, nə qədər qənaət olunub, təlimlərin neçə faizi tamamlanıb.' },
+  { label: 'Ən çox planlanan təlimlər', row: 'skill', col: '', sort: 'count', desc: 'Ən çox tələb olunan təlimlər — toplu (qrup) təlim imkanlarını görmək üçün.' },
+  { label: 'Departament × Status', row: 'dept', col: 'status', metric: 'count', desc: 'Hər departamentdə təlimlər hansı mərhələdədir.' },
+  { label: 'Kritik təlimlər icra olunurmu?', row: 'priority', col: 'status', metric: 'count', desc: 'Prioritet səviyyəsinə görə təlimlərin statusu — kritik təlimlər geridə qalırmı.' },
+  { label: 'Hard / Soft investisiya', row: 'dept', col: 'comp_cat', metric: 'planned', desc: 'Departamentlər üzrə büdcənin Hard və Soft Skills arasında bölgüsü.' },
+  { label: 'Vəzifə kateqoriyası üzrə', row: 'category', col: '', sort: 'planned', desc: 'Hansı vəzifə səviyyəsinə nə qədər investisiya edilir.' },
+  { label: 'Aylıq təlim təqvimi', row: 'month', col: 'status', metric: 'count', desc: 'Təlimlərin aylar üzrə paylanması və statusu.' },
 ];
 
-function displayVal(v) {
-  return v === null || v === undefined || v === '' ? '—' : String(v);
-}
-// Row/column header labels for fields being used as a GROUPING key (not
-// the aggregated metric value) — e.g. status='Completed' as a dimension
-// shows the "Tamamlandı" group label. budget/used_budget never reach here
-// as a real per-row value any more (see VALUE_FIELDS/groupKeyFor/
-// groupLabelFor below) — they always collapse to a single bucket instead
-// of fanning out one column/row per distinct amount.
-function labelFor(field, v) {
-  if (v === '—') return v;
-  if (field === 'status') return statusMeta(v).label;
-  if (field === 'priority') return priorityMeta(v).label;
-  if (field === 'man_hours') return `${v} saat`;
-  if (field === 'start_date' || field === 'end_date') {
-    const d = new Date(v);
-    return Number.isNaN(d.getTime()) ? v : d.toLocaleDateString('az-AZ', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  }
-  return v;
-}
+// Filtrlər (slicer) — hamısı az-orta dəyərli, bir-birinə uyğunlaşan
+const FILTER_DIMS = ['dept', 'status', 'priority', 'comp_cat', 'category', 'budget_status'];
 
-// budget/used_budget are continuous currency amounts, not a finite set of
-// categories — used as a row/column dimension they must NOT fan out one
-// bucket per distinct amount (that produced a column per training,
-// literally unreadable). Instead every row collapses into a SINGLE bucket
-// for that axis, labeled with just the field's plain title, and the cell
-// shows the (summed, since effectiveMetric already resolves to that field)
-// value directly — exactly what was asked: "sütün hissəsində sadəcə
-// başlığa seçilən sütünün başlığının adı qeyd olunsun".
-const VALUE_FIELDS = new Set(['budget', 'used_budget']);
-function groupKeyFor(field, t) {
-  return VALUE_FIELDS.has(field) ? field : displayVal(t[field]);
+function val(dim, t) {
+  const v = DIMS[dim].get(t);
+  return v === null || v === undefined || String(v).trim() === '' ? EMPTY : String(v).trim();
 }
-function groupLabelFor(field, key) {
-  return VALUE_FIELDS.has(field) ? FIELD_LABELS[field] : labelFor(field, key);
+function label(dim, v) {
+  if (v === EMPTY) return 'Qeyd olunmayıb';
+  return DIMS[dim].fmt ? DIMS[dim].fmt(v) : v;
 }
 
 function newAgg() {
-  return {
-    count: 0, budgetSum: 0, usedBudgetSum: 0, savedCostSum: 0,
-    // Separate from budgetSum/usedBudgetSum above (which include every row
-    // regardless of whether the other field is set, for the plain
-    // budget/used_budget metrics) — these two only ever accumulate from the
-    // SAME rows counted into savedCostSum, so the "Planlanmış: X · İstifadə: Y"
-    // detail line always satisfies X - Y === the Qənaət value shown next to it.
-    savedCostBudgetSum: 0, savedCostUsedSum: 0,
-    hoursSum: 0, completedCount: 0, participants: new Set(),
-  };
+  return { count: 0, people: new Set(), hours: 0, planned: 0, used: 0, saved: 0, done: 0 };
 }
-function addToAgg(agg, t) {
-  agg.count += 1;
-  agg.budgetSum += Number(t.budget) || 0;
-  agg.usedBudgetSum += Number(t.used_budget) || 0;
-  // Saved cost only counts rows where BOTH budget and used_budget are set —
-  // a row still missing one of them contributes nothing here, same rule as
-  // the Dashboard's saved-cost KPI (lib/analytics.js's rowSavedCost).
-  if (hasSavedCost(t)) {
-    agg.savedCostSum += Number(t.budget) - Number(t.used_budget);
-    agg.savedCostBudgetSum += Number(t.budget);
-    agg.savedCostUsedSum += Number(t.used_budget);
+function addTo(a, t) {
+  a.count += 1;
+  if (t.employee_name) a.people.add(t.employee_name);
+  a.hours += Number(t.man_hours) || 0;
+  a.planned += Number(t.budget) || 0;
+  if (t.status === 'Completed') { a.used += Number(t.used_budget) || 0; a.done += 1; }
+  if (hasSavedCost(t)) a.saved += rowSavedCost(t);
+}
+function metricOf(a, m) {
+  if (!a) return 0;
+  switch (m) {
+    case 'count': return a.count;
+    case 'participants': return a.people.size;
+    case 'hours': return a.hours;
+    case 'planned': return a.planned;
+    case 'used': return a.used;
+    case 'saved': return a.saved;
+    case 'completion': return a.count ? Math.round((a.done / a.count) * 100) : 0;
+    default: return 0;
   }
-  agg.hoursSum += Number(t.man_hours) || 0;
-  if (t.status === 'Completed') agg.completedCount += 1;
-  if (t.employee_name) agg.participants.add(t.employee_name);
+}
+function mergeAgg(list) {
+  const out = newAgg();
+  list.forEach((a) => {
+    out.count += a.count; out.hours += a.hours; out.planned += a.planned;
+    out.used += a.used; out.saved += a.saved; out.done += a.done;
+    a.people.forEach((p) => out.people.add(p));
+  });
+  return out;
+}
+
+function orderKeys(dim, keys) {
+  const d = DIMS[dim];
+  if (d.order) return [...keys].sort((a, b) => (d.order.indexOf(a) + 99 * (d.order.indexOf(a) < 0)) - (d.order.indexOf(b) + 99 * (d.order.indexOf(b) < 0)));
+  return [...keys].sort((a, b) => (a === EMPTY) - (b === EMPTY) || label(dim, a).localeCompare(label(dim, b), 'az'));
 }
 
 export default function AnalysisView({ trainings }) {
-  const [rowField, setRowField] = useState('dept');
-  // Multiple column dimensions can be selected at once (e.g. Status AND
-  // Departament together), producing composite column headers — unlike
-  // rowField, which stays single-select. Stored as a Set of field keys;
-  // colFieldsArr (below) derives the actual, deterministically-ordered list
-  // to use, always excluding rowField so the same field can't sit on both axes.
-  const [colFields, setColFields] = useState(() => new Set(['status']));
-  // Starts unselected on purpose — see METRIC_LABELS comment.
-  const [metric, setMetric] = useState('');
-  const [catFilters, setCatFilters] = useState({});
-  const [showPct, setShowPct] = useState(false);
-  const [showSlicers, setShowSlicers] = useState(false);
+  const [row, setRow] = useState('dept');
+  const [col, setCol] = useState('');
+  const [metric, setMetric] = useState('count');
+  const [sort, setSort] = useState({ key: 'planned', dir: 'desc' });
+  const [limit, setLimit] = useState(15);
+  const [filters, setFilters] = useState({}); // dim -> Set | undefined (undefined = hamısı)
 
-  const colFieldsArr = useMemo(
-    () => DIMENSION_FIELDS.filter((f) => f !== rowField && colFields.has(f)),
-    [colFields, rowField]
-  );
-
-  // Self-heals to a single fallback field whenever the derived list would
-  // otherwise be empty — e.g. the user unchecked every column field, or
-  // rowField changed to the one field that was previously selected for
-  // columns. Keeps the table always renderable without blocking checkbox
-  // interactions with extra validation logic.
-  useEffect(() => {
-    if (colFieldsArr.length === 0) {
-      const fallback = DIMENSION_FIELDS.find((f) => f !== rowField) || DIMENSION_FIELDS[0];
-      setColFields(new Set([fallback]));
-    }
-  }, [colFieldsArr, rowField]);
-
-  // Only well-defined when exactly one column field is selected — mirrors
-  // the field it's swapping with rowField, same as the old single-select
-  // swap. Disabled (not hidden) otherwise, since swapping rowField into a
-  // multi-field column selection has no obvious single meaning.
-  function swapFields() {
-    if (colFieldsArr.length !== 1) return;
-    const other = colFieldsArr[0];
-    setColFields(new Set([rowField]));
-    setRowField(other);
-  }
+  const activePreset = PRESETS.find((p) => p.row === row && p.col === col && (!p.col || p.metric === metric));
 
   function applyPreset(p) {
-    setRowField(p.rowField);
-    setColFields(new Set(p.colFields));
-    setMetric(p.metric);
+    setRow(p.row);
+    setCol(p.col);
+    if (p.metric) setMetric(p.metric);
+    if (p.sort) setSort({ key: p.sort, dir: 'desc' });
   }
-  function isActivePreset(p) {
-    return rowField === p.rowField && metric === p.metric
-      && colFieldsArr.length === p.colFields.length
-      && p.colFields.every((f) => colFieldsArr.includes(f));
+  function changeRow(v) {
+    setRow(v);
+    if (col === v) setCol('');
   }
 
-  // What actually gets computed/shown when the user hasn't explicitly
-  // picked a "Dəyər": rather than an empty table, this defaults to a
-  // plain row/column match count — UNLESS budget or used_budget is one of
-  // the chosen dimensions, in which case that field's own sum is shown
-  // directly (its literal value "on its own", without a separate metric
-  // pick, per the explicit ask). An explicit metric pick always wins.
-  const effectiveMetric = useMemo(() => {
-    if (metric) return metric;
-    if (colFieldsArr.includes('budget') || rowField === 'budget') return 'budget';
-    if (colFieldsArr.includes('used_budget') || rowField === 'used_budget') return 'used_budget';
-    return 'count';
-  }, [metric, rowField, colFieldsArr]);
+  // --- Uyğunlaşan filtrlər ---
+  const passes = (t, except) => FILTER_DIMS.every((d) => {
+    if (d === except) return true;
+    const s = filters[d];
+    return !s || s.has(val(d, t));
+  });
+  const filtered = useMemo(() => trainings.filter((t) => passes(t, null)), [trainings, filters]); // eslint-disable-line react-hooks/exhaustive-deps
+  const filterOptions = useMemo(() => {
+    const out = {};
+    FILTER_DIMS.forEach((d) => {
+      const vals = new Set(trainings.filter((t) => passes(t, d)).map((t) => val(d, t)));
+      (filters[d] || new Set()).forEach((v) => vals.add(v));
+      out[d] = orderKeys(d, vals);
+    });
+    return out;
+  }, [trainings, filters]); // eslint-disable-line react-hooks/exhaustive-deps
+  const activeFilterCount = FILTER_DIMS.filter((d) => filters[d]).length;
+  function setFilter(d, set) {
+    setFilters((prev) => {
+      const next = { ...prev };
+      const all = filterOptions[d] || [];
+      if (!set || set.size === 0 || set.size === all.length) delete next[d]; else next[d] = set;
+      return next;
+    });
+  }
 
-  const uniqueValsByField = useMemo(() => {
-    const map = {};
-    DIMENSION_FIELDS.forEach((f) => { map[f] = [...new Set(trainings.map((t) => displayVal(t[f])))].filter((v) => v !== '—').sort(); });
-    return map;
-  }, [trainings]);
-
-  const sliced = useMemo(() => {
-    return trainings.filter((t) => {
-      for (const f of DIMENSION_FIELDS) {
-        const sel = catFilters[f];
-        if (sel && displayVal(t[f]) !== '—' && !sel.has(displayVal(t[f]))) return false;
+  // --- Aqreqasiya ---
+  const { rowKeys, byRow, byCell, colKeys, byCol, total } = useMemo(() => {
+    const byRowM = new Map(); const byCellM = new Map(); const byColM = new Map(); const tot = newAgg();
+    filtered.forEach((t) => {
+      const r = val(row, t);
+      if (!byRowM.has(r)) byRowM.set(r, newAgg());
+      addTo(byRowM.get(r), t);
+      addTo(tot, t);
+      if (col) {
+        const c = val(col, t);
+        const k = `${r}\u0000${c}`;
+        if (!byCellM.has(k)) byCellM.set(k, newAgg());
+        addTo(byCellM.get(k), t);
+        if (!byColM.has(c)) byColM.set(c, newAgg());
+        addTo(byColM.get(c), t);
       }
-      return true;
     });
-  }, [trainings, catFilters]);
+    return {
+      rowKeys: [...byRowM.keys()], byRow: byRowM, byCell: byCellM,
+      colKeys: col ? orderKeys(col, byColM.keys()) : [], byCol: byColM, total: tot,
+    };
+  }, [filtered, row, col]);
 
-  function metricValue(agg) {
-    if (!agg) return 0;
-    switch (effectiveMetric) {
-      case 'count': return agg.count;
-      case 'budget': return agg.budgetSum;
-      case 'used_budget': return agg.usedBudgetSum;
-      case 'saved_cost': return agg.savedCostSum;
-      case 'man_hours': return agg.hoursSum;
-      case 'avg_budget': return agg.count ? agg.budgetSum / agg.count : 0;
-      case 'avg_hours': return agg.count ? agg.hoursSum / agg.count : 0;
-      case 'completion_rate': return agg.count ? (agg.completedCount / agg.count) * 100 : 0;
-      case 'participants': return agg.participants.size;
-      default: return 0;
-    }
+  const sortMetric = col ? metric : sort.key;
+  const sortedRows = useMemo(() => {
+    const keys = [...rowKeys];
+    if (DIMS[row].chrono) return keys.sort((a, b) => (a === EMPTY) - (b === EMPTY) || a.localeCompare(b));
+    if (DIMS[row].order && col) return orderKeys(row, keys);
+    const dir = col ? -1 : (sort.dir === 'asc' ? 1 : -1);
+    return keys.sort((a, b) => dir * (metricOf(byRow.get(a), sortMetric) - metricOf(byRow.get(b), sortMetric)));
+  }, [rowKeys, byRow, row, col, sort, sortMetric]);
+
+  const isMany = !!DIMS[row].many;
+  const effectiveLimit = isMany ? limit : 0;
+  const shownRows = effectiveLimit && sortedRows.length > effectiveLimit ? sortedRows.slice(0, effectiveLimit) : sortedRows;
+  const hiddenRows = effectiveLimit && sortedRows.length > effectiveLimit ? sortedRows.slice(effectiveLimit) : [];
+  const otherAgg = hiddenRows.length ? mergeAgg(hiddenRows.map((k) => byRow.get(k))) : null;
+
+  const maxCell = useMemo(() => {
+    if (!col) return 0;
+    let m = 0;
+    byCell.forEach((a) => { m = Math.max(m, Math.abs(metricOf(a, metric))); });
+    return m || 1;
+  }, [byCell, col, metric]);
+  const maxByMetric = useMemo(() => {
+    const out = {};
+    SUMMARY_METRICS.forEach((m) => { out[m] = Math.max(1, ...sortedRows.map((k) => Math.abs(metricOf(byRow.get(k), m)))); });
+    return out;
+  }, [sortedRows, byRow]);
+
+  function toggleSort(key) {
+    setSort((s) => (s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' }));
   }
 
-  const { rowKeys, colKeys, cellAgg, rowAgg, colAgg, grandAgg, maxCellVal } = useMemo(() => {
-    const rowSet = new Set(), colSet = new Set();
-    const cellAgg = {}, rowAgg = {}, colAgg = {};
-    const grandAgg = newAgg();
-
-    sliced.forEach((t) => {
-      const r = groupKeyFor(rowField, t);
-      // Composite key so multiple column fields collapse into one combined
-      // column — e.g. colFieldsArr = ['status', 'dept'] produces keys like
-      // "Approved|||Maliyyə departamenti". Field values themselves never
-      // contain '|||', same assumption the row|||col cellAgg key below
-      // already relies on. A budget/used_budget entry always contributes
-      // its constant groupKeyFor token instead of the row's own amount, so
-      // it never splits the composite key further (see groupKeyFor above).
-      const c = colFieldsArr.map((f) => groupKeyFor(f, t)).join('|||');
-      rowSet.add(r); colSet.add(c);
-      const key = r + '||||||' + c;
-      if (!cellAgg[key]) cellAgg[key] = newAgg();
-      if (!rowAgg[r]) rowAgg[r] = newAgg();
-      if (!colAgg[c]) colAgg[c] = newAgg();
-      addToAgg(cellAgg[key], t);
-      addToAgg(rowAgg[r], t);
-      addToAgg(colAgg[c], t);
-      addToAgg(grandAgg, t);
-    });
-
-    const rowKeysArr = [...rowSet].sort((a, b) => metricValue(rowAgg[b]) - metricValue(rowAgg[a]));
-    const colKeysArr = [...colSet].sort();
-    // Math.abs so saved_cost (the only metric that can go negative) still
-    // scales its heat intensity by magnitude, not just by how positive it is.
-    const maxCellVal = Math.max(...Object.values(cellAgg).map((a) => Math.abs(metricValue(a))), 1);
-
-    return { rowKeys: rowKeysArr, colKeys: colKeysArr, cellAgg, rowAgg, colAgg, grandAgg, maxCellVal };
-  }, [sliced, rowField, colFieldsArr, metric]);
-
-  // Turns a composite column key back into its per-field display label,
-  // e.g. "Approved|||Maliyyə departamenti" -> "Təsdiqləndi / Maliyyə departamenti".
-  function colLabel(key) {
-    const parts = key.split('|||');
-    return colFieldsArr.map((f, i) => groupLabelFor(f, parts[i])).join(' / ');
+  function colorFor(m, v) {
+    if (METRICS[m].signed) return v > 0 ? 'var(--green)' : v < 0 ? 'var(--red)' : undefined;
+    if (METRICS[m].pct) return v >= 70 ? 'var(--green)' : v >= 40 ? '#d97706' : 'var(--red)';
+    return undefined;
+  }
+  function heat(v) {
+    if (!v) return undefined;
+    const a = 0.06 + Math.min(1, Math.abs(v) / maxCell) * 0.34;
+    return `rgba(37, 99, 235, ${a.toFixed(2)})`;
   }
 
-  function fmt(n) {
-    if (effectiveMetric === 'count' || effectiveMetric === 'participants') return Math.round(n).toLocaleString('az-AZ');
-    if (effectiveMetric === 'man_hours' || effectiveMetric === 'avg_hours') return (Math.round(n * 10) / 10).toLocaleString('az-AZ') + ' saat';
-    if (effectiveMetric === 'completion_rate') return Math.round(n) + '%';
-    return Math.round(n).toLocaleString('az-AZ') + ' ₼';
-  }
-
-  function cellDisplay(agg, rowTotalAgg) {
-    const raw = metricValue(agg);
-    if (showPct && effectiveMetric !== 'completion_rate' && effectiveMetric !== 'participants') {
-      const rowTotal = metricValue(rowTotalAgg);
-      const pct = rowTotal ? Math.round((raw / rowTotal) * 100) : 0;
-      return `${pct}%`;
-    }
-    return fmt(raw);
-  }
-
-  // Any budget-related number is easy to misread in isolation — "3,865 ₼
-  // qənaət" means nothing without knowing it's the gap between which two
-  // bigger numbers. So whichever of the three budget metrics is selected,
-  // the OTHER two show as a small context line under the main value:
-  //  - saved_cost -> Planlanmış/İstifadə (only rows where BOTH are set,
-  //    any status — see addToAgg's savedCost*Sum / lib/analytics.js's
-  //    hasSavedCost)
-  //  - budget -> İstifadə (plain total across every row, same population
-  //    the budget metric itself sums)
-  //  - used_budget -> Planlanmış (same, plain total)
-  // Skipped in percent mode, where the context would clutter more than help.
-  function budgetContextDetail(agg) {
-    if (showPct || !agg) return null;
-    if (effectiveMetric === 'saved_cost') {
-      if (!agg.savedCostBudgetSum && !agg.savedCostUsedSum) return null;
-      return (
-        <div style={{ fontSize: 10.5, color: 'var(--ink-400)', fontWeight: 400, marginTop: 2, whiteSpace: 'nowrap' }}>
-          Planlanmış: {fmt(agg.savedCostBudgetSum)} · İstifadə: {fmt(agg.savedCostUsedSum)}
-        </div>
-      );
-    }
-    if (effectiveMetric === 'budget' && agg.usedBudgetSum) {
-      return (
-        <div style={{ fontSize: 10.5, color: 'var(--ink-400)', fontWeight: 400, marginTop: 2, whiteSpace: 'nowrap' }}>
-          İstifadə: {fmt(agg.usedBudgetSum)}
-        </div>
-      );
-    }
-    if (effectiveMetric === 'used_budget' && agg.budgetSum) {
-      return (
-        <div style={{ fontSize: 10.5, color: 'var(--ink-400)', fontWeight: 400, marginTop: 2, whiteSpace: 'nowrap' }}>
-          Planlanmış: {fmt(agg.budgetSum)}
-        </div>
-      );
-    }
-    return null;
-  }
-
-  function heatColor(agg) {
-    const raw = metricValue(agg);
-    if (!raw) return 'transparent';
-    // saved_cost can go negative (overspend) unlike every other metric here —
-    // intensity is based on magnitude so both directions scale correctly,
-    // and a negative total shades red instead of the default blue.
-    const intensity = Math.min(1, Math.abs(raw) / maxCellVal);
-    const alpha = 0.08 + intensity * 0.35;
-    return raw < 0 ? `rgba(220, 38, 38, ${alpha.toFixed(2)})` : `rgba(37, 99, 235, ${alpha.toFixed(2)})`;
-  }
-
-  async function exportPivot() {
+  async function exportExcel() {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Analiz');
-    const columns = [{ header: FIELD_LABELS[rowField], key: 'rowLabel', width: 26 }];
-    colKeys.forEach((c, i) => { columns.push({ header: colLabel(c), key: `c${i}`, width: 18 }); });
-    columns.push({ header: 'Cəmi', key: 'total', width: 16 });
-    ws.columns = columns;
-
-    rowKeys.forEach((r) => {
-      const rowData = { rowLabel: groupLabelFor(rowField, r) };
-      colKeys.forEach((c, i) => { rowData[`c${i}`] = metricValue(cellAgg[r + '||||||' + c]); });
-      rowData.total = metricValue(rowAgg[r]);
-      ws.addRow(rowData);
-    });
-
-    const totalRowData = { rowLabel: 'Cəmi' };
-    colKeys.forEach((c, i) => { totalRowData[`c${i}`] = metricValue(colAgg[c]); });
-    totalRowData.total = metricValue(grandAgg);
-    const totalRow = ws.addRow(totalRowData);
-    totalRow.font = { bold: true };
-
-    const numFmt = effectiveMetric === 'budget' || effectiveMetric === 'used_budget' || effectiveMetric === 'saved_cost' || effectiveMetric === 'avg_budget' ? '#,##0 "₼"'
-      : effectiveMetric === 'completion_rate' ? '0"%"'
-      : effectiveMetric === 'man_hours' || effectiveMetric === 'avg_hours' ? '#,##0.0'
-      : '#,##0';
-    columns.forEach((col) => { if (col.key !== 'rowLabel') ws.getColumn(col.key).numFmt = numFmt; });
-
+    const lines = [...shownRows.map((k) => [label(row, k), byRow.get(k), k]), ...(otherAgg ? [[`Digər (${hiddenRows.length})`, otherAgg, null]] : [])];
+    if (col) {
+      ws.columns = [{ header: DIMS[row].label, width: 34 }, ...colKeys.map((c) => ({ header: label(col, c), width: 16 })), { header: 'Cəmi', width: 16 }];
+      lines.forEach(([lab, agg, k]) => ws.addRow([
+        lab,
+        ...colKeys.map((c) => (k === null ? metricOf(mergeAgg(hiddenRows.map((h) => byCell.get(`${h}\u0000${c}`)).filter(Boolean)), metric) : metricOf(byCell.get(`${k}\u0000${c}`), metric))),
+        metricOf(agg, metric),
+      ]));
+      ws.addRow(['Cəmi', ...colKeys.map((c) => metricOf(byCol.get(c), metric)), metricOf(total, metric)]);
+    } else {
+      ws.columns = [{ header: DIMS[row].label, width: 34 }, ...SUMMARY_METRICS.map((m) => ({ header: METRICS[m].label + (METRICS[m].pct ? ' (%)' : ''), width: 18 }))];
+      lines.forEach(([lab, agg]) => ws.addRow([lab, ...SUMMARY_METRICS.map((m) => metricOf(agg, m))]));
+      ws.addRow(['Cəmi', ...SUMMARY_METRICS.map((m) => metricOf(total, m))]);
+    }
     styleHeaderRow(ws);
-    await downloadWorkbook(wb, `analiz-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    ws.lastRow.font = { bold: true };
+    await downloadWorkbook(wb, `etrafli-analiz-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
-  const activeSlicerCount = DIMENSION_FIELDS.filter((f) => catFilters[f] && catFilters[f].size < uniqueValsByField[f].length).length;
-
-  function clearAllSlicers() {
-    const reset = {};
-    DIMENSION_FIELDS.forEach((f) => { reset[f] = new Set(uniqueValsByField[f]); });
-    setCatFilters(reset);
-  }
+  const colOptions = COL_DIMS.filter((d) => d !== row);
+  const description = activePreset?.desc
+    || (col
+      ? `${DIMS[row].label} üzrə ${METRICS[metric].label.toLowerCase()}, ${DIMS[col].label.toLowerCase()} bölgüsü ilə.`
+      : `${DIMS[row].label} üzrə bütün əsas göstəricilər.`);
 
   return (
     <div style={{ marginTop: 8 }}>
       <div className="section-title">Ətraflı Analiz</div>
-      <div className="section-sub" style={{ marginBottom: 18 }}>Hazır analizlərdən seçin, ya da sahələri özünüz qurun</div>
+      <div className="section-sub" style={{ marginBottom: 18 }}>Hazır suallardan birini seçin, ya da qruplaşdırmanı özünüz qurun</div>
 
       <div className="card no-print" style={{ marginBottom: 16 }}>
-        <div className="filter-label" style={{ marginBottom: 10 }}>Tövsiyə olunan analizlər</div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
-          {PRESETS.map((p) => {
-            const active = isActivePreset(p);
-            return (
-              <button
-                key={p.label}
-                onClick={() => applyPreset(p)}
-                title={p.desc}
-                className={active ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm'}
-              >
-                {p.label}
-              </button>
-            );
-          })}
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--ink-500)', marginBottom: 4 }}>
-          {PRESETS.find(isActivePreset)?.desc || 'Aşağıdakı sahələrlə öz analizinizi qurdunuz.'}
+        <div className="filter-label" style={{ marginBottom: 10 }}>Hazır analizlər</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {PRESETS.map((p) => (
+            <button key={p.label} onClick={() => applyPreset(p)} title={p.desc}
+              className={activePreset === p ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm'}>
+              {p.label}
+            </button>
+          ))}
         </div>
       </div>
 
       <div className="card no-print" style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12, alignItems: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div>
-            <div className="filter-label">Sətir sahəsi</div>
-            <select value={rowField} onChange={(e) => setRowField(e.target.value)} style={{ minWidth: 180 }}>
-              {DIMENSION_FIELDS.map((f) => <option key={f} value={f}>{FIELD_LABELS[f]}</option>)}
+            <div className="filter-label">Qruplaşdır</div>
+            <select value={row} onChange={(e) => changeRow(e.target.value)} style={{ minWidth: 190 }}>
+              {ROW_DIMS.map((d) => <option key={d} value={d}>{DIMS[d].label}</option>)}
             </select>
           </div>
-          <button
-            onClick={swapFields}
-            title={colFieldsArr.length === 1 ? 'Sətir/Sütunu dəyiş' : 'Yalnız bir sütun sahəsi seçiləndə dəyişmək mümkündür'}
-            className="btn btn-outline btn-sm"
-            disabled={colFieldsArr.length !== 1}
-            style={{ height: 40, padding: '0 12px' }}
-          >
-            <ArrowLeftRight size={15} strokeWidth={2.2} />
-          </button>
           <div>
-            <div className="filter-label">Sütun sahələri (çoxlu seçim)</div>
-            <MultiSelectFilter
-              label="Sütun sahələri"
-              options={DIMENSION_FIELDS.filter((f) => f !== rowField)}
-              selected={colFields}
-              onChange={(s) => setColFields(s)}
-              labelFor={(f) => FIELD_LABELS[f]}
-            />
-          </div>
-          <div>
-            <div className="filter-label">Dəyər</div>
-            <select value={metric} onChange={(e) => setMetric(e.target.value)} style={{ minWidth: 190 }}>
-              {METRIC_OPTIONS.map((m) => <option key={m} value={m}>{METRIC_LABELS[m]}</option>)}
+            <div className="filter-label">Bölgü (istəyə bağlı)</div>
+            <select value={col} onChange={(e) => setCol(e.target.value)} style={{ minWidth: 200 }}>
+              <option value="">— Yoxdur (bütün göstəricilər) —</option>
+              {colOptions.map((d) => <option key={d} value={d}>{DIMS[d].label}</option>)}
             </select>
           </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, height: 40, cursor: 'pointer' }}>
-            <input type="checkbox" checked={showPct} onChange={(e) => setShowPct(e.target.checked)} />
-            Faizlə göstər (sətir üzrə)
-          </label>
-          <button
-            onClick={exportPivot}
-            className="btn btn-success"
-            style={{ height: 40, marginLeft: 'auto' }}
-          >
+          {col && (
+            <div>
+              <div className="filter-label">Göstərici</div>
+              <select value={metric} onChange={(e) => setMetric(e.target.value)} style={{ minWidth: 180 }}>
+                {Object.keys(METRICS).map((m) => <option key={m} value={m}>{METRICS[m].label}</option>)}
+              </select>
+            </div>
+          )}
+          {isMany && (
+            <div>
+              <div className="filter-label">Göstər</div>
+              <select value={limit} onChange={(e) => setLimit(Number(e.target.value))} style={{ minWidth: 120 }}>
+                <option value={10}>İlk 10</option>
+                <option value={15}>İlk 15</option>
+                <option value={30}>İlk 30</option>
+                <option value={0}>Hamısı</option>
+              </select>
+            </div>
+          )}
+          <button onClick={exportExcel} className="btn btn-success" style={{ marginLeft: 'auto' }}>
             <Download size={14} strokeWidth={2.2} /> Excel-ə ixrac et
           </button>
         </div>
 
-        <div style={{ fontSize: 13, color: 'var(--ink-600)', background: 'var(--ink-50)', borderRadius: 8, padding: '8px 12px', marginBottom: 4 }}>
-          Hazırda göstərilir: <strong>{FIELD_LABELS[rowField]}</strong> üzrə sətirlər,{' '}
-          <strong>{colFieldsArr.map((f) => FIELD_LABELS[f]).join(' / ')}</strong> görə sütunlar — dəyər:{' '}
-          <strong>{METRIC_LABELS[effectiveMetric]}</strong>
-          {!metric && <> (dəyər seçilməyib, standart olaraq {colFieldsArr.includes('budget') || colFieldsArr.includes('used_budget') || rowField === 'budget' || rowField === 'used_budget' ? 'seçilmiş büdcə sahəsi' : 'sayı'} göstərilir)</>}.
+        <div className="slicer-row" style={{ marginTop: 14 }}>
+          {FILTER_DIMS.map((d) => (
+            <MultiSelectFilter
+              key={d}
+              label={DIMS[d].label}
+              options={filterOptions[d] || []}
+              selected={filters[d] || new Set(filterOptions[d] || [])}
+              onChange={(s) => setFilter(d, s)}
+              labelFor={(v) => label(d, v)}
+            />
+          ))}
+          {activeFilterCount > 0 && (
+            <button onClick={() => setFilters({})} className="btn btn-outline btn-sm">Filtrləri təmizlə</button>
+          )}
         </div>
-        {(HIGH_CARDINALITY_FIELDS.has(rowField) || colFieldsArr.some((f) => HIGH_CARDINALITY_FIELDS.has(f))) && (
-          <div style={{ fontSize: 12, color: 'var(--amber-700, #b45309)', marginBottom: 4 }}>
-            Diqqət: seçilmiş sahə(lər) sərbəst mətndir — hər təlim demək olar unikal qiymətə malikdir, ona görə cədvəldə çox sayda sətir/sütun görünə bilər.
-          </div>
-        )}
-
-        <button
-          onClick={() => setShowSlicers((v) => !v)}
-          className="btn btn-outline btn-sm"
-          style={{ marginTop: 8 }}
-        >
-          {showSlicers ? 'Əlavə filtrləri gizlət' : 'Əlavə filtrlər'} {activeSlicerCount > 0 && `(${activeSlicerCount} aktiv)`}
-        </button>
-
-        {showSlicers && (
-          <div style={{ marginTop: 10 }}>
-            <div className="slicer-row">
-              {DIMENSION_FIELDS.map((f) => (
-                <MultiSelectFilter
-                  key={f}
-                  label={FIELD_LABELS[f]}
-                  options={uniqueValsByField[f] || []}
-                  selected={catFilters[f] || new Set(uniqueValsByField[f])}
-                  onChange={(s) => setCatFilters((prev) => ({ ...prev, [f]: s }))}
-                  labelFor={(v) => labelFor(f, v)}
-                />
-              ))}
-              {activeSlicerCount > 0 && (
-                <button onClick={clearAllSlicers} className="btn btn-outline btn-sm">Hamısını təmizlə</button>
-              )}
-            </div>
-          </div>
-        )}
       </div>
 
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>{FIELD_LABELS[rowField]}</th>
-              {colKeys.map((c) => <th key={c}>{colLabel(c)}</th>)}
-              <th>Cəmi</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rowKeys.map((r) => (
-              <tr key={r}>
-                <td style={{ fontWeight: 600 }}>{groupLabelFor(rowField, r)}</td>
-                {colKeys.map((c) => {
-                  const agg = cellAgg[r + '||||||' + c];
-                  return (
-                    <td key={c} style={{ background: heatColor(agg) }}>
-                      {cellDisplay(agg, rowAgg[r])}
-                      {budgetContextDetail(agg)}
-                    </td>
-                  );
-                })}
-                <td style={{ fontWeight: 700 }}>
-                  {fmt(metricValue(rowAgg[r]))}
-                  {budgetContextDetail(rowAgg[r])}
-                </td>
+      <div style={{ fontSize: 13, color: 'var(--ink-600)', background: 'var(--ink-50)', borderRadius: 8, padding: '8px 12px', marginBottom: 10 }}>
+        {description} <span style={{ color: 'var(--ink-500)' }}>· {filtered.length} təlim qeydi{activeFilterCount ? `, ${activeFilterCount} filtr aktiv` : ''}</span>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="card" style={{ textAlign: 'center', color: 'var(--ink-500)', padding: 28 }}>Seçilmiş filtrlərə uyğun məlumat yoxdur.</div>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>{DIMS[row].label}</th>
+                {col
+                  ? <>{colKeys.map((c) => <th key={c} style={{ textAlign: 'right' }}>{label(col, c)}</th>)}<th style={{ textAlign: 'right' }}>Cəmi</th></>
+                  : SUMMARY_METRICS.map((m) => (
+                    <th key={m} onClick={() => toggleSort(m)} title={METRICS[m].hint || 'Sıralamaq üçün klikləyin'}
+                      style={{ textAlign: 'right', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                      {METRICS[m].label}
+                      {sort.key === m && (sort.dir === 'desc' ? <ArrowDown size={12} style={{ marginLeft: 3, verticalAlign: -1 }} /> : <ArrowUp size={12} style={{ marginLeft: 3, verticalAlign: -1 }} />)}
+                    </th>
+                  ))}
               </tr>
-            ))}
-            <tr style={{ background: 'var(--ink-50)' }}>
-              <td style={{ fontWeight: 800 }}>Cəmi</td>
-              {colKeys.map((c) => (
-                <td key={c} style={{ fontWeight: 700 }}>
-                  {fmt(metricValue(colAgg[c]))}
-                  {budgetContextDetail(colAgg[c])}
-                </td>
-              ))}
-              <td style={{ fontWeight: 800 }}>
-                {fmt(metricValue(grandAgg))}
-                {budgetContextDetail(grandAgg)}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {shownRows.map((k) => {
+                const a = byRow.get(k);
+                return (
+                  <tr key={k}>
+                    <td style={{ fontWeight: 600, maxWidth: 360 }}>{label(row, k)}</td>
+                    {col
+                      ? <>
+                          {colKeys.map((c) => {
+                            const v = metricOf(byCell.get(`${k}\u0000${c}`), metric);
+                            return (
+                              <td key={c} style={{ textAlign: 'right', background: heat(v), color: colorFor(metric, v) }}>
+                                {v ? METRICS[metric].fmt(v) : <span style={{ color: 'var(--ink-300)' }}>–</span>}
+                              </td>
+                            );
+                          })}
+                          <td style={{ textAlign: 'right', fontWeight: 700, color: colorFor(metric, metricOf(a, metric)) }}>{METRICS[metric].fmt(metricOf(a, metric))}</td>
+                        </>
+                      : SUMMARY_METRICS.map((m) => {
+                        const v = metricOf(a, m);
+                        const showBar = m === sort.key && !METRICS[m].pct;
+                        return (
+                          <td key={m} style={{ textAlign: 'right', color: colorFor(m, v), fontWeight: m === sort.key ? 700 : 400 }}>
+                            {METRICS[m].fmt(v)}
+                            {showBar && (
+                              <div style={{ height: 3, marginTop: 3, borderRadius: 2, background: 'var(--ink-100)' }}>
+                                <div style={{ height: 3, borderRadius: 2, width: `${Math.round((Math.abs(v) / maxByMetric[m]) * 100)}%`, background: v < 0 ? 'var(--red)' : 'var(--blue, #2563eb)' }} />
+                              </div>
+                            )}
+                          </td>
+                        );
+                      })}
+                  </tr>
+                );
+              })}
+              {otherAgg && (
+                <tr style={{ color: 'var(--ink-500)' }}>
+                  <td style={{ fontStyle: 'italic' }}>Digər ({hiddenRows.length})</td>
+                  {col
+                    ? <>
+                        {colKeys.map((c) => {
+                          const v = metricOf(mergeAgg(hiddenRows.map((h) => byCell.get(`${h}\u0000${c}`)).filter(Boolean)), metric);
+                          return <td key={c} style={{ textAlign: 'right' }}>{v ? METRICS[metric].fmt(v) : '–'}</td>;
+                        })}
+                        <td style={{ textAlign: 'right' }}>{METRICS[metric].fmt(metricOf(otherAgg, metric))}</td>
+                      </>
+                    : SUMMARY_METRICS.map((m) => <td key={m} style={{ textAlign: 'right' }}>{METRICS[m].fmt(metricOf(otherAgg, m))}</td>)}
+                </tr>
+              )}
+              <tr style={{ background: 'var(--ink-50)' }}>
+                <td style={{ fontWeight: 800 }}>Cəmi</td>
+                {col
+                  ? <>
+                      {colKeys.map((c) => <td key={c} style={{ textAlign: 'right', fontWeight: 700 }}>{METRICS[metric].fmt(metricOf(byCol.get(c), metric))}</td>)}
+                      <td style={{ textAlign: 'right', fontWeight: 800 }}>{METRICS[metric].fmt(metricOf(total, metric))}</td>
+                    </>
+                  : SUMMARY_METRICS.map((m) => (
+                    <td key={m} style={{ textAlign: 'right', fontWeight: 800, color: colorFor(m, metricOf(total, m)) }}>{METRICS[m].fmt(metricOf(total, m))}</td>
+                  ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div style={{ fontSize: 11.5, color: 'var(--ink-500)', marginTop: 8 }}>
+        İstifadə olunmuş büdcə yalnız tamamlanmış təlimləri, qənaət isə planlanmış və istifadə olunmuş büdcəsi qeyd olunmuş bütün təlimləri əhatə edir (Dashboard kartları ilə eyni qayda).
       </div>
     </div>
   );
