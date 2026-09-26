@@ -105,6 +105,12 @@ export default function AnnualTnaHub({ profile, team, requests, planYear, tnaWin
   ];
 
   const [tab, setTab] = useState(tabs[0].key);
+  // A tab's red "N yeni" disappears as soon as the user opens that tab.
+  const [openedTabs, setOpenedTabs] = useState(() => new Set([tabs[0].key]));
+  function openTab(k) {
+    setTab(k);
+    setOpenedTabs((prev) => (prev.has(k) ? prev : new Set(prev).add(k)));
+  }
   const activeTab = tabs.some((t) => t.key === tab) ? tab : tabs[0].key;
 
   return (
@@ -126,11 +132,11 @@ export default function AnnualTnaHub({ profile, team, requests, planYear, tnaWin
               <button
                 key={t.key}
                 className={'subtab-pill' + (activeTab === t.key ? ' active' : '')}
-                onClick={() => setTab(t.key)}
+                onClick={() => openTab(t.key)}
               >
                 <t.Icon size={14} strokeWidth={2.2} /> {t.label}
                 {typeof t.count === 'number' && <span className="badge-count">{t.count}</span>}
-                {!!t.newCount && <span className="badge-new" title="Son baxışınızdan sonra yeni və ya dəyişmiş">{t.newCount > 99 ? '99+' : t.newCount} yeni</span>}
+                {!!t.newCount && !openedTabs.has(t.key) && <span className="badge-new" title="Son baxışınızdan sonra yeni və ya dəyişmiş">{t.newCount > 99 ? '99+' : t.newCount} yeni</span>}
               </button>
             ))}
           </div>
