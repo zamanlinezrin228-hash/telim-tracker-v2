@@ -1,301 +1,519 @@
 import { useState } from 'react';
 import {
-  Compass, Lightbulb, Send, UserCheck, Folder, Search, GitBranch, ListPlus, ClipboardList,
-  UserSquare2, ArrowRight, ArrowDown, ChevronDown, CheckCircle2, RotateCcw, XCircle, HelpCircle,
+  Compass, Lightbulb, Send, UserCheck, Search, CheckCircle2, XCircle, RotateCcw, ListPlus,
+  PlayCircle, PauseCircle, Flag, ClipboardCheck, ArrowRight, ArrowDown, ArrowLeft, RefreshCcw,
+  GitBranch, Map as MapIcon, BookOpen, Users, HelpCircle, Ban, Building2,
 } from 'lucide-react';
 import { ReqStatusBadge, TrainingStatusBadge } from './Badges';
 
-const ROLE_TABS = [
-  { key: 'employee', label: 'Əməkdaş' },
-  { key: 'sube', label: 'Şöbə Rəhbəri' },
-  { key: 'dept', label: 'Departament Rəhbəri' },
-  { key: 'ld', label: 'L&D / HR' },
+// ---------------------------------------------------------------------------
+// Bələdçi — mətn əvəzinə qərar ağacı:
+//  1) Simulyasiya: istifadəçi hər addımda "nə baş verir?" seçimini klikləyir,
+//     növbəti addıma keçir, status və məsul şəxs dərhal göstərilir.
+//  2) Axın xəritəsi: bütün yol bir baxışda, budaqlarla; hər qutuya klikləyəndə
+//     simulyasiya həmin addımdan açılır.
+//  3) Statuslar: hər status nə deməkdir, kim hərəkət edir, sonra nə ola bilər.
+//  4) Rolum üzrə: əməkdaş / şöbə / departament / L&D üçün qısa addımlar.
+// ---------------------------------------------------------------------------
+
+const PHASES = [
+  { key: 'need', label: 'Ehtiyac', color: 'var(--blue)' },
+  { key: 'chain', label: 'Rəhbər təsdiqi', color: 'var(--purple)' },
+  { key: 'ld', label: 'L&D qərarı', color: 'var(--amber)' },
+  { key: 'plan', label: 'Plan və icra', color: 'var(--green)' },
+];
+
+// Qərar ağacının düyünləri
+const NODES = {
+  start: {
+    phase: 'need', icon: Lightbulb, title: 'Təlim ehtiyacı yarandı', who: 'Əməkdaş və ya rəhbər',
+    text: 'Əməkdaşın inkişafı üçün bir təlim, bacarıq və ya səriştə ehtiyacı müəyyən edildi.',
+    question: 'Hazırda hansı dövrdəyik?',
+    options: [
+      { label: 'İllik TNA pəncərəsi açıqdır', to: 'annual' },
+      { label: 'İl ortası — tək ehtiyac', to: 'adhoc' },
+    ],
+  },
+  annual: {
+    phase: 'need', icon: ListPlus, title: 'İllik TNA → Sorğu yarat', who: 'Göndərən', where: 'İllik TNA',
+    text: 'Cədvəldə sətir doldurulur. Rəhbər öz sətri ilə yanaşı komandasının sətirlərini də eyni cədvəldə doldurur. Səriştə siyahıdan seçilir (əməkdaşın şöbəsinə görə avtomatik), yoxdursa özünüz yazırsınız. Vendor yalnız tövsiyədir.',
+    question: '"Hamısını Göndər" basıldı — göndərənin birbaşa rəhbəri var?',
+    options: [
+      { label: 'Bəli, rəhbəri var', to: 'mgr' },
+      { label: 'Xeyr, zəncirin başındadır', to: 'ldPending' },
+    ],
+  },
+  adhoc: {
+    phase: 'need', icon: Send, title: 'Təlim Sorğuları → Yeni Sorğu', who: 'Göndərən', where: 'Təlim Sorğuları',
+    text: 'Bir ehtiyac üçün tək sorğu. Bu imkanı L&D açıb-bağlayır; illik TNA dövründə adətən bağlı olur.',
+    question: 'Ad-hoc sorğular hazırda açıqdır?',
+    options: [
+      { label: 'Bəli, açıqdır', to: 'adhocSend' },
+      { label: 'Xeyr, bağlıdır', to: 'adhocClosed' },
+    ],
+  },
+  adhocClosed: {
+    phase: 'need', icon: Ban, title: 'Sorğu qəbul olunmur', who: 'Göndərən', tone: 'end',
+    text: '"Yeni Sorğu" basanda "Hazırda aktiv deyil" mesajı çıxır. Ehtiyacı İllik TNA bölməsində qeyd edin.',
+    options: [{ label: 'İllik TNA-ya keç', to: 'annual' }],
+  },
+  adhocSend: {
+    phase: 'need', icon: Send, title: 'Sorğu göndərildi', who: 'Göndərən',
+    text: 'Forma doldurulur (vendor tövsiyədir) və göndərilir.',
+    question: 'Göndərənin birbaşa rəhbəri var?',
+    options: [
+      { label: 'Bəli', to: 'mgr' },
+      { label: 'Xeyr', to: 'ldPending' },
+    ],
+  },
+  mgr: {
+    phase: 'chain', icon: UserCheck, title: 'Birbaşa rəhbərin baxışı', who: 'Birbaşa rəhbər (məs. şöbə rəhbəri)',
+    where: 'İllik TNA / Təlim Sorğuları', reqStatus: 'Pending Manager Review',
+    text: 'Sorğu rəhbərin cədvəlinə "Əməkdaş təqdim edib" işarəsi ilə düşür. Rəhbər sətri redaktə edə bilər. Göndərən də statusu canlı izləyir.',
+    question: 'Rəhbər nə qərar verir?',
+    options: [
+      { label: 'Təsdiqləyir', to: 'upChain', kind: 'ok' },
+      { label: 'Geri göndərir', to: 'revision', kind: 'warn' },
+      { label: 'Rədd edir', to: 'rejected', kind: 'bad' },
+    ],
+  },
+  upChain: {
+    phase: 'chain', icon: GitBranch, title: 'Zəncir yoxlanır', who: 'Sistem (avtomatik)', decision: true,
+    text: 'Sistem təsdiq edən rəhbərin öz rəhbərinin olub-olmadığını yoxlayır. Sorğu heç bir səviyyəni keçmədən, bir-bir yuxarı qalxır.',
+    question: 'Təsdiq edən rəhbərin də rəhbəri var?',
+    options: [
+      { label: 'Bəli — növbəti səviyyəyə', to: 'mgr2' },
+      { label: 'Xeyr — L&D-yə', to: 'ldPending' },
+    ],
+  },
+  mgr2: {
+    phase: 'chain', icon: Building2, title: 'Növbəti rəhbərin baxışı', who: 'Departament rəhbəri',
+    where: 'İllik TNA → Departament üzrə baxış', reqStatus: 'Pending Manager Review',
+    text: 'Əvvəlki rəhbərin təsdiqi qeyd olunub. İndi departament rəhbəri baxır. Əməkdaş, şöbə rəhbəri və L&D sorğunun burada olduğunu görür.',
+    question: 'Departament rəhbəri nə qərar verir?',
+    options: [
+      { label: 'Təsdiqləyir', to: 'upChain', kind: 'ok' },
+      { label: 'Geri göndərir', to: 'revision', kind: 'warn' },
+      { label: 'Rədd edir', to: 'rejected', kind: 'bad' },
+    ],
+  },
+  revision: {
+    phase: 'chain', icon: RotateCcw, title: 'Düzəliş tələb olunur', who: 'Göndərən', reqStatus: 'Needs Revision', tone: 'warn',
+    text: 'Qərar verənin qeydi göndərənə görünür. Sətir "Redaktə et" ilə düzəldilib yenidən göndərilir — yeni sorğu yaratmağa ehtiyac yoxdur.',
+    options: [{ label: 'Düzəldib yenidən göndər', to: 'resubmit' }],
+  },
+  resubmit: {
+    phase: 'chain', icon: RefreshCcw, title: 'Yenidən göndərildi', who: 'Göndərən', decision: true,
+    text: 'Düzəldilmiş sorğu zəncirə yenidən daxil olur.',
+    question: 'Göndərənin birbaşa rəhbəri var?',
+    options: [
+      { label: 'Bəli', to: 'mgr' },
+      { label: 'Xeyr', to: 'ldPending' },
+    ],
+  },
+  rejected: {
+    phase: 'chain', icon: XCircle, title: 'Rədd edildi', who: 'Proses bitdi', reqStatus: 'Rejected', tone: 'end',
+    text: 'Kim rədd edibsə, onun adı və səbəbi göndərənə və zəncirdəki hər kəsə görünür. Bu sorğu üzrə proses bitir.',
+    options: [{ label: 'Başdan başla', to: 'start' }],
+  },
+  ldPending: {
+    phase: 'ld', icon: Send, title: 'L&D-yə çatdı', who: 'L&D (Nəzrin, Tural)', where: 'İllik TNA / Təlim Sorğuları', reqStatus: 'Pending',
+    text: 'Bütün rəhbər təsdiqləri tamamlanıb. Sorğu L&D-nin siyahısında görünür.',
+    options: [{ label: 'Analizə götürülür', to: 'ldReview' }],
+  },
+  ldReview: {
+    phase: 'ld', icon: Search, title: 'L&D analiz edir', who: 'L&D', reqStatus: 'In Review',
+    text: 'Vəzifə uyğunluğu, büdcə, prioritet və səriştə boşluğu (WG / CGI) qiymətləndirilir.',
+    question: 'L&D nə qərar verir?',
+    options: [
+      { label: 'Təsdiqləyir', to: 'approved', kind: 'ok' },
+      { label: 'Geri göndərir', to: 'revision', kind: 'warn' },
+      { label: 'Rədd edir', to: 'rejected', kind: 'bad' },
+    ],
+  },
+  approved: {
+    phase: 'ld', icon: CheckCircle2, title: 'Təsdiqləndi', who: 'L&D', reqStatus: 'Approved', tone: 'ok',
+    text: 'Sorğu təsdiqlənib. Plana yalnız L&D əlavə edə bilər — rəhbərlərdə bu düymə yoxdur.',
+    options: [{ label: 'Plana Əlavə Et', to: 'planned' }],
+  },
+  planned: {
+    phase: 'plan', icon: ListPlus, title: 'İzləmə Cədvəlinə düşdü', who: 'L&D', where: 'İzləmə Cədvəli', trStatus: 'Scheduled to Commence on Planned Date',
+    text: 'Vendor, planlanmış büdcə və tarixlər əlavə olunur; sətir müvafiq ilin planına düşür. WG, CGI və prioritet avtomatik hesablanır. Okt–Yan aylarında "Büdcələnmiş", qalan aylarda "Büdcədən kənar" kimi qeyd olunur.',
+    question: 'Təlim necə davam edir?',
+    options: [
+      { label: 'Başladı', to: 'inProgress', kind: 'ok' },
+      { label: 'Təxirə salındı', to: 'postponed', kind: 'warn' },
+      { label: 'Ləğv edildi', to: 'canceled', kind: 'bad' },
+    ],
+  },
+  inProgress: {
+    phase: 'plan', icon: PlayCircle, title: 'Davam edir', who: 'Əməkdaş, vendor', trStatus: 'In Progress',
+    text: 'Təlim gedir.',
+    options: [{ label: 'Tamamlandı', to: 'completed', kind: 'ok' }],
+  },
+  postponed: {
+    phase: 'plan', icon: PauseCircle, title: 'Təxirə salındı', who: 'L&D', trStatus: 'Postponed', tone: 'warn',
+    text: 'Tarix dəyişdirilir. Büdcə hələ planda qalır.',
+    options: [
+      { label: 'Yeni tarixdə başladı', to: 'inProgress', kind: 'ok' },
+      { label: 'Ləğv edildi', to: 'canceled', kind: 'bad' },
+    ],
+  },
+  canceled: {
+    phase: 'plan', icon: XCircle, title: 'Ləğv edildi', who: 'Proses bitdi', trStatus: 'Canceled', tone: 'end',
+    text: 'Bu təlimin büdcəsi Dashboard-da "Real Büdcə"dən çıxarılır.',
+    options: [{ label: 'Başdan başla', to: 'start' }],
+  },
+  completed: {
+    phase: 'plan', icon: Flag, title: 'Tamamlandı', who: 'L&D', trStatus: 'Completed', tone: 'ok',
+    text: 'Faktiki xərc "İstifadə olunmuş büdcə" kimi qeyd olunur, planlanmışla fərqi "Qənaət" kimi hesablanır.',
+    options: [{ label: 'Rəhbər qiymətləndirir', to: 'evaluation' }],
+  },
+  evaluation: {
+    phase: 'plan', icon: ClipboardCheck, title: 'IDP qiymətləndirməsi', who: 'Birbaşa rəhbər', where: 'IDP', tone: 'end',
+    text: 'Rəhbər IDP-də yenilənmiş cari səviyyəni və şərhini yazır. Tələb olunan səviyyəyə çatılıb-çatılmadığı avtomatik göstərilir. İlkin plan məlumatı dəyişmir.',
+    options: [{ label: 'Başdan başla', to: 'start' }],
+  },
+};
+
+const REQ_STATUSES = [
+  { s: 'Pending Manager Review', mean: 'Sorğu rəhbərin (və ya növbəti rəhbərin) təsdiqini gözləyir.', who: 'Birbaşa rəhbər / departament rəhbəri', next: ['Pending Manager Review', 'Pending', 'Needs Revision', 'Rejected'] },
+  { s: 'Pending', mean: 'Bütün rəhbər təsdiqləri tamamlanıb, sorğu L&D-yə çatıb.', who: 'L&D', next: ['In Review'] },
+  { s: 'In Review', mean: 'L&D sorğunu analiz edir.', who: 'L&D', next: ['Approved', 'Needs Revision', 'Rejected'] },
+  { s: 'Needs Revision', mean: 'Qərar verən düzəliş istəyib; qeydi göndərənə görünür.', who: 'Göndərən', next: ['Pending Manager Review', 'Pending'] },
+  { s: 'Approved', mean: 'L&D təsdiqləyib; plana əlavə olunmağı gözləyir.', who: 'L&D', next: [] , nextNote: 'Plana Əlavə Et → İzləmə Cədvəli' },
+  { s: 'Rejected', mean: 'Rədd edilib; səbəb və qərar verən görünür. Proses bitir.', who: '—', next: [] },
+];
+const TR_STATUSES = [
+  { s: 'Scheduled to Commence on Planned Date', mean: 'Planda var, başlama tarixini gözləyir.', who: 'L&D', next: ['In Progress', 'Postponed', 'Canceled'] },
+  { s: 'In Progress', mean: 'Təlim gedir.', who: 'Əməkdaş, vendor', next: ['Completed'] },
+  { s: 'Postponed', mean: 'Tarix dəyişib; büdcə planda qalır.', who: 'L&D', next: ['In Progress', 'Canceled'] },
+  { s: 'Completed', mean: 'Bitib; faktiki xərc və qənaət hesablanır, rəhbər IDP-də qiymətləndirir.', who: 'Rəhbər (qiymətləndirmə)', next: [] },
+  { s: 'Canceled', mean: 'Ləğv edilib; Real Büdcədən çıxarılır.', who: '—', next: [] },
 ];
 
 const ROLE_PATHS = {
-  employee: {
-    steps: [
-      '"Sorğu yarat" bölməsində öz adınıza bir sətir doldurub göndərirsiniz — və ya istənilən vaxt "Təlim Sorğuları" bölməsindən "Yeni Sorğu" ilə ad-hoc bir ehtiyac göndərirsiniz.',
-      'Rəhbəriniz varsa → sorğunuz "Manager Baxışında" statusuna düşür (onun öz cədvəlinə "Əməkdaş təqdim edib" işarəsi ilə əlavə olunur). Rəhbəriniz yoxdursa → birbaşa L&D-yə gedir.',
-      'Nəticəni "Təlim Sorğuları → Mənim Göndərdiklərim" bölməsindən izləyirsiniz.',
-      '"Düzəliş tələb olunur" statusu görsəniz — "Redaktə et" düyməsi ilə qeydi oxuyub düzəldib yenidən göndərin.',
-    ],
-  },
-  sube: {
-    steps: [
-      '"İllik TNA → Sorğu yarat" cədvəlində öz sətrinizi VƏ komandanızın sətirlərini eyni cədvəldə doldurub topluca göndərirsiniz.',
-      'Komandanızdan kimsə özü sorğu göndərsə, onun sətri həmin cədvələ "Əməkdaş təqdim edib" işarəsi ilə düşür — Redaktə/Təsdiqlə/Rədd edə bilərsiniz, batch-ı gözləmədən.',
-      '"Hamısını Göndər" edəndə: departament rəhbəriniz varsa → batch ona gedir. Zəncirin başındasınızsa → birbaşa L&D-yə gedir.',
-      'Departament rəhbəri "Geri göndər" etsə, o sətir yenidən sizin cədvəlinizə "Düzəliş tələb olunur" qeydi ilə düşür — düzəldib yenidən göndərirsiniz.',
-    ],
-  },
-  dept: {
-    steps: [
-      '"İllik TNA"da 4 bölmə görürsünüz: Sorğu yarat (öz sorğunuz üçün), Statuslar, Departament üzrə baxış, Qərarlar tarixçəsi.',
-      '"Departament üzrə baxış"da şöbə rəhbərlərinizin göndərdiyi bütün batch-lar — YALNIZ öz departamentiniz — göndərən şöbə rəhbərinə görə qruplaşdırılmış görünür.',
-      'Hər sətri Redaktə edə, Təsdiqləyə (L&D-yə göndərilir), Geri göndərə (şöbə rəhbərinə "Düzəliş tələb olunur" ilə qayıdır) və ya Rədd edə bilərsiniz.',
-      '"Statuslar" bölməsində YALNIZ öz şöbə rəhbərlərinizin İllik TNA-nı doldurub-doldurmadığını görürsünüz — başqa departamentlər görünmür.',
-    ],
-  },
-  ld: {
-    steps: [
-      '"İllik TNA"da bütün şirkətin məlumatları görünür — hər departament üzrə.',
-      '"Departament üzrə baxış"da L&D-yə çatan bütün sorğuları "Analizə götür"ürsünüz, sonra Təsdiqləyir, Geri göndərir və ya Rədd edirsiniz.',
-      'Təsdiqlənən sorğuları "Qərarlar tarixçəsi"ndə "Plana Əlavə Et" ilə İzləmə Cədvəlinə (illik plana) köçürürsünüz — burada vendor, büdcə, tarix kimi icra detallarını əlavə edirsiniz.',
-      'İzləmə Cədvəlini idarə edir, Excel-ə ixrac edir, istənilən əməkdaş üçün IDP sənədi yaradıb PDF-ə çap edə bilərsiniz.',
-    ],
-  },
+  employee: { label: 'Əməkdaş', steps: [
+    ['İllik TNA → Sorğu yarat', 'Öz adınıza sətir doldurub göndərin (dövr açıq deyilsə, ad-hoc imkan varsa Təlim Sorğuları).'],
+    ['Rəhbərinizə gedir', 'Status "Manager Baxışında" olur; onun cədvəlində görünür.'],
+    ['Canlı izləyin', 'Sorğunuzun hər mərhələsini (kimdədir, nə vaxt) status xəttində görürsünüz. Qırmızı rəqəm yenilik olduğunu göstərir.'],
+    ['Düzəliş istənərsə', '"Redaktə et" ilə qeydi oxuyub düzəldin və yenidən göndərin.'],
+  ] },
+  sube: { label: 'Şöbə rəhbəri', steps: [
+    ['Komandanızla birlikdə doldurun', 'Öz sətrinizi və komandanızın sətirlərini eyni cədvəldə doldurub topluca göndərin.'],
+    ['Əməkdaş sorğuları', 'Əməkdaşın özü göndərdiyi sətirlər cədvəlinizə düşür — Redaktə / Təsdiqlə / Rədd edin.'],
+    ['Yuxarı gedir', 'Təsdiqlədiyiniz sətir departament rəhbərinizə gedir (varsa), sonra L&D-yə. Hamısını izləyirsiniz.'],
+    ['Şöbənizin məlumatları', 'Dashboard və Səriştə Xəritəsində yalnız öz şöbənizi görürsünüz.'],
+  ] },
+  dept: { label: 'Departament rəhbəri', steps: [
+    ['Departament üzrə baxış', 'Şöbə rəhbərlərinizdən gələn sətirlər göndərənə görə qruplaşdırılmış görünür.'],
+    ['Qərar verin', 'Redaktə edin, Təsdiqləyin (L&D-yə gedir), Geri göndərin və ya Rədd edin.'],
+    ['Statuslar', 'Şöbə rəhbərlərinizdən kimin doldurub-doldurmadığını görürsünüz.'],
+    ['Bütün departament', 'İzləmə Cədvəli, Dashboard və Səriştə Xəritəsində bütün tabeçilik zəncirinizi görürsünüz.'],
+  ] },
+  ld: { label: 'L&D (Nəzrin, Tural)', steps: [
+    ['Bütün şirkət', 'Bütün sorğuları hər mərhələdə — hələ rəhbərdə olanları da — görürsünüz.'],
+    ['Analiz və qərar', 'Analizə götürün, Təsdiqləyin, Geri göndərin və ya Rədd edin.'],
+    ['Plana Əlavə Et', 'Təsdiqlənəni vendor, büdcə, tarixlə İzləmə Cədvəlinə köçürün (yalnız L&D).'],
+    ['İdarəetmə', 'İllik TNA pəncərəsini və ad-hoc sorğuları açıb-bağlayın, IDP yaradın, Excel/PDF ixrac edin.'],
+  ] },
 };
 
-const STAGES = [
-  {
-    n: 1, title: 'Ehtiyacın yaranması', icon: Lightbulb, color: 'blue',
-    body: 'İki giriş nöqtəsi var: illik dövr üçün "İllik TNA → Sorğu yarat" toplu cədvəli, və ya istənilən vaxt "Təlim Sorğuları → Yeni Sorğu" ilə tək bir ad-hoc ehtiyac.',
-    note: 'İllik TNA yalnız L&D-nin açdığı pəncərə aktiv olanda görünür — L&D/HR və departament rəhbərləri isə pəncərədən asılı olmayaraq həmişə görür.',
-  },
-  {
-    n: 2, title: 'Göndərmə', icon: Send, color: 'blue',
-    body: 'Komandası olmayan əməkdaş öz adına bir sətir doldurur. Rəhbər (komandası olan hər kəs) öz sətri ilə YANAŞI komandasının sətirlərini eyni cədvəldə doldurub topluca göndərir.',
-    statusChip: { from: 'Pending Manager Review', to: 'Pending' },
-    note: 'Rəhbəriniz varsa → "Manager Baxışında" (onun cədvəlinə düşür). Rəhbəriniz yoxdursa (zəncirin başındasınızsa) → birbaşa "Gözləyir" (L&D-yə).',
-  },
-  {
-    n: 3, title: 'Şöbə rəhbərinin baxışı', icon: UserCheck, color: 'purple',
-    body: 'Komandası olmayan əməkdaşın göndərdiyi sətir, rəhbərinin öz "Sorğu yarat" cədvəlinə əlavə olunur — batch gözlənilmədən dərhal Redaktə/Təsdiqlə/Rədd edilə bilər.',
-    note: 'Rəhbər öz batch-ını göndərəndə: onun da rəhbəri (departament rəhbəri) varsa → yenə "Manager Baxışında" bir pillə yuxarı, yoxdursa → "Gözləyir" (L&D-yə).',
-  },
-  {
-    n: 4, title: 'Departament rəhbərinin baxışı', icon: Folder, color: 'purple',
-    body: 'Şöbə rəhbərinin göndərdiyi bütün batch-lar, departament rəhbərinin "İllik TNA → Departament üzrə baxış" bölməsində — göndərən şöbə rəhbərinə görə qruplaşdırılmış — görünür. Öz "Sorğu yarat" cədvəlinə qarışmır.',
-    statusChip: { from: 'Pending Manager Review', to: 'Pending' },
-    note: 'Redaktə et / Təsdiqlə (L&D-yə göndərilir) / Geri göndər (şöbə rəhbərinə "Düzəliş tələb olunur" ilə qayıdır) / Rədd et.',
-  },
-  {
-    n: 5, title: 'L&D analizi', icon: Search, color: 'amber',
-    body: 'Bütün yollar — birbaşa göndərilən, şöbə/departament zəncirindən keçən — sonda buraya çatır. L&D sorğunu "Analizə götür", status "Baxılır (L&D)" olur.',
-    statusChip: { from: 'Pending', to: 'In Review' },
-  },
-  {
-    n: 6, title: 'Qərar', icon: GitBranch, color: 'amber',
-    body: 'L&D üç yoldan birini seçir:',
-    branches: [
-      { label: 'Təsdiqlə', Icon: CheckCircle2, color: 'var(--green)', detail: '"Təsdiqləndi" — sorğu "Qərarlar tarixçəsi"nə düşür.' },
-      { label: 'Geri göndər', Icon: RotateCcw, color: 'var(--amber)', detail: '"Düzəliş tələb olunur" — göndərənin öz cədvəlinə qeydlə qayıdır.' },
-      { label: 'Rədd et', Icon: XCircle, color: 'var(--red)', detail: '"Rədd edildi" — prosesin sonu, tarixçədə qalır.' },
-    ],
-  },
-  {
-    n: 7, title: 'Plana əlavə etmə', icon: ListPlus, color: 'green',
-    body: '"Təsdiqləndi" statusundakı sorğular "Qərarlar tarixçəsi"ndə "Plana Əlavə Et" düyməsi ilə İzləmə Cədvəlinə (illik plana) köçürülür — bu, ƏL İLƏ edilir, avtomatik deyil.',
-    note: 'Bu addımda vendor, planlanmış büdcə, başlama/bitmə tarixi kimi icra detalları əlavə olunur.',
-  },
-  {
-    n: 8, title: 'İcra və İzləmə', icon: ClipboardList, color: 'green',
-    body: 'İzləmə Cədvəlindəki hər təlimin öz icra statusu var — sorğu statusundan tamamilə fərqli bir sistemdir:',
-    trainingStatuses: ['Scheduled to Commence on Planned Date', 'In Progress', 'Postponed', 'Completed', 'Canceled'],
-  },
-  {
-    n: 9, title: 'IDP sənədi', icon: UserSquare2, color: 'teal',
-    body: 'İstənilən vaxt (L&D/HR), bir əməkdaşın bütün sorğu tarixçəsi VƏ təlim planı bir sənəddə birləşdirilib PDF kimi çap edilə bilər — səriştə uyğunluğu, səviyyələr və prioritet daxil olmaqla.',
-  },
-];
+function phaseOf(key) { return PHASES.find((p) => p.key === key) || PHASES[0]; }
 
-const COLOR_MAP = {
-  blue: { bg: 'var(--blue-light)', text: 'var(--blue)', border: 'var(--blue-border)' },
-  purple: { bg: 'var(--purple-light)', text: 'var(--purple)', border: 'var(--purple-light)' },
-  amber: { bg: 'var(--amber-light)', text: 'var(--amber)', border: 'var(--amber-border)' },
-  green: { bg: 'var(--green-light)', text: 'var(--green)', border: 'var(--green-border)' },
-  teal: { bg: 'var(--blue-light)', text: 'var(--teal)', border: 'var(--blue-border)' },
-};
-
-const FAQ = [
-  {
-    q: 'Niyə mənim İllik TNA üçün "Sorğu yarat" yerim yoxdur?',
-    a: 'İki səbəb ola bilər: (1) İllik TNA pəncərəsi hazırda bağlıdır və siz L&D/HR və ya departament rəhbəri deyilsiniz — pəncərə açılana qədər gözləməlisiniz. (2) L&D/HR və ya departament rəhbərisinizsə və heç bir birbaşa tabeliyinizdə əməkdaş yoxdursa, "Sorğu yarat" tabı sizə də görünməlidir (öz adınıza sətir doldurmaq üçün) — əgər görünmürsə, administratordan yoxlamasını xahiş edin.',
-  },
-  {
-    q: '"Sorğu yarat" (İllik TNA) ilə "Yeni Sorğu" (ad-hoc) arasında fərq nədir?',
-    a: 'İllik TNA illik planlaşdırma dövrü üçün toplu cədvəldir — bütün il üçün ehtiyacları bir dəfəyə planlaşdırırsınız. "Yeni Sorğu" isə istənilən vaxt yarana biləcək tək bir ehtiyac üçündür (planlaşdırılmamış, təxirəsalınmaz).',
-  },
-  {
-    q: 'Komandam yoxdursa İllik TNA-nı necə göndərim?',
-    a: '"Sorğu yarat" cədvəlində "Əməkdaş" sütununda "Mən" seçib öz sətrinizi doldurub göndərirsiniz — heç kimin komandasında olmağınız tələb olunmur.',
-  },
-  {
-    q: 'Sorğum niyə hələ "Gözləyir" statusunda qalıb?',
-    a: 'Zəncirdəki növbəti rəhbər (və ya L&D) hələ ona baxmayıb. Sıra ilə keçir: birbaşa rəhbər → (varsa) departament rəhbəri → L&D.',
-  },
-  {
-    q: '"Düzəliş tələb olunur" statusu nə deməkdir?',
-    a: 'Kimsə (rəhbəriniz, departament rəhbəri və ya L&D) sizin sorğunuzu geri göndərib, adətən bir qeydlə. Qeydi oxuyub, "Redaktə et" ilə düzəldib yenidən göndərməlisiniz — yenidən eyni zəncirdən keçəcək.',
-  },
-  {
-    q: 'Rədd edilmiş sorğuma nə olur?',
-    a: 'Proses bitir — sorğu "Qərarlar tarixçəsi" bölməsində "Rədd edildi" statusu ilə qalır, qərar qeydi ilə birlikdə. Yenidən göndərmək üçün yeni sorğu yaratmaq lazımdır.',
-  },
-  {
-    q: 'Təsdiqlənmiş sorğu avtomatik olaraq illik plana düşürmü?',
-    a: 'Xeyr. L&D "Qərarlar tarixçəsi"ndə "Plana Əlavə Et" düyməsini əl ilə basmalıdır — bu addımda vendor, büdcə, tarix kimi icra detalları da əlavə olunur.',
-  },
-  {
-    q: 'İzləmə Cədvəlindəki statuslar (Planlaşdırılıb, Davam edir və s.) sorğu statusu ilə eynidirmi?',
-    a: 'Xeyr, tamamilə ayrı sistemdir. Sorğu statusu (Gözləyir → Baxılır → Təsdiqləndi/Rədd edildi) təsdiq prosesini göstərir; İzləmə Cədvəlinin statusu isə artıq planlaşdırılmış təlimin İCRA mərhələsini göstərir.',
-  },
-  {
-    q: 'IDP sənədini kim yarada bilər?',
-    a: 'Yalnız L&D/HR rolundakı istifadəçilər — istənilən əməkdaş üçün, onun bütün sorğu tarixçəsi və təlim planı əsasında.',
-  },
-  {
-    q: 'Excel-ə ixrac hardan edilir?',
-    a: 'Həm İzləmə Cədvəlində, həm də İllik TNA-nın "Sorğu yarat" cədvəlində "Excel-ə ixrac et" düyməsi var — hər ikisi ekrandakı eyni rəngli sütun qruplarını və çərçivələri saxlayır.',
-  },
-];
-
-function StatusArrow({ from, to }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-      {from ? <ReqStatusBadge status={from} /> : <span style={{ fontSize: 11.5, color: 'var(--ink-400)' }}>—</span>}
-      <ArrowRight size={14} strokeWidth={2.2} color="var(--ink-300)" />
-      {to ? <ReqStatusBadge status={to} /> : <span style={{ fontSize: 11.5, color: 'var(--ink-400)' }}>—</span>}
-    </div>
-  );
+function StatusOf({ node }) {
+  if (node.reqStatus) return <ReqStatusBadge status={node.reqStatus} />;
+  if (node.trStatus) return <TrainingStatusBadge status={node.trStatus} />;
+  return null;
 }
 
-function StageCard({ stage, isLast }) {
-  const c = COLOR_MAP[stage.color];
-  const Icon = stage.icon;
+// ---------------------------- Simulyasiya ----------------------------------
+function Simulator({ path, setPath }) {
+  const current = path[path.length - 1];
+  const node = NODES[current];
+  const phase = phaseOf(node.phase);
+  const phaseIdx = PHASES.findIndex((p) => p.key === node.phase);
+  const Icon = node.icon;
+
+  function go(to) { setPath([...path, to]); }
+  function back() { if (path.length > 1) setPath(path.slice(0, -1)); }
+
   return (
     <div>
-      <div className="card stagger-item" style={{ '--i': stage.n, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-        <div style={{
-          width: 40, height: 40, borderRadius: 10, background: c.bg, color: c.text,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontWeight: 800, fontSize: 14,
-        }}>
-          <Icon size={19} strokeWidth={2} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <span style={{ fontSize: 11, fontWeight: 800, color: c.text, letterSpacing: 0.3 }}>ADDIM {stage.n}</span>
-            <div style={{ fontSize: 15, fontWeight: 800 }}>{stage.title}</div>
+      <div className="guide-phases">
+        {PHASES.map((p, i) => (
+          <div key={p.key} className={'guide-phase' + (i < phaseIdx ? ' done' : '') + (i === phaseIdx ? ' current' : '')} style={{ '--c': p.color }}>
+            <span className="guide-phase-dot">{i < phaseIdx ? <CheckCircle2 size={14} strokeWidth={2.6} /> : i + 1}</span>
+            <span>{p.label}</span>
           </div>
-          <div style={{ fontSize: 13, color: 'var(--ink-700)', lineHeight: 1.55 }}>{stage.body}</div>
+        ))}
+      </div>
 
-          {stage.statusChip && <StatusArrow from={stage.statusChip.from} to={stage.statusChip.to} />}
-
-          {stage.branches && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginTop: 12 }}>
-              {stage.branches.map((b) => (
-                <div key={b.label} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: 'var(--surface)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 12.5, color: b.color, marginBottom: 4 }}>
-                    <b.Icon size={14} strokeWidth={2.2} /> {b.label}
-                  </div>
-                  <div style={{ fontSize: 12, color: 'var(--ink-500)', lineHeight: 1.45 }}>{b.detail}</div>
-                </div>
-              ))}
+      <div className={'guide-card guide-tone-' + (node.tone || 'none')} style={{ '--c': phase.color }}>
+        <div className="guide-card-head">
+          <div className="guide-card-icon"><Icon size={26} strokeWidth={2} /></div>
+          <div style={{ flex: 1 }}>
+            <div className="guide-card-title">{node.title}</div>
+            <div className="guide-chips">
+              <span className="guide-chip"><Users size={12} strokeWidth={2.4} /> {node.who}</span>
+              {node.where && <span className="guide-chip"><Compass size={12} strokeWidth={2.4} /> {node.where}</span>}
+              <StatusOf node={node} />
             </div>
-          )}
+          </div>
+        </div>
+        <p className="guide-card-text">{node.text}</p>
 
-          {stage.trainingStatuses && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-              {stage.trainingStatuses.map((s, i) => (
-                <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <TrainingStatusBadge status={s} />
-                  {i < stage.trainingStatuses.length - 1 && <ArrowRight size={12} strokeWidth={2.2} color="var(--ink-300)" />}
-                </div>
-              ))}
-            </div>
-          )}
+        {node.question && (
+          <div className="guide-question"><HelpCircle size={16} strokeWidth={2.4} /> {node.question}</div>
+        )}
+        <div className="guide-options">
+          {node.options.map((o) => (
+            <button key={o.label} className={'guide-option guide-option-' + (o.kind || 'default')} onClick={() => go(o.to)}>
+              <span>{o.label}</span>
+              <span className="guide-option-next">
+                {NODES[o.to].title}
+                <ArrowRight size={15} strokeWidth={2.4} />
+              </span>
+            </button>
+          ))}
+        </div>
 
-          {stage.note && (
-            <div className="notice" style={{ marginTop: 10, fontSize: 12, background: 'var(--ink-50)', borderColor: 'var(--ink-200)', color: 'var(--ink-500)' }}>
-              {stage.note}
-            </div>
-          )}
+        <div className="guide-nav">
+          <button className="btn btn-outline btn-sm" onClick={back} disabled={path.length <= 1}>
+            <ArrowLeft size={14} strokeWidth={2.2} /> Geri
+          </button>
+          <button className="btn btn-outline btn-sm" onClick={() => setPath(['start'])} disabled={path.length <= 1}>
+            <RefreshCcw size={14} strokeWidth={2.2} /> Başdan başla
+          </button>
         </div>
       </div>
-      {!isLast && (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0' }}>
-          <ArrowDown size={18} strokeWidth={2.2} color="var(--ink-300)" />
+
+      {path.length > 1 && (
+        <div className="card" style={{ marginTop: 14 }}>
+          <div className="filter-label" style={{ marginBottom: 10 }}>Keçdiyiniz yol</div>
+          <div className="guide-trail">
+            {path.map((k, i) => {
+              const n = NODES[k];
+              return (
+                <span key={i} className="guide-trail-item">
+                  {i > 0 && <ArrowRight size={13} strokeWidth={2.4} className="guide-trail-arrow" />}
+                  <button className={'guide-trail-chip' + (i === path.length - 1 ? ' current' : '')}
+                    style={{ '--c': phaseOf(n.phase).color }} onClick={() => setPath(path.slice(0, i + 1))}>
+                    {n.title}
+                  </button>
+                </span>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-function FaqItem({ item, open, onToggle }) {
+// ---------------------------- Axın xəritəsi --------------------------------
+function MapBox({ id, onOpen, small }) {
+  const n = NODES[id];
+  const Icon = n.icon;
   return (
-    <div className="card" style={{ marginBottom: 10, padding: 0, overflow: 'hidden' }}>
-      <button
-        onClick={onToggle}
-        style={{
-          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
-          padding: '14px 18px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left',
-        }}
-      >
-        <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink-900)' }}>{item.q}</span>
-        <ChevronDown size={16} strokeWidth={2.2} style={{ flexShrink: 0, color: 'var(--ink-400)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .18s ease' }} />
-      </button>
-      {open && (
-        <div style={{ padding: '0 18px 16px', fontSize: 12.5, color: 'var(--ink-500)', lineHeight: 1.6 }}>
-          {item.a}
-        </div>
-      )}
+    <button className={'map-box' + (n.decision ? ' map-decision' : '') + (small ? ' map-small' : '') + ' guide-tone-' + (n.tone || 'none')}
+      style={{ '--c': phaseOf(n.phase).color }} onClick={() => onOpen(id)} title="Simulyasiyanı bu addımdan aç">
+      <Icon size={16} strokeWidth={2.2} />
+      <span className="map-box-title">{n.title}</span>
+      <StatusOf node={n} />
+    </button>
+  );
+}
+function Down({ label }) {
+  return (
+    <div className="map-down">
+      <ArrowDown size={16} strokeWidth={2.4} />
+      {label && <span className="map-down-label">{label}</span>}
     </div>
   );
 }
+function Branches({ items }) {
+  return (
+    <div className="map-branches" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
+      {items.map((b) => (
+        <div key={b.label} className={'map-branch map-branch-' + (b.kind || 'default')}>
+          <div className="map-branch-label">{b.label}</div>
+          {b.children}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FlowMap({ onOpen }) {
+  const phaseHead = (key, text) => (
+    <div className="map-phase-head" style={{ '--c': phaseOf(key).color }}>{text}</div>
+  );
+  return (
+    <div className="card guide-map">
+      <div className="section-sub" style={{ marginBottom: 14 }}>Hər qutuya klikləyin — simulyasiya həmin addımdan açılır.</div>
+
+      {phaseHead('need', '1 · Ehtiyac')}
+      <MapBox id="start" onOpen={onOpen} />
+      <Down />
+      <Branches items={[
+        { label: 'İllik TNA dövrü', children: <MapBox id="annual" onOpen={onOpen} small /> },
+        { label: 'İl ortası', children: <>
+          <MapBox id="adhoc" onOpen={onOpen} small />
+          <Down label="bağlıdırsa" />
+          <MapBox id="adhocClosed" onOpen={onOpen} small />
+        </> },
+      ]} />
+      <Down label="Göndərilir — rəhbəri var?" />
+      <Branches items={[
+        { label: 'Bəli', children: <>
+          {phaseHead('chain', '2 · Rəhbər təsdiqi')}
+          <MapBox id="mgr" onOpen={onOpen} small />
+          <Down label="təsdiq" />
+          <MapBox id="upChain" onOpen={onOpen} small />
+          <Down label="rəhbərin də rəhbəri var" />
+          <MapBox id="mgr2" onOpen={onOpen} small />
+          <div className="map-loop"><RefreshCcw size={12} /> zəncirin başına qədər təkrarlanır</div>
+        </> },
+        { label: 'Xeyr — birbaşa L&D', kind: 'muted', children: <div className="map-skip">Rəhbər mərhələsi keçilir</div> },
+      ]} />
+      <Down />
+      <Branches items={[
+        { label: 'Geri göndər', kind: 'warn', children: <>
+          <MapBox id="revision" onOpen={onOpen} small />
+          <div className="map-loop"><RotateCcw size={12} /> düzəldilib yenidən göndərilir</div>
+        </> },
+        { label: 'Rədd et', kind: 'bad', children: <MapBox id="rejected" onOpen={onOpen} small /> },
+      ]} />
+      <div className="map-note">Rəhbər və ya L&D istənilən mərhələdə "Geri göndər" və ya "Rədd et" seçə bilər.</div>
+      <Down label="bütün təsdiqlər tamamdır" />
+
+      {phaseHead('ld', '3 · L&D qərarı')}
+      <MapBox id="ldPending" onOpen={onOpen} />
+      <Down />
+      <MapBox id="ldReview" onOpen={onOpen} />
+      <Down label="təsdiq" />
+      <MapBox id="approved" onOpen={onOpen} />
+      <Down label="Plana Əlavə Et (yalnız L&D)" />
+
+      {phaseHead('plan', '4 · Plan və icra')}
+      <MapBox id="planned" onOpen={onOpen} />
+      <Down />
+      <Branches items={[
+        { label: 'Başladı', kind: 'ok', children: <>
+          <MapBox id="inProgress" onOpen={onOpen} small />
+          <Down />
+          <MapBox id="completed" onOpen={onOpen} small />
+          <Down />
+          <MapBox id="evaluation" onOpen={onOpen} small />
+        </> },
+        { label: 'Təxirə salındı', kind: 'warn', children: <>
+          <MapBox id="postponed" onOpen={onOpen} small />
+          <div className="map-loop"><RefreshCcw size={12} /> yeni tarixdə başlaya bilər</div>
+        </> },
+        { label: 'Ləğv edildi', kind: 'bad', children: <MapBox id="canceled" onOpen={onOpen} small /> },
+      ]} />
+    </div>
+  );
+}
+
+// ---------------------------- Statuslar ------------------------------------
+function StatusTable({ title, rows, Badge }) {
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="section-title" style={{ fontSize: 15, marginBottom: 12 }}>{title}</div>
+      <div className="status-dict">
+        {rows.map((r) => (
+          <div key={r.s} className="status-dict-row">
+            <div className="status-dict-badge"><Badge status={r.s} /></div>
+            <div className="status-dict-mean">{r.mean}</div>
+            <div className="status-dict-who"><Users size={12} strokeWidth={2.4} /> {r.who}</div>
+            <div className="status-dict-next">
+              {r.next.length === 0 && !r.nextNote && <span className="status-dict-end">Son mərhələ</span>}
+              {r.nextNote && <span className="status-dict-end">{r.nextNote}</span>}
+              {r.next.map((n) => (
+                <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <ArrowRight size={12} strokeWidth={2.4} color="var(--ink-400)" /><Badge status={n} />
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------- Rol üzrə -------------------------------------
+function RoleSteps() {
+  const [role, setRole] = useState('employee');
+  const r = ROLE_PATHS[role];
+  return (
+    <div className="card">
+      <div className="subtab-nav" style={{ marginBottom: 18 }}>
+        {Object.entries(ROLE_PATHS).map(([k, v]) => (
+          <button key={k} className={'subtab-pill' + (role === k ? ' active' : '')} onClick={() => setRole(k)}>{v.label}</button>
+        ))}
+      </div>
+      <div className="role-steps">
+        {r.steps.map(([title, text], i) => (
+          <div key={title} className="role-step">
+            <div className="role-step-num">{i + 1}</div>
+            <div>
+              <div className="role-step-title">{title}</div>
+              <div className="role-step-text">{text}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const TABS = [
+  { key: 'sim', label: 'Addım-addım simulyasiya', Icon: GitBranch },
+  { key: 'map', label: 'Tam axın xəritəsi', Icon: MapIcon },
+  { key: 'status', label: 'Statuslar', Icon: BookOpen },
+  { key: 'role', label: 'Rolum üzrə', Icon: Users },
+];
 
 export default function ProcessGuideView() {
-  const [role, setRole] = useState('employee');
-  const [openFaq, setOpenFaq] = useState(0);
+  const [tab, setTab] = useState('sim');
+  const [path, setPath] = useState(['start']);
+
+  function openAt(id) {
+    setPath(id === 'start' ? ['start'] : ['start', id]);
+    setTab('sim');
+  }
 
   return (
     <div>
       <div className="page-header">
         <div className="page-header-row">
           <div>
-            <h1><Compass size={20} strokeWidth={2.2} style={{ verticalAlign: -3, marginRight: 8, color: 'var(--blue)' }} />Bələdçi — TNA Prosesi Necə İşləyir?</h1>
-            <p>Ehtiyacın yaranmasından IDP sənədinə qədər bütün yol — rolunuzu seçin, öz addımlarınızı görün, aşağıda tam road map-ə baxın.</p>
+            <h1><Compass size={20} strokeWidth={2.2} style={{ verticalAlign: -3, marginRight: 8, color: 'var(--blue)' }} />Bələdçi — Proses necə işləyir?</h1>
+            <p>Ehtiyacın yaranmasından qiymətləndirməyə qədər — hər addımda nə baş verdiyini seçərək izləyin.</p>
           </div>
         </div>
       </div>
-
       <div className="page">
-        <div className="section-title" style={{ marginBottom: 10 }}>Mən kiməm?</div>
-        <div className="subtab-nav" style={{ marginBottom: 14 }}>
-          {ROLE_TABS.map((t) => (
-            <button key={t.key} className={'subtab-pill' + (role === t.key ? ' active' : '')} onClick={() => setRole(t.key)}>
-              {t.label}
+        <div className="subtab-nav" style={{ marginBottom: 18 }}>
+          {TABS.map(({ key, label, Icon }) => (
+            <button key={key} className={'subtab-pill' + (tab === key ? ' active' : '')} onClick={() => setTab(key)}>
+              <Icon size={14} strokeWidth={2.2} /> {label}
             </button>
           ))}
         </div>
-        <div className="card" style={{ marginBottom: 32, borderLeft: '3px solid var(--blue)' }}>
-          <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 10, color: 'var(--blue)' }}>
-            {ROLE_TABS.find((t) => t.key === role).label} olaraq sizin addımlarınız:
-          </div>
-          <ol style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {ROLE_PATHS[role].steps.map((s, i) => (
-              <li key={i} style={{ fontSize: 13, color: 'var(--ink-700)', lineHeight: 1.55 }}>{s}</li>
-            ))}
-          </ol>
-        </div>
 
-        <div className="section-title" style={{ marginBottom: 4 }}>Tam Road Map</div>
-        <div className="section-sub" style={{ marginBottom: 18 }}>Bir ehtiyacın doğulmasından IDP sənədinə qədər keçdiyi bütün addımlar, hər addımda status necə dəyişdiyi ilə birlikdə.</div>
-        <div style={{ maxWidth: 720, margin: '0 auto 40px' }}>
-          {STAGES.map((stage, i) => (
-            <StageCard key={stage.n} stage={stage} isLast={i === STAGES.length - 1} />
-          ))}
-        </div>
-
-        <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-          <HelpCircle size={17} strokeWidth={2.2} /> Tez-tez verilən suallar
-        </div>
-        <div className="section-sub" style={{ marginBottom: 18 }}>Ağlınıza gələ biləcək ən çox rast gəlinən suallar.</div>
-        <div style={{ maxWidth: 780 }}>
-          {FAQ.map((item, i) => (
-            <FaqItem key={i} item={item} open={openFaq === i} onToggle={() => setOpenFaq(openFaq === i ? -1 : i)} />
-          ))}
-        </div>
+        {tab === 'sim' && <Simulator path={path} setPath={setPath} />}
+        {tab === 'map' && <FlowMap onOpen={openAt} />}
+        {tab === 'status' && (
+          <>
+            <StatusTable title="Sorğu statusları (təsdiq zənciri)" rows={REQ_STATUSES} Badge={ReqStatusBadge} />
+            <StatusTable title="Təlim statusları (İzləmə Cədvəli)" rows={TR_STATUSES} Badge={TrainingStatusBadge} />
+          </>
+        )}
+        {tab === 'role' && <RoleSteps />}
       </div>
     </div>
   );
