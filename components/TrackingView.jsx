@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import ExcelJS from 'exceljs';
-import { Search, Download, FilterX, Pencil, Trash2, Save, Columns3, Layers, ArrowUp, ArrowDown, Folder } from 'lucide-react';
+import { Search, Download, FilterX, Pencil, Trash2, Save, Columns3, Layers, ArrowUp, ArrowDown, Folder, Plus } from 'lucide-react';
 import { sb } from '../lib/supabase';
-import { fmtMoney, statusMeta, priorityMeta, computeGapMetrics } from '../lib/helpers';
+import { fmtMoney, statusMeta, priorityMeta, computeGapMetrics, computeBudgetStatus } from '../lib/helpers';
 import { styleGroupedTable, downloadWorkbook } from '../lib/excelExport';
 import { GROUP_BG, GROUP_TEXT } from '../lib/tableGroups';
 import { TrainingStatusBadge, PriorityBadge, BudgetStatusBadge } from './Badges';
@@ -427,6 +427,24 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
   }
 
   function openEdit(row) { setError(''); setEditing({ ...row }); }
+
+  // L&D: yeni sətri əl ilə əlavə etmək. Sətir birbaşa Supabase-dəki
+  // trainings cədvəlinə yazılır (RLS: yalnız ld/hr əlavə edə bilər).
+  function openNew() {
+    setError('');
+    const yearNums = years.map(Number).filter(Boolean);
+    const defaultYear = selectedYear !== 'all'
+      ? Number(selectedYear)
+      : (yearNums.length ? Math.max(...yearNums) : new Date().getFullYear());
+    setEditing({
+      plan_year: defaultYear,
+      status: 'Scheduled to Commence on Planned Date',
+      budget_status: computeBudgetStatus(),
+      budget: null,
+      used_budget: null,
+      man_hours: null,
+    });
+  }
   const GAP_SOURCE_FIELDS = new Set(['current_skill_level', 'required_skill_level', 'importance_level']);
   function upd(field, value) {
     setEditing((e) => {
@@ -447,12 +465,33 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
   }
 
   async function saveEdit() {
-    setSaving(true); setError('');
+    setError('');
+    const isNew = !editing.id;
+    // Məcburi sahələr (cədvəldə NOT NULL olanlar)
+    const missing = [];
+    if (!String(editing.employee_name || '').trim()) missing.push('Ad Soyad');
+    if (!String(editing.dept || '').trim()) missing.push('Departament');
+    if (!String(editing.skill || '').trim()) missing.push('Təlim / İnkişaf istiqaməti');
+    if (!editing.status) missing.push('Status');
+    if (missing.length) { setError('Doldurun: ' + missing.join(', ')); return; }
+
+    // Boş sahələr NULL kimi yazılsın ('' tarix/rəqəm sahəsində xəta verir)
     const { id, ...rest } = editing;
-    const { error: err } = await sb.from('trainings').update(rest).eq('id', id);
+    const payload = {};
+    Object.entries(rest).forEach(([k, v]) => {
+      if (v === undefined) return;
+      payload[k] = typeof v === 'string' && v.trim() === '' ? null : v;
+    });
+    ['employee_name', 'dept', 'skill'].forEach((k) => { if (payload[k]) payload[k] = String(payload[k]).trim(); });
+
+    setSaving(true);
+    const { error: err } = isNew
+      ? await sb.from('trainings').insert(payload)
+      : await sb.from('trainings').update(payload).eq('id', id);
     setSaving(false);
     if (err) { setError('Xəta: ' + err.message); return; }
     setEditing(null);
+    showToast(isNew ? 'Yeni sətir əlavə olundu.' : 'Dəyişikliklər saxlanıldı.', 'success');
     if (onDataChanged) await onDataChanged();
   }
 
@@ -502,6 +541,9 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
               <Layers size={13} strokeWidth={2.2} /> Departamentə görə qrupla
             </button>
             <ColumnPicker columns={ALL_COLUMNS} visible={new Set(ALL_COLUMNS.map((c) => c.key).filter((k) => !hiddenCols.has(k)))} onToggle={toggleColumn} />
+            {isAdmin && (
+              <button onClick={openNew} className="btn btn-primary btn-sm"><Plus size={13} strokeWidth={2.4} /> Yeni sətir</button>
+            )}
             {canExport && (
               <button onClick={exportToExcel} className="btn btn-success btn-sm"><Download size={13} strokeWidth={2.2} /> Excel-ə ixrac et</button>
             )}
@@ -557,14 +599,19 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
         {editing && (
           <div className="modal-overlay">
             <div className="modal-card" style={{ width: 640, maxHeight: '90vh', overflow: 'auto' }}>
-              <div className="modal-title">Qeydi Redaktə Et</div>
+              <div className="modal-title">{editing.id ? 'Qeydi Redaktə Et' : 'Yeni Sətir Əlavə Et'}</div>
+              {!editing.id && (
+                <div style={{ fontSize: 12.5, color: 'var(--ink-500)', marginBottom: 12 }}>
+                  Ulduzlu sahələr (*) məcburidir. Prioritet, WG və CGI səviyyələrdən avtomatik hesablanır.
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                 <div style={{ flex: 1 }}>
                   <label>İl</label>
                   <input type="number" value={editing.plan_year || ''} onChange={(e) => upd('plan_year', Number(e.target.value))} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label>Departament</label>
+                  <label>Departament *</label>
                   <input type="text" value={editing.dept || ''} onChange={(e) => upd('dept', e.target.value)} />
                 </div>
                 <div style={{ flex: 1 }}>
@@ -573,7 +620,7 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
                 </div>
               </div>
               <div style={{ marginBottom: 10 }}>
-                <label>Ad Soyad</label>
+                <label>Ad Soyad *</label>
                 <input type="text" value={editing.employee_name || ''} onChange={(e) => upd('employee_name', e.target.value)} />
               </div>
               <div style={{ marginBottom: 10 }}>
@@ -594,7 +641,7 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
                 <textarea rows={2} value={editing.learning_goal || ''} onChange={(e) => upd('learning_goal', e.target.value)} />
               </div>
               <div style={{ marginBottom: 10 }}>
-                <label>{FIELD_LABELS.skill}</label>
+                <label>{FIELD_LABELS.skill} *</label>
                 <input type="text" value={editing.skill || ''} onChange={(e) => upd('skill', e.target.value)} />
               </div>
               <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
@@ -662,7 +709,7 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
               <div className="filter-label" style={{ margin: '4px 0 10px' }}>Status, tarixlər və büdcə</div>
               <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                 <div style={{ flex: 1 }}>
-                  <label>Status</label>
+                  <label>Status *</label>
                   <select value={editing.status || ''} onChange={(e) => upd('status', e.target.value)}>
                     {STATUS_OPTIONS.map((o) => <option key={o} value={o}>{statusMeta(o).label}</option>)}
                   </select>
@@ -687,15 +734,15 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
               <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                 <div style={{ flex: 1 }}>
                   <label>{FIELD_LABELS.man_hours}</label>
-                  <input type="number" value={editing.man_hours || 0} onChange={(e) => upd('man_hours', Number(e.target.value))} />
+                  <input type="number" value={editing.man_hours ?? ''} onChange={(e) => upd('man_hours', e.target.value === '' ? null : Number(e.target.value))} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <label>{FIELD_LABELS.used_budget} (₼)</label>
-                  <input type="number" value={editing.used_budget || 0} onChange={(e) => upd('used_budget', Number(e.target.value))} />
+                  <input type="number" value={editing.used_budget ?? ''} onChange={(e) => upd('used_budget', e.target.value === '' ? null : Number(e.target.value))} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <label>{FIELD_LABELS.budget} (₼)</label>
-                  <input type="number" value={editing.budget || 0} onChange={(e) => upd('budget', Number(e.target.value))} />
+                  <input type="number" value={editing.budget ?? ''} onChange={(e) => upd('budget', e.target.value === '' ? null : Number(e.target.value))} />
                 </div>
               </div>
               <div style={{ marginBottom: 14 }}>
