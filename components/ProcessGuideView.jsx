@@ -36,8 +36,8 @@ const NODES = {
   },
   annual: {
     phase: 'need', icon: ListPlus, title: 'İllik TNA → Sorğu yarat', who: 'Göndərən', where: 'İllik TNA',
-    text: 'Cədvəldə sətir doldurulur. Rəhbər öz sətri ilə yanaşı komandasının sətirlərini də eyni cədvəldə doldurur. Səriştə siyahıdan seçilir (əməkdaşın şöbəsinə görə avtomatik), yoxdursa özünüz yazırsınız. Vendor yalnız tövsiyədir.',
-    question: '"Hamısını Göndər" basıldı — göndərənin birbaşa rəhbəri var?',
+    text: 'Cədvəldə sətir doldurulur (rəhbər komandasının sətirlərini də burada doldurur). Səriştələr əməkdaşın şöbəsinə görə avtomatik təklif olunur.',
+    question: 'Göndərənin birbaşa rəhbəri var?',
     options: [
       { label: 'Bəli, rəhbəri var', to: 'mgr' },
       { label: 'Xeyr, zəncirin başındadır', to: 'ldPending' },
@@ -45,7 +45,7 @@ const NODES = {
   },
   adhoc: {
     phase: 'need', icon: Send, title: 'Təlim Sorğuları → Yeni Sorğu', who: 'Göndərən', where: 'Təlim Sorğuları',
-    text: 'Bir ehtiyac üçün tək sorğu. Bu imkanı L&D açıb-bağlayır; illik TNA dövründə adətən bağlı olur.',
+    text: 'Tək bir ehtiyac üçün sorğu. Bu imkanı L&D açıb-bağlayır.',
     question: 'Ad-hoc sorğular hazırda açıqdır?',
     options: [
       { label: 'Bəli, açıqdır', to: 'adhocSend' },
@@ -69,7 +69,7 @@ const NODES = {
   mgr: {
     phase: 'chain', icon: UserCheck, title: 'Birbaşa rəhbərin baxışı', who: 'Birbaşa rəhbər (məs. şöbə rəhbəri)',
     where: 'İllik TNA / Təlim Sorğuları', reqStatus: 'Pending Manager Review',
-    text: 'Sorğu rəhbərin cədvəlinə "Əməkdaş təqdim edib" işarəsi ilə düşür. Rəhbər sətri redaktə edə bilər. Göndərən də statusu canlı izləyir.',
+    text: 'Sorğu rəhbərin cədvəlinə düşür. Rəhbər sətri redaktə edə bilər, göndərən statusu canlı izləyir.',
     question: 'Rəhbər nə qərar verir?',
     options: [
       { label: 'Təsdiqləyir', to: 'upChain', kind: 'ok' },
@@ -79,7 +79,7 @@ const NODES = {
   },
   upChain: {
     phase: 'chain', icon: GitBranch, title: 'Zəncir yoxlanır', who: 'Sistem (avtomatik)', decision: true,
-    text: 'Sistem təsdiq edən rəhbərin öz rəhbərinin olub-olmadığını yoxlayır. Sorğu heç bir səviyyəni keçmədən, bir-bir yuxarı qalxır.',
+    text: 'Sorğu heç bir səviyyəni atlamadan, bir-bir yuxarı qalxır.',
     question: 'Təsdiq edən rəhbərin də rəhbəri var?',
     options: [
       { label: 'Bəli — növbəti səviyyəyə', to: 'mgr2' },
@@ -89,7 +89,7 @@ const NODES = {
   mgr2: {
     phase: 'chain', icon: Building2, title: 'Növbəti rəhbərin baxışı', who: 'Departament rəhbəri',
     where: 'İllik TNA → Departament üzrə baxış', reqStatus: 'Pending Manager Review',
-    text: 'Əvvəlki rəhbərin təsdiqi qeyd olunub. İndi departament rəhbəri baxır. Əməkdaş, şöbə rəhbəri və L&D sorğunun burada olduğunu görür.',
+    text: 'Əvvəlki təsdiq qeyd olunub. Əməkdaş, şöbə rəhbəri və L&D sorğunun burada olduğunu görür.',
     question: 'Departament rəhbəri nə qərar verir?',
     options: [
       { label: 'Təsdiqləyir', to: 'upChain', kind: 'ok' },
@@ -99,7 +99,7 @@ const NODES = {
   },
   revision: {
     phase: 'chain', icon: RotateCcw, title: 'Düzəliş tələb olunur', who: 'Göndərən', reqStatus: 'Needs Revision', tone: 'warn',
-    text: 'Qərar verənin qeydi göndərənə görünür. Sətir "Redaktə et" ilə düzəldilib yenidən göndərilir — yeni sorğu yaratmağa ehtiyac yoxdur.',
+    text: 'Qeyd göndərənə görünür. "Redaktə et" ilə düzəldilib yenidən göndərilir.',
     options: [{ label: 'Düzəldib yenidən göndər', to: 'resubmit' }],
   },
   resubmit: {
@@ -113,7 +113,7 @@ const NODES = {
   },
   rejected: {
     phase: 'chain', icon: XCircle, title: 'Rədd edildi', who: 'Proses bitdi', reqStatus: 'Rejected', tone: 'end',
-    text: 'Kim rədd edibsə, onun adı və səbəbi göndərənə və zəncirdəki hər kəsə görünür. Bu sorğu üzrə proses bitir.',
+    text: 'Rədd edənin adı və səbəbi hamıya görünür. Proses bitir.',
     options: [{ label: 'Başdan başla', to: 'start' }],
   },
   ldPending: {
@@ -123,7 +123,7 @@ const NODES = {
   },
   ldReview: {
     phase: 'ld', icon: Search, title: 'L&D analiz edir', who: 'L&D', reqStatus: 'In Review',
-    text: 'Vəzifə uyğunluğu, büdcə, prioritet və səriştə boşluğu (WG / CGI) qiymətləndirilir.',
+    text: 'Vəzifə uyğunluğu, büdcə və prioritet qiymətləndirilir.',
     question: 'L&D nə qərar verir?',
     options: [
       { label: 'Təsdiqləyir', to: 'approved', kind: 'ok' },
@@ -133,12 +133,12 @@ const NODES = {
   },
   approved: {
     phase: 'ld', icon: CheckCircle2, title: 'Təsdiqləndi', who: 'L&D', reqStatus: 'Approved', tone: 'ok',
-    text: 'Sorğu təsdiqlənib. Plana yalnız L&D əlavə edə bilər — rəhbərlərdə bu düymə yoxdur.',
+    text: 'Plana yalnız L&D əlavə edə bilər.',
     options: [{ label: 'Plana Əlavə Et', to: 'planned' }],
   },
   planned: {
     phase: 'plan', icon: ListPlus, title: 'İzləmə Cədvəlinə düşdü', who: 'L&D', where: 'İzləmə Cədvəli', trStatus: 'Scheduled to Commence on Planned Date',
-    text: 'Vendor, planlanmış büdcə və tarixlər əlavə olunur; sətir müvafiq ilin planına düşür. WG, CGI və prioritet avtomatik hesablanır. Okt–Yan aylarında "Büdcələnmiş", qalan aylarda "Büdcədən kənar" kimi qeyd olunur.',
+    text: 'Vendor, büdcə və tarixlər əlavə olunur; sətir həmin ilin planına düşür. Prioritet avtomatik hesablanır.',
     question: 'Təlim necə davam edir?',
     options: [
       { label: 'Başladı', to: 'inProgress', kind: 'ok' },
@@ -166,12 +166,12 @@ const NODES = {
   },
   completed: {
     phase: 'plan', icon: Flag, title: 'Tamamlandı', who: 'L&D', trStatus: 'Completed', tone: 'ok',
-    text: 'Faktiki xərc "İstifadə olunmuş büdcə" kimi qeyd olunur, planlanmışla fərqi "Qənaət" kimi hesablanır.',
+    text: 'Faktiki xərc qeyd olunur, planlanmışla fərqi "Qənaət" kimi hesablanır.',
     options: [{ label: 'Rəhbər qiymətləndirir', to: 'evaluation' }],
   },
   evaluation: {
     phase: 'plan', icon: ClipboardCheck, title: 'IDP qiymətləndirməsi', who: 'Birbaşa rəhbər', where: 'IDP', tone: 'end',
-    text: 'Rəhbər IDP-də yenilənmiş cari səviyyəni və şərhini yazır. Tələb olunan səviyyəyə çatılıb-çatılmadığı avtomatik göstərilir. İlkin plan məlumatı dəyişmir.',
+    text: 'Rəhbər IDP-də yeni səviyyəni və şərhini yazır; hədəfə çatılıb-çatılmadığı avtomatik göstərilir.',
     options: [{ label: 'Başdan başla', to: 'start' }],
   },
 };
@@ -228,6 +228,15 @@ function StatusOf({ node }) {
 }
 
 // ---------------------------- Simulyasiya ----------------------------------
+// Böyüyən ağac: keçilmiş addımlar yuxarıda yığcam qutular kimi qalır (arada
+// seçilmiş cavab yazılır), cari addım böyük görünür, onun seçimləri isə
+// aşağıda yan-yana budaqlar kimi açılır — hər budaq hara apardığını
+// (növbəti addım + statusu) əvvəlcədən göstərir.
+function chosenLabel(fromId, toId) {
+  const o = NODES[fromId].options.find((x) => x.to === toId);
+  return o ? o.label : null;
+}
+
 function Simulator({ path, setPath }) {
   const current = path[path.length - 1];
   const node = NODES[current];
@@ -249,36 +258,70 @@ function Simulator({ path, setPath }) {
         ))}
       </div>
 
-      <div className={'guide-card guide-tone-' + (node.tone || 'none')} style={{ '--c': phase.color }}>
-        <div className="guide-card-head">
-          <div className="guide-card-icon"><Icon size={26} strokeWidth={2} /></div>
-          <div style={{ flex: 1 }}>
-            <div className="guide-card-title">{node.title}</div>
-            <div className="guide-chips">
-              <span className="guide-chip"><Users size={12} strokeWidth={2.4} /> {node.who}</span>
-              {node.where && <span className="guide-chip"><Compass size={12} strokeWidth={2.4} /> {node.where}</span>}
-              <StatusOf node={node} />
+      <div className="tree">
+        {path.slice(0, -1).map((id, i) => {
+          const n = NODES[id];
+          const PIcon = n.icon;
+          const label = chosenLabel(id, path[i + 1]);
+          return (
+            <div key={i} className="tree-col">
+              <button className="tree-past" style={{ '--c': phaseOf(n.phase).color }}
+                onClick={() => setPath(path.slice(0, i + 1))} title="Bu addıma qayıt">
+                <PIcon size={15} strokeWidth={2.2} />
+                <span>{n.title}</span>
+                <StatusOf node={n} />
+              </button>
+              <div className="tree-link">
+                <span className="tree-line" />
+                {label && <span className="tree-link-label">{label}</span>}
+                <span className="tree-line" />
+                <ArrowDown size={14} strokeWidth={2.6} className="tree-arrow" />
+              </div>
+            </div>
+          );
+        })}
+
+        <div className={'tree-current guide-tone-' + (node.tone || 'none')} style={{ '--c': phase.color }}>
+          <div className="tree-current-head">
+            <div className="guide-card-icon"><Icon size={24} strokeWidth={2} /></div>
+            <div>
+              <div className="guide-card-title">{node.title}</div>
+              <div className="guide-chips">
+                <span className="guide-chip"><Users size={12} strokeWidth={2.4} /> {node.who}</span>
+                {node.where && <span className="guide-chip"><Compass size={12} strokeWidth={2.4} /> {node.where}</span>}
+                <StatusOf node={node} />
+              </div>
             </div>
           </div>
-        </div>
-        <p className="guide-card-text">{node.text}</p>
-
-        {node.question && (
-          <div className="guide-question"><HelpCircle size={16} strokeWidth={2.4} /> {node.question}</div>
-        )}
-        <div className="guide-options">
-          {node.options.map((o) => (
-            <button key={o.label} className={'guide-option guide-option-' + (o.kind || 'default')} onClick={() => go(o.to)}>
-              <span>{o.label}</span>
-              <span className="guide-option-next">
-                {NODES[o.to].title}
-                <ArrowRight size={15} strokeWidth={2.4} />
-              </span>
-            </button>
-          ))}
+          <p className="guide-card-text">{node.text}</p>
+          {node.question && <div className="guide-question"><HelpCircle size={16} strokeWidth={2.4} /> {node.question}</div>}
         </div>
 
-        <div className="guide-nav">
+        <div className="tree-stem" />
+        <div className="tree-fan" style={{ '--n': node.options.length }}>
+          {node.options.map((o) => {
+            const t = NODES[o.to];
+            const TIcon = t.icon;
+            return (
+              <button key={o.label} className={'tree-branch tree-branch-' + (o.kind || 'default')} onClick={() => go(o.to)}>
+                <span className="tree-branch-label">{o.label}</span>
+                <span className="tree-branch-body">
+                  <span className="tree-branch-target" style={{ color: phaseOf(t.phase).color }}>
+                    <TIcon size={15} strokeWidth={2.2} />
+                    <span>{t.title}</span>
+                  </span>
+                  <span className="tree-branch-meta">
+                    <StatusOf node={t} />
+                    <span className="tree-branch-who">{t.who}</span>
+                  </span>
+                  <span className="tree-branch-go">Bu yolla get <ArrowRight size={13} strokeWidth={2.6} /></span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="guide-nav" style={{ justifyContent: 'center' }}>
           <button className="btn btn-outline btn-sm" onClick={back} disabled={path.length <= 1}>
             <ArrowLeft size={14} strokeWidth={2.2} /> Geri
           </button>
@@ -287,26 +330,6 @@ function Simulator({ path, setPath }) {
           </button>
         </div>
       </div>
-
-      {path.length > 1 && (
-        <div className="card" style={{ marginTop: 14 }}>
-          <div className="filter-label" style={{ marginBottom: 10 }}>Keçdiyiniz yol</div>
-          <div className="guide-trail">
-            {path.map((k, i) => {
-              const n = NODES[k];
-              return (
-                <span key={i} className="guide-trail-item">
-                  {i > 0 && <ArrowRight size={13} strokeWidth={2.4} className="guide-trail-arrow" />}
-                  <button className={'guide-trail-chip' + (i === path.length - 1 ? ' current' : '')}
-                    style={{ '--c': phaseOf(n.phase).color }} onClick={() => setPath(path.slice(0, i + 1))}>
-                    {n.title}
-                  </button>
-                </span>
-              );
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
