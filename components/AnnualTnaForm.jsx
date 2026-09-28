@@ -100,7 +100,9 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
   const areaLabel = useMemo(() => new Map(comp.areas.map((a) => [a.key, a.label])), [comp.areas]);
 
   function mapIncomingRow(r) {
-    const submitter = selectableEmployees.find((e) => e.full_name_az === r.employee_name);
+    const submitter = r.employee_id
+      ? selectableEmployees.find((e) => e.id === r.employee_id)
+      : selectableEmployees.find((e) => e.full_name_az === r.employee_name);
     return {
       sourceRequestId: r.id,
       revisionNote: r.manager_note || r.reviewer_note || '',
@@ -155,6 +157,9 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
   function fieldsFor(r) {
     const member = r.employeeId ? selectableEmployees.find((t) => t.id === r.employeeId) : null;
     return {
+      // A picked person is linked by id; the DB trigger fills name/dept/şöbə
+      // from their profile. A typed name is resolved by the trigger itself.
+      employee_id: member ? member.id : null,
       employee_name: member ? (member.full_name_az || member.id) : r.manualName.trim(),
       dept: member?.dept || profile.dept || '—',
       sube: member?.sube || profile.sube || null,

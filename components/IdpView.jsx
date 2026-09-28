@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import { loadCompetencyData } from '../lib/competency';
-import { fmtMoney, fmtDateTime } from '../lib/helpers';
+import { fmtMoney, fmtDateTime, normalizeName } from '../lib/helpers';
 import { ReqStatusBadge, PriorityBadge, TrainingStatusBadge } from './Badges';
 import EmptyState from './EmptyState';
 import TrainingEvaluationModal from './TrainingEvaluationModal';
@@ -67,7 +67,7 @@ export default function IdpView({ requests, trainings, profile, team, onDataChan
     sb.from('profiles').select('full_name_az').then(({ data }) => {
       const counts = new Map();
       (data || []).forEach((p) => counts.set(p.full_name_az, (counts.get(p.full_name_az) || 0) + 1));
-      setAmbiguousNames(new Set([...counts].filter(([, n]) => n > 1).map(([name]) => name)));
+      setAmbiguousNames(new Set([...counts].filter(([, n]) => n > 1).map(([name]) => normalizeName(name))));
     });
   }, []);
 
@@ -96,13 +96,42 @@ export default function IdpView({ requests, trainings, profile, team, onDataChan
   // (their actual completed/logged training history), while a much smaller
   // number have Annual TNA / ad-hoc `training_requests` on file — using
   // requests alone left most of the company invisible in this picker.
+  // Identity is employee_id whenever the row is linked to a profile (the DB
+  // trigger fills it), so two different people sharing a name — e.g. the
+  // two "Tural Əhmədov" accounts — never merge. Unlinked rows (workers with
+  // no account) fall back to the name, plus dept when the name is shared;
+  // an unlinked row whose name belongs to exactly one linked person joins
+  // that person. Ambiguity is detected from the rows themselves too, since
+  // a manager's profiles fetch only returns their direct reports.
+  const rowKey = useMemo(() => {
+    const idsByName = new Map();
+    [...requests, ...trainings].forEach((r) => {
+      if (!r.employee_id || !r.employee_name) return;
+      const n = normalizeName(r.employee_name);
+      if (!idsByName.has(n)) idsByName.set(n, new Set());
+      idsByName.get(n).add(r.employee_id);
+    });
+    const ambiguous = (name) => ambiguousNames.has(normalizeName(name)) || (idsByName.get(normalizeName(name))?.size || 0) > 1;
+    return (r) => {
+      if (r.employee_id) return `id:${r.employee_id}`;
+      if (!r.employee_name) return null;
+      if (ambiguous(r.employee_name)) return `name:${normalizeName(r.employee_name)}|||${normalizeName(r.dept)}`;
+      const ids = idsByName.get(normalizeName(r.employee_name));
+      if (ids && ids.size === 1) return `id:${[...ids][0]}`;
+      return `name:${normalizeName(r.employee_name)}`;
+    };
+  }, [requests, trainings, ambiguousNames]);
+
   const employees = useMemo(() => {
     const map = new Map();
     function absorb(r) {
-      if (!r.employee_name) return;
-      const key = ambiguousNames.has(r.employee_name) ? `${r.employee_name}|||${r.dept || ''}` : r.employee_name;
+      const key = rowKey(r);
+      if (!key) return;
       if (!map.has(key)) {
-        map.set(key, { key, name: r.employee_name, dept: r.dept, sube: r.sube, position: r.position, latest: r.created_at || null });
+        map.set(key, {
+          key, id: key.startsWith('id:') ? key.slice(3) : null,
+          name: r.employee_name, dept: r.dept, sube: r.sube, position: r.position, latest: r.created_at || null,
+        });
       } else {
         const cur = map.get(key);
         if (!cur.position && r.position) cur.position = r.position;
@@ -119,8 +148,13 @@ export default function IdpView({ requests, trainings, profile, team, onDataChan
     }
     requests.forEach(absorb);
     trainings.forEach(absorb);
-    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'az'));
-  }, [requests, trainings, ambiguousNames]);
+    const list = [...map.values()];
+    // Same visible name twice (two real people) → show dept in the picker.
+    const nameCount = new Map();
+    list.forEach((e) => nameCount.set(e.name, (nameCount.get(e.name) || 0) + 1));
+    list.forEach((e) => { e.duplicateName = nameCount.get(e.name) > 1; });
+    return list.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'az'));
+  }, [requests, trainings, rowKey]);
 
   // Same "İl" filter pattern as Dashboard/Tracking. training_requests has
   // no plan_year column, so its rows are bucketed by the year they were
@@ -134,42 +168,27 @@ export default function IdpView({ requests, trainings, profile, team, onDataChan
 
   const employee = employees.find((e) => e.key === selectedKey) || null;
 
-  // `team` is already exactly "profiles whose manager_id === my id" (see
-  // pages/index.js's afterLogin) — the same direct-report relationship the
-  // task asks for, not the wider dept/şöbə scope a manager can otherwise
-  // see. An L&D/HR viewer who also happens to directly manage someone
-  // (e.g. a şöbə lead whose own team sits inside L&D/HR) gets this too,
-  // same dual-role handling as the İllik TNA hub. Matched on name ALONE,
-  // not also dept — team is already narrowed to just this manager's own
-  // reports, and trainings.dept/profiles.dept disagree on casing in real
-  // data (confirmed: "Maliyyə Departamenti" on trainings vs "Maliyyə
-  // departamenti" on profiles), the same casing mismatch matchesOwnScope
-  // exists to handle elsewhere — a plain dept `===` here silently hid the
-  // Qiymətləndir button for every real manager/report pair.
-  const isDirectManager = !!employee && !!team && team.some((t) => t.full_name_az === employee.name);
-
-  // Matches the same identity the `employees` picker groups by: name alone
-  // for everyone except the handful of genuinely ambiguous (shared) names,
-  // where dept stays part of the match to keep two different real people
-  // apart. See the ambiguousNames fetch above for why a plain dept match
-  // for everyone else was wrong.
-  const employeeIsAmbiguous = !!employee && ambiguousNames.has(employee.name);
+  // Direct report only (team = profiles whose manager_id is me); by id when
+  // the rows are linked, else by name unless that name is shared.
+  const isDirectManager = !!employee && !!team && (employee.id
+    ? team.some((t) => t.id === employee.id)
+    : !employee.duplicateName && team.some((t) => normalizeName(t.full_name_az) === normalizeName(employee.name)));
 
   const employeeRequests = useMemo(() => {
     if (!employee) return [];
     return requests
-      .filter((r) => r.employee_name === employee.name && (!employeeIsAmbiguous || (r.dept || '') === (employee.dept || '')))
+      .filter((r) => rowKey(r) === employee.key)
       .filter((r) => selectedYear === 'all' || new Date(r.created_at).getFullYear() === Number(selectedYear))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  }, [requests, employee, employeeIsAmbiguous, selectedYear]);
+  }, [requests, employee, rowKey, selectedYear]);
 
   const employeeTrainings = useMemo(() => {
     if (!employee) return [];
     return trainings
-      .filter((t) => t.employee_name === employee.name && (!employeeIsAmbiguous || (t.dept || '') === (employee.dept || '')))
+      .filter((t) => rowKey(t) === employee.key)
       .filter((t) => selectedYear === 'all' || t.plan_year === Number(selectedYear))
       .sort((a, b) => new Date(b.start_date || 0) - new Date(a.start_date || 0));
-  }, [trainings, employee, employeeIsAmbiguous, selectedYear]);
+  }, [trainings, employee, rowKey, selectedYear]);
 
   const stats = useMemo(() => {
     const totalRequests = employeeRequests.length;

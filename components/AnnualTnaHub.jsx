@@ -27,6 +27,19 @@ import TnaCompletionTracker from './TnaCompletionTracker';
 export default function AnnualTnaHub({ profile, team, requests, planYear, tnaWindowOpen, adhocRequestsOpen, onDataChanged, unseenSince }) {
   const isLd = profile.role === 'ld';
   const [togglingAdhoc, setTogglingAdhoc] = useState(false);
+  const [togglingWindow, setTogglingWindow] = useState(false);
+
+  async function toggleTnaWindow() {
+    const next = !tnaWindowOpen;
+    if (!window.confirm(next
+      ? `İllik TNA (${planYear}) pəncərəsi açılsın? Bütün əməkdaşlar sorğu göndərə biləcək.`
+      : `İllik TNA (${planYear}) pəncərəsi bağlansın? Yeni sorğu göndərmək dayandırılacaq.`)) return;
+    setTogglingWindow(true);
+    const { error } = await sb.from('app_settings').update({ tna_window_open: next }).eq('id', 1);
+    setTogglingWindow(false);
+    if (error) { showToast('Xəta: ' + error.message, 'error'); return; }
+    if (onDataChanged) onDataChanged();
+  }
 
   // L&D-only in-app switch for app_settings.adhoc_requests_open, so this no
   // longer needs manual SQL each time the annual TNA window opens/closes —
@@ -43,11 +56,10 @@ export default function AnnualTnaHub({ profile, team, requests, planYear, tnaWin
   const isScopedManager = !isLd && profile.role === 'manager' && hasTeam;
   const isDeptManager = isScopedManager && profile.scope_level === 'dept';
 
-  // Not gated by hasTeam: L&D/HR/dept-manager staff are individual
-  // employees too and need to log their own personal need even with zero
-  // direct reports — AnnualTnaForm already handles a teamless profile fine
-  // (it just offers "Mən" as the only selectable person).
-  const showSorgu = tnaWindowOpen || isLd || isScopedManager;
+  // Submitting follows the TNA window for everyone except L&D (who can test
+  // with it closed). Managers still get the hub while it's closed, to review
+  // and track what was already submitted.
+  const showSorgu = tnaWindowOpen || isLd;
   const showStatuslar = isLd || isDeptManager;
 
   const surveyRequests = requests.filter((r) => r.source === 'Manager Survey');
@@ -142,6 +154,17 @@ export default function AnnualTnaHub({ profile, team, requests, planYear, tnaWin
           </div>
         </div>
 
+        {isLd && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 13, cursor: togglingWindow ? 'default' : 'pointer', width: 'fit-content', fontWeight: 600 }}>
+            <input
+              type="checkbox"
+              checked={!!tnaWindowOpen}
+              disabled={togglingWindow}
+              onChange={toggleTnaWindow}
+            />
+            İllik TNA pəncərəsi açıqdır ({planYear})
+          </label>
+        )}
         {isLd && (
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 13, cursor: togglingAdhoc ? 'default' : 'pointer', width: 'fit-content' }}>
             <input

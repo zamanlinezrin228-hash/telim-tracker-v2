@@ -36,18 +36,20 @@ export default function Home() {
   // İllik TNA 'last seen' value from BEFORE the current visit, so the
   // hub's tabs can still highlight what's new while the user is on the page.
   const [tnaUnseenSince, setTnaUnseenSince] = useState(null);
+  // Company-wide rows are fetched only for L&D/HR/dashboard_full_access —
+  // get_dashboard_trainings() bypasses RLS, so calling it for everyone put
+  // every training row in every browser.
+  const fullAccessRef = useRef(false);
 
   const loadData = useCallback(async () => {
     const { data: tData } = await sb.from('trainings').select('*').order('id');
     setTrainings(tData || []);
-    // The Dashboard shows company-wide KPIs by default for every role, even
-    // though the plain trainings fetch above is RLS-scoped per role (managers
-    // see only their dept/sube, employees only their own rows) so Tracking
-    // stays correctly restricted. get_dashboard_trainings() is a separate
-    // SECURITY DEFINER function that returns every row regardless of caller,
-    // purely for this reporting view — see the reviewed .sql migration.
-    const { data: allTData } = await sb.rpc('get_dashboard_trainings');
-    setAllTrainings(allTData || []);
+    if (fullAccessRef.current) {
+      const { data: allTData } = await sb.rpc('get_dashboard_trainings');
+      setAllTrainings(allTData || []);
+    } else {
+      setAllTrainings([]);
+    }
     const { data: rData } = await sb.from('training_requests').select('*').order('created_at', { ascending: false });
     setRequests(rData || []);
     const { data: sData } = await sb.from('app_settings').select('*').eq('id', 1).single();
@@ -63,7 +65,19 @@ export default function Home() {
 
   const afterLogin = useCallback(async () => {
     const { data: { user } } = await sb.auth.getUser();
-    const { data: prof } = await sb.from('profiles').select('*').eq('id', user.id).single();
+    const { data: prof } = user
+      ? await sb.from('profiles').select('*').eq('id', user.id).single()
+      : { data: null };
+    if (!prof) {
+      // Expired session or a missing profile row — back to the login screen
+      // instead of crashing on the skeleton.
+      showToast('Profil yüklənmədi. Yenidən daxil olun; problem qalarsa L&D ilə əlaqə saxlayın.', 'error');
+      await sb.auth.signOut();
+      setLoggedIn(false);
+      setLoading(false);
+      return;
+    }
+    fullAccessRef.current = !!prof && (prof.role === 'ld' || prof.role === 'hr' || prof.dashboard_full_access === true);
     // Whole reporting tree (not just direct reports). Fails harmlessly
     // (empty list → old dept/şöbə-only behaviour) until the SQL is applied.
     let scopeList = [];
@@ -73,7 +87,8 @@ export default function Home() {
     const scopeNameSet = new Set(
       [prof.full_name_az, ...scopeList.map((p) => p.full_name_az)].filter(Boolean).map(normalizeName)
     );
-    setProfile({ ...prof, scope_name_set: scopeNameSet });
+    const scopeIdSet = new Set([prof.id, ...scopeList.map((p) => p.id)].filter(Boolean));
+    setProfile({ ...prof, scope_name_set: scopeNameSet, scope_id_set: scopeIdSet });
     // scope_level/role are needed to tell a şöbə-level manager's own
     // forwarded batch apart from a plain employee's single-row submission
     // when both land in this same manager's queue (see AnnualTnaForm.jsx's
@@ -302,7 +317,7 @@ export default function Home() {
               <HomeScreen profile={profile} team={team} setView={setView} tnaWindowOpen={appSettings.tna_window_open} planYear={appSettings.tna_plan_year} canSeeDashboard={canSeeDashboard} requestsNotifCount={requestsNotifCount} tnaNotifCount={tnaNotifCount} showAnnualTna={showAnnualTna} />
             )}
             {view === 'dashboard' && canSeeDashboard && (
-              <DashboardView trainings={allTrainings} ownScopeTrainings={trainings} profile={profile} team={team} requests={requests} restrictToOwnScope={!hasDashboardFullAccess} />
+              <DashboardView trainings={hasDashboardFullAccess ? allTrainings : trainings} ownScopeTrainings={trainings} profile={profile} team={team} requests={requests} restrictToOwnScope={!hasDashboardFullAccess} />
             )}
             {view === 'tracking' && <TrackingView trainings={trainings} profile={profile} onDataChanged={handleDataChanged} />}
             {view === 'requests' && (
