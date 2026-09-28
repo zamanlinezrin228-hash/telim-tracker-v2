@@ -67,7 +67,7 @@ export default function AnnualTnaManagerReview({ profile, team, requests, onData
     const g = {};
     list.forEach((r) => {
       const submitter = team.find((t) => t.id === r.requested_by);
-      const key = submitter ? submitter.full_name_az : (r.employee_name || r.sube || r.dept || '—');
+      const key = submitter ? submitter.full_name_az : (r.employee_name ? `${r.employee_name} (${r.dept || '—'})` : (r.sube || r.dept || '—'));
       (g[key] = g[key] || []).push(r);
     });
     return g;

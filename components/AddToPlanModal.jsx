@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ListPlus } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import { computeBudgetStatus, computeGapMetrics } from '../lib/helpers';
+import { showToast } from '../lib/toast';
 
 const COMP_CAT_OPTIONS = ['Hard Skills', 'Soft Skills'];
 
@@ -36,6 +37,7 @@ export default function AddToPlanModal({ request, planYear, onClose, onSubmitted
     // own manually-set urgency at submission time, a different concept.
     const gap = computeGapMetrics(request.current_skill_level, request.required_skill_level, request.importance_level);
     const trainingPayload = {
+      employee_id: request.employee_id || null,
       dept: request.dept, sube: request.sube || null, employee_name: request.employee_name,
       position: request.position || null, skill: request.training_title,
       comp_cat: compCat || null, vendor: vendor.trim() || null,
@@ -57,8 +59,11 @@ export default function AddToPlanModal({ request, planYear, onClose, onSubmitted
     };
     const { data, error: err } = await sb.from('trainings').insert(trainingPayload).select().single();
     if (err) { setError('Xəta: ' + err.message); setSaving(false); return; }
-    await sb.from('training_requests').update({ linked_training_id: data.id }).eq('id', request.id);
+    const { error: linkErr } = await sb.from('training_requests').update({ linked_training_id: data.id }).eq('id', request.id);
     setSaving(false);
+    // The training row already exists at this point — say so rather than
+    // letting the request look un-added and invite a duplicate insert.
+    if (linkErr) showToast(`Təlim plana əlavə edildi (#${data.id}), amma sorğu ilə əlaqələndirilmədi: ${linkErr.message}`, 'error');
     onSubmitted();
   }
 

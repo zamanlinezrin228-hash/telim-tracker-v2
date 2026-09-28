@@ -85,6 +85,7 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
         return {
           ...base,
           requested_by: profile.id,
+          employee_id: m.id,
           employee_name: m.full_name_az || m.id,
           dept: m.dept || profile.dept || '—',
           sube: m.sube || profile.sube || null,
@@ -96,6 +97,7 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
       payloads = [{
         ...base,
         requested_by: profile.id,
+        employee_id: profile.id,
         employee_name: profile.full_name_az || profile.id,
         dept: profile.dept || '—',
         sube: profile.sube || null,

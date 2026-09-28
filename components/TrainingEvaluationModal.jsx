@@ -38,14 +38,20 @@ export default function TrainingEvaluationModal({ training, onClose, onSaved }) 
     setError('');
     setSaving(true);
     const { data: { user } } = await sb.auth.getUser();
-    const { error: err } = await sb.from('trainings').update({
+    const { data: updated, error: err } = await sb.from('trainings').update({
       post_training_skill_level: level,
       evaluation_comment: comment.trim() || null,
       evaluated_by: user.id,
       evaluated_at: new Date().toISOString(),
-    }).eq('id', training.id);
+    }).eq('id', training.id).select('id');
     setSaving(false);
     if (err) { setError('Xəta: ' + err.message); return; }
+    // RLS lets a manager update only their direct reports' linked rows; a
+    // blocked update returns no error, just zero rows.
+    if (!updated || updated.length === 0) {
+      setError('Yadda saxlanılmadı: bu təlim qeydi sizin birbaşa tabeliyinizdəki əməkdaşın profilinə bağlı deyil. L&D ilə əlaqə saxlayın.');
+      return;
+    }
     onSaved();
   }
 

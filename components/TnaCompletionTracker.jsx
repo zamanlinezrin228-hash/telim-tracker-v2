@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Users2, CheckCircle2, Clock } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import EmptyState from './EmptyState';
+import { isInTnaCycle } from '../lib/helpers';
 
 function byName(a, b) {
   return (a.full_name_az || '').localeCompare(b.full_name_az || '', 'az');
@@ -75,7 +76,7 @@ function ProgressBlock({ done, total, managers }) {
 function DeptManagerCompletionCard({ team, requests, planYear }) {
   const submittedManagerIds = new Set(
     requests
-      .filter((r) => r.source === 'Manager Survey' && new Date(r.created_at).getFullYear() === planYear)
+      .filter((r) => r.source === 'Manager Survey' && isInTnaCycle(r.created_at, planYear))
       .map((r) => r.requested_by)
   );
   const managers = team
@@ -126,7 +127,7 @@ export default function TnaCompletionTracker({ profile, team, requests, planYear
 
   const submittedManagerIds = new Set(
     requests
-      .filter((r) => r.source === 'Manager Survey' && new Date(r.created_at).getFullYear() === planYear)
+      .filter((r) => r.source === 'Manager Survey' && isInTnaCycle(r.created_at, planYear))
       .map((r) => r.requested_by)
   );
 
