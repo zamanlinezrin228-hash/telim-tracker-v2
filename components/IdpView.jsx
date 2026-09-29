@@ -36,12 +36,19 @@ function evaluationVerdict(t) {
   return { icon: '⚠️', text: 'Hələ tələb olunan səviyyəyə çatmayıb', color: '#d97706' };
 }
 
-export default function IdpView({ requests, trainings, profile, team, onDataChanged }) {
+export default function IdpView({ requests, trainings, profile, team, onDataChanged, scopeProfiles = [], fullAccess = false }) {
   const [selectedKey, setSelectedKey] = useState('');
   const [selectedYear, setSelectedYear] = useState('all');
   const [library, setLibrary] = useState([]);
   const [evalTraining, setEvalTraining] = useState(null);
   const [ambiguousNames, setAmbiguousNames] = useState(new Set());
+  // Everyone this viewer may build an IDP for, even with no history yet
+  // (new hires): L&D / full-access → all active profiles; managers → their
+  // whole reporting tree (scopeProfiles, from get_my_scope_profiles()).
+  const [directoryProfiles, setDirectoryProfiles] = useState([]);
+  // Evaluator names for evaluations left by someone outside `team`.
+  const [evaluatorNames, setEvaluatorNames] = useState({});
+  const isLdOrHr = profile?.role === 'ld' || profile?.role === 'hr';
 
   useEffect(() => {
     // Old library kept so earlier TNA rows (written with its wording) still
@@ -64,12 +71,30 @@ export default function IdpView({ requests, trainings, profile, team, onDataChan
     // picker entries, e.g. Həmidə Əsgərova's real 2026 trainings (logged
     // under "İnformasiya texnologiyaları şöbəsi") never appearing once she
     // ALSO got a row under her current "Maliyyə departamenti".
+    if (fullAccess || isLdOrHr) {
+      sb.from('profiles').select('*').then(({ data }) => setDirectoryProfiles(data || []));
+    }
     sb.from('profiles').select('full_name_az').then(({ data }) => {
       const counts = new Map();
       (data || []).forEach((p) => counts.set(p.full_name_az, (counts.get(p.full_name_az) || 0) + 1));
       setAmbiguousNames(new Set([...counts].filter(([, n]) => n > 1).map(([name]) => normalizeName(name))));
     });
   }, []);
+
+  useEffect(() => {
+    const known = new Set([profile?.id, ...(team || []).map((m) => m.id), ...Object.keys(evaluatorNames)]);
+    const ids = [...new Set(trainings.map((t) => t.evaluated_by).filter((id) => id && !known.has(id)))];
+    if (!ids.length) return;
+    sb.from('profiles').select('id, full_name_az').in('id', ids).then(({ data }) => {
+      if (!data?.length) return;
+      setEvaluatorNames((prev) => {
+        const next = { ...prev };
+        data.forEach((p) => { next[p.id] = p.full_name_az; });
+        return next;
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trainings, team, profile?.id]);
 
   // Maps a skill/training_title string to its Kateqoriya → Səriştə, matched
   // against competency_library.sub_competency. Exact (case/whitespace
@@ -148,13 +173,40 @@ export default function IdpView({ requests, trainings, profile, team, onDataChan
     }
     requests.forEach(absorb);
     trainings.forEach(absorb);
+    map.forEach((e) => { e.hasHistory = true; });
+
+    // Add everyone in the viewer's scope who has no history yet (new hires,
+    // people never trained), and refresh linked people's position/dept to
+    // their CURRENT profile. Departed staff (is_active = false) are not added
+    // — their existing history still shows via the rows above.
+    const people = new Map();
+    [...directoryProfiles, ...(scopeProfiles || []), ...(profile ? [profile] : [])].forEach((p) => {
+      if (p?.id) people.set(p.id, p);
+    });
+    people.forEach((p) => {
+      const key = `id:${p.id}`;
+      const cur = map.get(key);
+      if (cur) {
+        cur.name = p.full_name_az || cur.name;
+        cur.position = p.position || cur.position;
+        cur.dept = p.dept || cur.dept;
+        cur.sube = p.sube ?? cur.sube;
+        return;
+      }
+      if (p.is_active === false || !p.full_name_az) return;
+      map.set(key, {
+        key, id: p.id, name: p.full_name_az, dept: p.dept, sube: p.sube, position: p.position,
+        latest: null, hasHistory: false,
+      });
+    });
+
     const list = [...map.values()];
     // Same visible name twice (two real people) → show dept in the picker.
     const nameCount = new Map();
     list.forEach((e) => nameCount.set(e.name, (nameCount.get(e.name) || 0) + 1));
     list.forEach((e) => { e.duplicateName = nameCount.get(e.name) > 1; });
     return list.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'az'));
-  }, [requests, trainings, rowKey]);
+  }, [requests, trainings, rowKey, directoryProfiles, scopeProfiles, profile]);
 
   // Same "İl" filter pattern as Dashboard/Tracking. training_requests has
   // no plan_year column, so its rows are bucketed by the year they were
@@ -225,7 +277,7 @@ export default function IdpView({ requests, trainings, profile, team, onDataChan
               <select value={selectedKey} onChange={(e) => setSelectedKey(e.target.value)}>
                 <option value="">— Əməkdaş seçin —</option>
                 {employees.map((e) => (
-                  <option key={e.key} value={e.key}>{e.name} — {e.dept || 'Departament yoxdur'}</option>
+                  <option key={e.key} value={e.key}>{e.name} — {e.dept || 'Departament yoxdur'}{e.hasHistory ? '' : ' · tarixçə yoxdur'}</option>
                 ))}
               </select>
             </div>
@@ -364,7 +416,8 @@ export default function IdpView({ requests, trainings, profile, team, onDataChan
                     {employeeTrainings.map((t) => {
                       const mapping = competencyMappingFor(t.skill);
                       const verdict = evaluationVerdict(t);
-                      const canEvaluate = isDirectManager && t.status === 'Completed';
+                      // Direct manager evaluates; L&D/HR can also evaluate or correct.
+                      const canEvaluate = (isDirectManager || isLdOrHr) && t.status === 'Completed';
                       // `team` only ever holds the viewer's DIRECT REPORTS
                       // (see pages/index.js), never the viewer's own
                       // profile — so the most common case (the evaluator
@@ -374,7 +427,8 @@ export default function IdpView({ requests, trainings, profile, team, onDataChan
                       // looking at an evaluation a different manager left.
                       const evaluator = !t.evaluated_by ? null
                         : t.evaluated_by === profile?.id ? profile
-                        : (team || []).find((m) => m.id === t.evaluated_by);
+                        : (team || []).find((m) => m.id === t.evaluated_by)
+                          || (evaluatorNames[t.evaluated_by] ? { full_name_az: evaluatorNames[t.evaluated_by] } : null);
                       return (
                       <Fragment key={t.id}>
                       <tr>
@@ -412,7 +466,9 @@ export default function IdpView({ requests, trainings, profile, team, onDataChan
                               <ClipboardCheck size={12} strokeWidth={2.2} /> Qiymətləndir
                             </button>
                           ) : (
-                            <span style={{ fontSize: 11, color: 'var(--ink-400)' }}>—</span>
+                            <span style={{ fontSize: 11, color: 'var(--ink-400)', whiteSpace: 'nowrap' }}>
+                              {t.status === 'Completed' ? 'Rəhbər qiymətləndirəcək' : 'Tamamlandıqdan sonra'}
+                            </span>
                           )}
                         </td>
                       </tr>
@@ -423,7 +479,7 @@ export default function IdpView({ requests, trainings, profile, team, onDataChan
                               <div className="idp-eval-header">
                                 <ClipboardCheck size={14} strokeWidth={2.2} />
                                 Post-Təlim Qiymətləndirməsi
-                                {isDirectManager && (
+                                {(isDirectManager || isLdOrHr) && (
                                   <button onClick={() => setEvalTraining(t)} className="btn btn-outline btn-sm no-print" style={{ marginLeft: 'auto' }}>
                                     Redaktə et
                                   </button>
