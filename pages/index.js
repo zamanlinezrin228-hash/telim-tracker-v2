@@ -342,7 +342,7 @@ export default function Home() {
               </div>
             )}
             {view === 'idp' && showIdp && (
-              <IdpView requests={requests} trainings={trainings} profile={profile} team={team} onDataChanged={handleDataChanged} />
+              <IdpView requests={requests} trainings={trainings} profile={profile} team={team} onDataChanged={handleDataChanged} scopeProfiles={scopeProfiles} fullAccess={hasDashboardFullAccess} />
             )}
             {view === 'competency-map' && <CompetencyMapView profile={profile} fullAccess={hasDashboardFullAccess} scopeProfiles={scopeProfiles} />}
             {view === 'guide' && <ProcessGuideView />}
