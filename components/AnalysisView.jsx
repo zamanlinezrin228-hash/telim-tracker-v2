@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import ExcelJS from 'exceljs';
 import { Download, ArrowDown, ArrowUp } from 'lucide-react';
 import { statusMeta, priorityMeta, fmtMoney } from '../lib/helpers';
-import { hasSavedCost, rowSavedCost } from '../lib/analytics';
+import { hasSavedCost, rowSavedCost, effectiveUsed } from '../lib/analytics';
 import { styleHeaderRow, downloadWorkbook } from '../lib/excelExport';
 import MultiSelectFilter from './MultiSelectFilter';
 
@@ -97,7 +97,7 @@ function addTo(a, t) {
   if (t.employee_name) a.people.add(t.employee_name);
   a.hours += Number(t.man_hours) || 0;
   a.planned += Number(t.budget) || 0;
-  if (t.status === 'Completed') { a.used += Number(t.used_budget) || 0; a.done += 1; }
+  if (t.status === 'Completed') { a.used += effectiveUsed(t); a.done += 1; }
   if (hasSavedCost(t)) a.saved += rowSavedCost(t);
 }
 function metricOf(a, m) {
@@ -430,7 +430,7 @@ export default function AnalysisView({ trainings }) {
         </div>
       )}
       <div style={{ fontSize: 11.5, color: 'var(--ink-500)', marginTop: 8 }}>
-        İstifadə olunmuş büdcə yalnız tamamlanmış təlimləri, qənaət isə planlanmış və istifadə olunmuş büdcəsi qeyd olunmuş bütün təlimləri əhatə edir (Dashboard kartları ilə eyni qayda).
+        İstifadə olunmuş büdcə və qənaət yalnız tamamlanmış təlimlər üzrə hesablanır; istifadə olunmuş büdcə boşdursa, planlanmış məbləğ tam xərclənmiş sayılır (Dashboard kartları ilə eyni qayda).
       </div>
     </div>
   );
