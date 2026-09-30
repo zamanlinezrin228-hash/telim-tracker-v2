@@ -165,8 +165,12 @@ export default function Home() {
   // updated_at). Only if it changed is the full requests list reloaded — so
   // the red badges update on their own without a page refresh.
   const reqSigRef = useRef(null);
+  // Same for the training plan: İzləmə Cədvəli and Dashboard refresh on their
+  // own when someone else adds a row or changes a status (updated_at is kept
+  // current by a DB trigger — see sql/09_son_toxunuslar.sql).
+  const trSigRef = useRef(null);
   useEffect(() => {
-    if (!loggedIn) { reqSigRef.current = null; return; }
+    if (!loggedIn) { reqSigRef.current = null; trSigRef.current = null; return; }
     let cancelled = false;
     async function check() {
       const { data, count, error } = await sb.from('training_requests')
@@ -177,6 +181,15 @@ export default function Home() {
       const sig = `${count}|${data && data[0] ? data[0].updated_at : ''}`;
       if (reqSigRef.current !== null && sig !== reqSigRef.current) await loadRequests();
       reqSigRef.current = sig;
+
+      const tr = await sb.from('trainings')
+        .select('updated_at', { count: 'exact' })
+        .order('updated_at', { ascending: false, nullsFirst: false })
+        .limit(1);
+      if (cancelled || tr.error) return;
+      const tsig = `${tr.count}|${tr.data && tr.data[0] ? tr.data[0].updated_at : ''}`;
+      if (trSigRef.current !== null && tsig !== trSigRef.current) await loadData();
+      trSigRef.current = tsig;
     }
     check();
     const id = setInterval(check, 30000);
@@ -189,7 +202,7 @@ export default function Home() {
       document.removeEventListener('visibilitychange', onFocus);
       window.removeEventListener('focus', onFocus);
     };
-  }, [loggedIn, loadRequests]);
+  }, [loggedIn, loadRequests, loadData]);
 
   // Red "unseen activity" badge on the "Təlim Sorğuları" nav item/Home
   // card — a brand-new submission landing in this profile's queue for the
