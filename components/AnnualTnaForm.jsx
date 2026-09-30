@@ -6,6 +6,7 @@ import { computeForward, computeGapMetrics } from '../lib/helpers';
 import { styleGroupedTable, downloadWorkbook } from '../lib/excelExport';
 import { loadCompetencyData, resolveArea, roleStatsByCatalogId, uniqueInOrder, normText, CRITICALITY_LABELS } from '../lib/competency';
 import { GROUP_BG, GROUP_TEXT } from '../lib/tableGroups';
+import { SuggestInput, useValueOptions } from '../lib/options';
 
 const PRIORITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical'];
 const PRIORITY_LABELS = { Low: 'Aşağı', Medium: 'Orta', High: 'Yüksək', Critical: 'Kritik' };
@@ -42,7 +43,8 @@ const TRANSFORMATION_AREA_OPTIONS = ['Yes', 'No'];
 // without having to read every label.
 const HEADER_GROUPS = [
   { label: 'Əməkdaş *', group: 'identity' },
-  { label: 'İnkişaf istiqaməti *', group: 'competency' },
+  { label: 'Səriştə (İnkişaf istiqaməti) *', group: 'competency' },
+  { label: 'Spesifik təlim ehtiyacı *', group: 'competency' },
   { label: 'Vəzifə *', group: 'identity' },
   { label: 'Ehtiyacın yaranma səbəbi *', group: 'competency' },
   { label: 'Səriştə kateqoriyası', group: 'competency' },
@@ -72,7 +74,7 @@ function focusOut(e) { e.target.style.borderColor = 'var(--ink-200)'; e.target.s
 function emptyRow(defaultEmployeeId = '') {
   return {
     sourceRequestId: null,
-    employeeId: defaultEmployeeId, manualName: '', position: '', area: '', category: '', competency: '', skill: '', needReason: '',
+    employeeId: defaultEmployeeId, manualName: '', position: '', area: '', category: '', competency: '', skill: '', trainingName: '', needReason: '',
     priority: 'Medium', importance: '', currentLevel: '', requiredLevel: '',
     compCat: '', vendor: '', manHours: '', budget: '',
     transformationArea: '', learningMethod: '', activityDuration: '', learningGoal: '',
@@ -81,6 +83,7 @@ function emptyRow(defaultEmployeeId = '') {
 }
 
 export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) {
+  const valueOpts = useValueOptions();
   const hasTeam = team && team.length > 0;
   const self = { id: profile.id, full_name_az: profile.full_name_az || '', dept: profile.dept, sube: profile.sube, position: profile.position };
   const selectableEmployees = [self, ...team];
@@ -110,7 +113,8 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
       manualName: submitter ? '' : (r.employee_name || ''),
       position: r.position || '',
       area: '', category: '', competency: '',
-      skill: r.training_title || '',
+      skill: r.competency || '',
+      trainingName: r.training_title || '',
       needReason: r.reason || '',
       priority: r.priority || 'Medium',
       importance: r.importance_level || '',
@@ -161,10 +165,13 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
       // from their profile. A typed name is resolved by the trigger itself.
       employee_id: member ? member.id : null,
       employee_name: member ? (member.full_name_az || member.id) : r.manualName.trim(),
-      dept: member?.dept || profile.dept || '—',
+      dept: member?.dept || member?.sube || profile.dept || profile.sube || '—',
       sube: member?.sube || profile.sube || null,
       position: r.position.trim() || null,
-      training_title: r.skill.trim(),
+      // Səriştə (kataloqdan) və konkret təlim AYRI saxlanılır:
+      // competency → İzləmə Cədvəlində "Səriştə", training_title → "Spesifik təlim ehtiyacı".
+      training_title: r.trainingName.trim(),
+      competency: (r.skill.trim() || r.competency.trim()) || null,
       reason: r.needReason.trim(),
       priority: r.priority,
       importance_level: r.importance || null,
@@ -226,9 +233,17 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
 
   async function handleSubmit() {
     setError('');
-    const filled = rows.filter((r) => (r.employeeId || r.manualName.trim()) && r.skill.trim());
+    const filled = rows.filter((r) => (r.employeeId || r.manualName.trim()) && (r.trainingName.trim() || r.skill.trim()));
     if (filled.length === 0) {
-      setError('Ən azı bir sətirdə əməkdaş adı və inkişaf istiqaməti doldurun.');
+      setError('Ən azı bir sətirdə əməkdaş adı, səriştə və spesifik təlim ehtiyacı doldurun.');
+      return;
+    }
+    if (filled.some((r) => !r.trainingName.trim())) {
+      setError('Doldurulan hər sətirdə "Spesifik təlim ehtiyacı" mütləqdir — seçdiyiniz səriştə üzrə hansı təlimi istədiyinizi yazın.');
+      return;
+    }
+    if (filled.some((r) => !r.sourceRequestId && !r.skill.trim())) {
+      setError('Doldurulan hər sətirdə "Alt səriştə" mütləqdir.');
       return;
     }
     // Every filled-in row must be complete before submission — only the
@@ -323,13 +338,13 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
   // HEADER_GROUPS/styleGroupedTable) so the downloaded file looks like the
   // same table, not a plain flat sheet.
   const EXCEL_COLUMN_GROUPS = [
-    'identity', 'identity', 'competency', 'competency', 'competency', 'competency', 'competency',
+    'identity', 'identity', 'competency', 'competency', 'competency', 'competency', 'competency', 'competency',
     'resource', 'resource', 'resource', 'competency', 'gap', 'gap', 'gap', 'plan', 'plan', 'plan',
     'meta', 'meta', 'meta',
   ];
 
   async function exportToExcel() {
-    const filledRows = rows.filter((r) => r.employeeId || r.manualName.trim() || r.skill.trim());
+    const filledRows = rows.filter((r) => r.employeeId || r.manualName.trim() || r.skill.trim() || r.trainingName.trim());
     if (filledRows.length === 0) return;
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('İllik TNA');
@@ -339,6 +354,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
       { header: 'Kateqoriya', key: 'category', width: 20 },
       { header: 'Səriştə', key: 'competency', width: 24 },
       { header: 'Alt səriştə (İnkişaf istiqaməti)', key: 'skill', width: 28 },
+      { header: 'Spesifik təlim ehtiyacı', key: 'trainingName', width: 30 },
       { header: 'Ehtiyacın yaranma səbəbi', key: 'needReason', width: 26 },
       { header: 'Səriştə kateqoriyası', key: 'compCat', width: 16 },
       { header: 'Vendor', key: 'vendor', width: 16 },
@@ -359,7 +375,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
       const member = r.employeeId ? selectableEmployees.find((t) => t.id === r.employeeId) : null;
       ws.addRow({
         employee: member ? (member.full_name_az || member.id) : r.manualName.trim(),
-        position: r.position, category: r.category, competency: r.competency, skill: r.skill,
+        position: r.position, category: r.category, competency: r.competency, skill: r.skill, trainingName: r.trainingName,
         needReason: r.needReason, compCat: r.compCat, vendor: r.vendor,
         manHours: r.manHours !== '' ? Number(r.manHours) : null, budget: r.budget !== '' ? Number(r.budget) : null,
         transformationArea: r.transformationArea, importance: r.importance,
@@ -404,7 +420,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
           ? `${planYear}-ci il üçün öz təlim ehtiyacınızı və ya komandanızın ehtiyaclarını cədvəldə doldurun. Əməkdaşı siyahıdan seçə, ya da əl ilə yaza bilərsiniz.`
           : `${planYear}-ci il üçün öz təlim ehtiyacınızı cədvəldə doldurun.`}
       </div>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 12.5, color: 'var(--blue)', marginBottom: profile.role === 'ld' ? 18 : 8 }}>
+      <div className="note-red" style={{ marginBottom: profile.role === 'ld' ? 18 : 8 }}>
         <Lightbulb size={15} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
         <span>
           Əməkdaş seçdikdən sonra onun şöbəsinə (şöbə yoxdursa departamentinə) uyğun səriştə sahəsinin bütün səriştələri —
@@ -432,7 +448,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                   <th key={i} style={{ background: GROUP_BG[h.group], color: GROUP_TEXT[h.group], fontSize: 11.5, borderBottom: `3px solid ${GROUP_TEXT[h.group]}` }}>
                     {h.label}
                     {h.label === 'Vendor' && profile.role !== 'ld' && (
-                      <div style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--red)', textTransform: 'none', letterSpacing: 0, marginTop: 3, lineHeight: 1.3 }}>
+                      <div className="note-red" style={{ fontSize: 9.5, textTransform: 'none', letterSpacing: 0, marginTop: 3, padding: '3px 5px' }}>
                         Bu, sadəcə tövsiyədir. Yekun vendor L&D-nin qiymətləndirməsindən sonra bildiriləcək.
                       </div>
                     )}
@@ -471,7 +487,8 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                       {team.map((m) => <option key={m.id} value={m.id}>{m.full_name_az}</option>)}
                     </select>
                     {!r.employeeId && (
-                      <input type="text" placeholder="və ya əl ilə yaz" value={r.manualName} onChange={(e) => updateRow(idx, 'manualName', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={{ ...inputStyle, marginTop: 2 }} />
+                      <SuggestInput placeholder="və ya əl ilə yaz" value={r.manualName} onChange={(v) => updateRow(idx, 'manualName', v)}
+                        options={[...new Set(valueOpts.people.map((p) => p.full_name_az))]} onFocus={focusIn} style={{ ...inputStyle, marginTop: 2 }} />
                     )}
                   </td>
                   <td style={{ minWidth: 230, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
@@ -497,8 +514,8 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                       />
                       <datalist id={`sub-${idx}`}>{subOptions.map((o) => <option key={o} value={o} />)}</datalist>
 
-                      <div style={{ fontSize: 10, color: 'var(--ink-400)', lineHeight: 1.3 }}>
-                        Aşağıdakı siyahıdan uyğun səriştəni seçə bilərsiniz. Əgər axtardığınız burada yoxdursa, sərbəst şəkildə özünüz yaza bilərsiniz.
+                      <div className="note-red" style={{ fontSize: 10.5, padding: '4px 6px' }}>
+                        Siyahıdan uyğun səriştəni seçin. Burada yoxdursa, özünüz yaza bilərsiniz.
                       </div>
 
                       {subStats && (
@@ -512,8 +529,18 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                       )}
                     </div>
                   </td>
+                  <td style={{ minWidth: 220, borderTop: '1px solid var(--ink-100)', padding: '6px 8px', background: 'var(--blue-soft, #eff6ff)' }}>
+                    <SuggestInput
+                      value={r.trainingName} onChange={(v) => updateRow(idx, 'trainingName', v)}
+                      options={valueOpts.skill} style={inputStyle} onFocus={focusIn}
+                      placeholder="Bu səriştə üzrə hansı təlim? *"
+                    />
+                    <div className="note-red" style={{ fontSize: 10.5, padding: '4px 6px', marginTop: 4 }}>
+                      Seçdiyiniz səriştəni inkişaf etdirmək üçün konkret təlimin adını yazın (məs. "Advanced Excel").
+                    </div>
+                  </td>
                   <td style={{ minWidth: 130, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
-                    <input type="text" value={r.position} onChange={(e) => updateRow(idx, 'position', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
+                    <SuggestInput value={r.position} onChange={(v) => updateRow(idx, 'position', v)} options={valueOpts.position} style={inputStyle} onFocus={focusIn} />
                   </td>
                   <td style={{ minWidth: 220, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <select value={r.needReason} onChange={(e) => updateRow(idx, 'needReason', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle}>
@@ -528,7 +555,7 @@ export default function AnnualTnaForm({ profile, team, planYear, onSubmitted }) 
                     </select>
                   </td>
                   <td style={{ minWidth: 130, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
-                    <input type="text" value={r.vendor} onChange={(e) => updateRow(idx, 'vendor', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
+                    <SuggestInput value={r.vendor} onChange={(v) => updateRow(idx, 'vendor', v)} options={valueOpts.vendor} onFocus={focusIn} style={inputStyle} />
                   </td>
                   <td style={{ minWidth: 100, borderTop: '1px solid var(--ink-100)', padding: '6px 8px' }}>
                     <input type="number" value={r.manHours} onChange={(e) => updateRow(idx, 'manHours', e.target.value)} onFocus={focusIn} onBlur={focusOut} style={inputStyle} />
