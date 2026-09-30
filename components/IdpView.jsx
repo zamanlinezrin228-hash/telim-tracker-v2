@@ -38,6 +38,7 @@ function evaluationVerdict(t) {
 
 export default function IdpView({ requests, trainings, profile, team, onDataChanged, scopeProfiles = [], fullAccess = false }) {
   const [selectedKey, setSelectedKey] = useState('');
+  const [personQuery, setPersonQuery] = useState('');
   const [selectedYear, setSelectedYear] = useState('all');
   const [library, setLibrary] = useState([]);
   const [evalTraining, setEvalTraining] = useState(null);
@@ -208,6 +209,15 @@ export default function IdpView({ requests, trainings, profile, team, onDataChan
     return list.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'az'));
   }, [requests, trainings, rowKey, directoryProfiles, scopeProfiles, profile]);
 
+  // Ad ilə axtarış: siyahını süzür; tək nəticə qalanda avtomatik seçir.
+  const filteredEmployees = useMemo(() => {
+    const k = personQuery.replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase().trim();
+    if (!k) return employees;
+    const list = employees.filter((x) => (x.name || '').replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase().includes(k));
+    const sel = employees.find((x) => x.key === selectedKey);
+    return sel && !list.includes(sel) ? [sel, ...list] : list;
+  }, [employees, personQuery, selectedKey]);
+
   // Same "İl" filter pattern as Dashboard/Tracking. training_requests has
   // no plan_year column, so its rows are bucketed by the year they were
   // submitted (created_at) instead.
@@ -272,11 +282,25 @@ export default function IdpView({ requests, trainings, profile, team, onDataChan
             <p>Bir əməkdaşın bütün təlim sorğularını və nəticələrini vahid, çap edilə bilən sənəddə görün.</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+            <div style={{ minWidth: 220 }}>
+              <div className="filter-label">Ad ilə axtar</div>
+              <input
+                type="text" value={personQuery} placeholder="Bir neçə hərf yazın..."
+                onChange={(e) => {
+                  const q = e.target.value;
+                  setPersonQuery(q);
+                  const k = q.replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase().trim();
+                  if (!k) return;
+                  const hits = employees.filter((x) => (x.name || '').replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase().includes(k));
+                  if (hits.length === 1) setSelectedKey(hits[0].key);
+                }}
+              />
+            </div>
             <div style={{ minWidth: 280 }}>
-              <div className="filter-label">Əməkdaş</div>
+              <div className="filter-label">Əməkdaş {personQuery.trim() ? `(${filteredEmployees.length} nəticə)` : ''}</div>
               <select value={selectedKey} onChange={(e) => setSelectedKey(e.target.value)}>
                 <option value="">— Əməkdaş seçin —</option>
-                {employees.map((e) => (
+                {filteredEmployees.map((e) => (
                   <option key={e.key} value={e.key}>{e.name} — {e.dept || 'Departament yoxdur'}{e.hasHistory ? '' : ' · tarixçə yoxdur'}</option>
                 ))}
               </select>
@@ -356,7 +380,7 @@ export default function IdpView({ requests, trainings, profile, team, onDataChan
               <div className="card" style={{ marginBottom: 24 }}>
                 <div className="req-list">
                   {employeeRequests.map((r) => {
-                    const mapping = competencyMappingFor(r.training_title);
+                    const mapping = competencyMappingFor(r.competency || r.training_title);
                     return (
                     <div className="req-card idp-req-card" key={r.id}>
                       <div className="req-card-top">
@@ -414,7 +438,7 @@ export default function IdpView({ requests, trainings, profile, team, onDataChan
                   </thead>
                   <tbody>
                     {employeeTrainings.map((t) => {
-                      const mapping = competencyMappingFor(t.skill);
+                      const mapping = competencyMappingFor(t.competency || t.skill);
                       const verdict = evaluationVerdict(t);
                       // Direct manager evaluates; L&D/HR can also evaluate or correct.
                       const canEvaluate = (isDirectManager || isLdOrHr) && t.status === 'Completed';
