@@ -24,7 +24,7 @@ const KPI_EXPORT_ROWS = [
   ['Planlanmış Büdcə', (k) => fmtMoney(k.plannedBudget)],
   ['İstifadə Olunmuş Büdcə (yalnız tamamlanmış)', (k) => fmtMoney(k.usedBudgetCompleted)],
   ['Qənaət', (k) => fmtMoney(k.totalSavedCost)],
-  ['Real Büdcə (Canceled xaric)', (k) => fmtMoney(k.realBudget)],
+  ['Real Büdcə (ləğv və təxirə salınanlar xaric, qənaət çıxılmış)', (k) => fmtMoney(k.realBudget)],
   ['Büdcə İstifadəsi', (k) => `${k.budgetUtilization}%`],
   ['Orta Büdcə / Təlim', (k) => fmtMoney(k.avgBudget)],
   ['Saat Başına Xərc', (k) => fmtMoney(k.costPerHour)],
@@ -73,7 +73,7 @@ const FINANCIAL_STATS = [
   },
   {
     key: 'realBudget', label: 'Real Büdcə', Icon: Banknote, color: '#7c3aed', format: fmtMoney,
-    subtitle: 'Planlanmış büdcə, ləğv edilmiş (Canceled) sətirlər çıxılmaqla',
+    subtitle: 'Planlanmış − ləğv − təxirə salınan − qənaət',
   },
   { key: 'budgetUtilization', label: 'Büdcə İstifadəsi', Icon: Percent, color: '#7c3aed', format: (n) => `${n}%`, subtitle: 'İstifadə Olunmuş / Planlanmış' },
   { key: 'avgBudget', label: 'Orta Büdcə / Təlim', Icon: TrendingUp, color: '#ea580c', format: fmtMoney },
