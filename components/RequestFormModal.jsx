@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Send } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import { computeBudgetStatus, computeForward, computeGapMetrics, priorityMeta } from '../lib/helpers';
+import { SuggestInput, useValueOptions } from '../lib/options';
 
 const IMPORTANCE_OPTIONS = [
   '1 – Aşağı (minimal təsir)', '2 – Orta (əsas işə təsir edir)',
@@ -15,6 +16,7 @@ const LEVEL_OPTIONS = [
 ];
 
 export default function RequestFormModal({ profile, team, onClose, onSubmitted }) {
+  const valueOpts = useValueOptions();
   const hasTeam = team && team.length > 0;
   const [forWhom, setForWhom] = useState('self');
   const [selectedIds, setSelectedIds] = useState([]);
@@ -87,7 +89,7 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
           requested_by: profile.id,
           employee_id: m.id,
           employee_name: m.full_name_az || m.id,
-          dept: m.dept || profile.dept || '—',
+          dept: m.dept || m.sube || profile.dept || profile.sube || '—',
           sube: m.sube || profile.sube || null,
           position: m.position || null,
           ...forward,
@@ -99,7 +101,7 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
         requested_by: profile.id,
         employee_id: profile.id,
         employee_name: profile.full_name_az || profile.id,
-        dept: profile.dept || '—',
+        dept: profile.dept || profile.sube || '—',
         sube: profile.sube || null,
         position: profile.position || null,
         ...forward,
@@ -119,7 +121,7 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
         <div className="modal-title" style={{ marginBottom: 4 }}>Yeni Təlim Sorğusu</div>
         <div className="section-sub" style={{ marginBottom: 14 }}>Aşağıdakı sahələri doldurub göndərin.</div>
 
-        <div className={'notice ' + (budgetStatus === 'Büdcədən kənar' ? 'notice-warning' : 'notice-success')} style={{ marginBottom: 16 }}>
+        <div className="notice note-red" style={{ marginBottom: 16 }}>
           {budgetStatus === 'Büdcədən kənar' ? (
             <><b>Diqqət:</b> Hazırda illik büdcə planlaşdırma dövründən (Oktyabr–Yanvar) kənardayıq. Bu sorğu təsdiqlənsə belə, <b>&quot;Büdcədən kənar&quot;</b> kateqoriyasında qeyd olunacaq və əvvəlcədən planlaşdırılmış büdcəyə daxil olmadığı üçün <b>təsdiq ehtimalı aşağıdır</b>.</>
           ) : (
@@ -169,7 +171,7 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
 
         <div style={{ marginBottom: 12 }}>
           <label>Təlimin adı *</label>
-          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="məs. Excel Advanced Kursu" />
+          <SuggestInput value={title} onChange={setTitle} options={valueOpts.skill} placeholder="məs. Excel Advanced Kursu — yazın, siyahıdan seçin" />
         </div>
 
         <div style={{ marginBottom: 12 }}>
@@ -245,9 +247,9 @@ export default function RequestFormModal({ profile, team, onClose, onSubmitted }
           })()}
           <div style={{ marginTop: 10 }}>
             <label>Vendor (istəyə bağlı)</label>
-            <input type="text" value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder="Tövsiyə etdiyiniz provayder (istəyə bağlı)" />
+            <SuggestInput value={vendor} onChange={setVendor} options={valueOpts.vendor} placeholder="Tövsiyə etdiyiniz provayder (istəyə bağlı)" />
             {profile.role !== 'ld' && (
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 11.5, fontWeight: 700, color: 'var(--red)', marginTop: 5 }}>
+              <div className="note-red" style={{ marginTop: 5 }}>
                 <span>Bu, sadəcə tövsiyədir. Yekun vendor L&D-nin qiymətləndirməsindən sonra sizə bildiriləcək.</span>
               </div>
             )}
