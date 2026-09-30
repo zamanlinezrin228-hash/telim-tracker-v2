@@ -84,7 +84,7 @@ export default function ResubmitModal({ request, profile, onClose, onSubmitted }
         <div className="section-sub" style={{ marginBottom: 14 }}>{request.employee_name} — {request.dept}</div>
 
         {request.reviewer_note && (
-          <div className="notice notice-warning" style={{ marginBottom: 16 }}>
+          <div className="notice note-red" style={{ marginBottom: 16 }}>
             <b>L&D-nin düzəliş qeydi:</b> {request.reviewer_note}
           </div>
         )}
