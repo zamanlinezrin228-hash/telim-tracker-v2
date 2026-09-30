@@ -8,6 +8,10 @@ import { GROUP_BG, GROUP_TEXT } from '../lib/tableGroups';
 import { TrainingStatusBadge, PriorityBadge, BudgetStatusBadge } from './Badges';
 import ColumnFilterHeader from './ColumnFilterHeader';
 import { showToast } from '../lib/toast';
+import {
+  SuggestInput, OptionSelect, useValueOptions, refreshValueOptions,
+  LEARNING_METHOD_OPTIONS, ACTIVITY_DURATION_OPTIONS, NEED_REASON_OPTIONS, TRANSFORMATION_AREA_OPTIONS,
+} from '../lib/options';
 
 const STATUS_OPTIONS = [
   'Scheduled to Commence on Planned Date', 'In Progress', 'Postponed', 'Completed', 'Canceled',
@@ -32,7 +36,8 @@ const LEVEL_OPTIONS = [
 
 const FILTER_FIELDS = ['dept', 'sube', 'position', 'category', 'skill', 'comp_cat', 'vendor', 'status', 'priority', 'budget_status'];
 const FIELD_LABELS = {
-  plan_year: 'İl', dept: 'Departament', sube: 'Filial', position: 'Vəzifə', category: 'Vəzifə Kateqoriyası',
+  plan_year: 'İl', dept: 'Departament', sube: 'Şöbə', position: 'Vəzifə', category: 'Vəzifə Kateqoriyası',
+  competency: 'Səriştə',
   comp_cat: 'Səriştə kateqoriyası (bacarıq/bilik/səriştə)', learning_goal: 'Öyrənmə Məqsədi',
   skill: 'Spesifik təlim ehtiyacı', vendor: 'Vendor', man_hours: 'Müddət (Man Hours)',
   used_budget: 'İstifadə olunmuş Büdcə', budget: 'Planlanmış Büdcə', status: 'Status',
@@ -61,6 +66,7 @@ const ALL_COLUMNS = [
   { key: 'category', label: FIELD_LABELS.category, group: 'competency' },
   { key: 'comp_cat', label: FIELD_LABELS.comp_cat, group: 'competency' },
   { key: 'learning_goal', label: FIELD_LABELS.learning_goal, group: 'plan' },
+  { key: 'competency', label: FIELD_LABELS.competency, group: 'competency' },
   { key: 'skill', label: FIELD_LABELS.skill, group: 'competency' },
   { key: 'vendor', label: FIELD_LABELS.vendor, group: 'resource' },
   { key: 'man_hours', label: FIELD_LABELS.man_hours, group: 'resource' },
@@ -234,6 +240,7 @@ function TrackingRow({ t, visibleColumns, isAdmin, onEdit, onDelete }) {
 }
 
 export default function TrackingView({ trainings, profile, onDataChanged }) {
+  const valueOpts = useValueOptions();
   const [search, setSearch] = useState('');
   const [selectedYear, setSelectedYear] = useState('all');
   const [filters, setFilters] = useState({});
@@ -445,6 +452,17 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
       man_hours: null,
     });
   }
+  function pickPerson(name) {
+    const matches = valueOpts.people.filter((p) => p.full_name_az === name);
+    if (matches.length !== 1) return; // eyni adlı iki nəfər — sistem departamentə görə özü ayıracaq
+    const p = matches[0];
+    setEditing((e) => ({
+      ...e,
+      dept: p.dept || e.dept,
+      sube: p.sube || e.sube,
+      position: p.position || e.position,
+    }));
+  }
   const GAP_SOURCE_FIELDS = new Set(['current_skill_level', 'required_skill_level', 'importance_level']);
   function upd(field, value) {
     setEditing((e) => {
@@ -470,8 +488,8 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
     // Məcburi sahələr (cədvəldə NOT NULL olanlar)
     const missing = [];
     if (!String(editing.employee_name || '').trim()) missing.push('Ad Soyad');
-    if (!String(editing.dept || '').trim()) missing.push('Departament');
-    if (!String(editing.skill || '').trim()) missing.push('Təlim / İnkişaf istiqaməti');
+    if (!String(editing.sube || '').trim()) missing.push('Şöbə');
+    if (!String(editing.skill || '').trim()) missing.push('Spesifik təlim ehtiyacı');
     if (!editing.status) missing.push('Status');
     if (missing.length) { setError('Doldurun: ' + missing.join(', ')); return; }
 
@@ -482,7 +500,10 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
       if (v === undefined) return;
       payload[k] = typeof v === 'string' && v.trim() === '' ? null : v;
     });
-    ['employee_name', 'dept', 'skill'].forEach((k) => { if (payload[k]) payload[k] = String(payload[k]).trim(); });
+    ['employee_name', 'dept', 'sube', 'skill'].forEach((k) => { if (payload[k]) payload[k] = String(payload[k]).trim(); });
+    // Departament məcburi deyil: bəzi şöbələrin departamenti yoxdur —
+    // onda departament kimi şöbənin adı yazılır (sistemin qaydası).
+    if (!payload.dept) payload.dept = payload.sube;
 
     setSaving(true);
     const { error: err } = isNew
@@ -492,6 +513,7 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
     if (err) { setError('Xəta: ' + err.message); return; }
     setEditing(null);
     showToast(isNew ? 'Yeni sətir əlavə olundu.' : 'Dəyişikliklər saxlanıldı.', 'success');
+    refreshValueOptions();
     if (onDataChanged) await onDataChanged();
   }
 
@@ -611,21 +633,23 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
                   <input type="number" value={editing.plan_year || ''} onChange={(e) => upd('plan_year', Number(e.target.value))} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label>Departament *</label>
-                  <input type="text" value={editing.dept || ''} onChange={(e) => upd('dept', e.target.value)} />
+                  <label>Departament</label>
+                  <SuggestInput value={editing.dept} onChange={(v) => upd('dept', v)} options={valueOpts.dept} placeholder="Boşdursa şöbə adı yazılır" />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label>Şöbə</label>
-                  <input type="text" value={editing.sube || ''} onChange={(e) => upd('sube', e.target.value)} />
+                  <label>Şöbə *</label>
+                  <SuggestInput value={editing.sube} onChange={(v) => upd('sube', v)} options={valueOpts.sube} placeholder="Yazın — siyahıdan seçin" />
                 </div>
               </div>
               <div style={{ marginBottom: 10 }}>
                 <label>Ad Soyad *</label>
-                <input type="text" value={editing.employee_name || ''} onChange={(e) => upd('employee_name', e.target.value)} />
+                <SuggestInput value={editing.employee_name} onChange={(v) => upd('employee_name', v)}
+                  options={[...new Set(valueOpts.people.map((p) => p.full_name_az))]} onPick={pickPerson}
+                  placeholder="Bir neçə hərf yazın — siyahıdan seçin" />
               </div>
               <div style={{ marginBottom: 10 }}>
                 <label>Vəzifə</label>
-                <input type="text" value={editing.position || ''} onChange={(e) => upd('position', e.target.value)} />
+                <SuggestInput value={editing.position} onChange={(v) => upd('position', v)} options={valueOpts.position} />
               </div>
 
               <div className="filter-label" style={{ margin: '4px 0 10px' }}>Səriştə və təlim ehtiyacı</div>
@@ -641,17 +665,21 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
                 <textarea rows={2} value={editing.learning_goal || ''} onChange={(e) => upd('learning_goal', e.target.value)} />
               </div>
               <div style={{ marginBottom: 10 }}>
+                <label>{FIELD_LABELS.competency}</label>
+                <input type="text" value={editing.competency || ''} onChange={(e) => upd('competency', e.target.value)} placeholder="Səriştə (kataloqdan)" />
+              </div>
+              <div style={{ marginBottom: 10 }}>
                 <label>{FIELD_LABELS.skill} *</label>
-                <input type="text" value={editing.skill || ''} onChange={(e) => upd('skill', e.target.value)} />
+                <SuggestInput value={editing.skill} onChange={(v) => upd('skill', v)} options={valueOpts.skill} placeholder="Konkret təlimin adı" />
               </div>
               <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                 <div style={{ flex: 1 }}>
                   <label>{FIELD_LABELS.transformation_area}</label>
-                  <input type="text" value={editing.transformation_area || ''} onChange={(e) => upd('transformation_area', e.target.value)} />
+                  <OptionSelect value={editing.transformation_area} onChange={(v) => upd('transformation_area', v)} options={TRANSFORMATION_AREA_OPTIONS} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <label>{FIELD_LABELS.vendor}</label>
-                  <input type="text" value={editing.vendor || ''} onChange={(e) => upd('vendor', e.target.value)} />
+                  <SuggestInput value={editing.vendor} onChange={(v) => upd('vendor', v)} options={valueOpts.vendor} />
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
@@ -680,16 +708,16 @@ export default function TrackingView({ trainings, profile, onDataChanged }) {
               <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                 <div style={{ flex: 1 }}>
                   <label>{FIELD_LABELS.learning_method}</label>
-                  <input type="text" value={editing.learning_method || ''} onChange={(e) => upd('learning_method', e.target.value)} />
+                  <OptionSelect value={editing.learning_method} onChange={(v) => upd('learning_method', v)} options={LEARNING_METHOD_OPTIONS} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <label>{FIELD_LABELS.activity_duration}</label>
-                  <input type="text" value={editing.activity_duration || ''} onChange={(e) => upd('activity_duration', e.target.value)} />
+                  <OptionSelect value={editing.activity_duration} onChange={(v) => upd('activity_duration', v)} options={ACTIVITY_DURATION_OPTIONS} />
                 </div>
               </div>
               <div style={{ marginBottom: 10 }}>
                 <label>{FIELD_LABELS.need_reason}</label>
-                <textarea rows={2} value={editing.need_reason || ''} onChange={(e) => upd('need_reason', e.target.value)} />
+                <OptionSelect value={editing.need_reason} onChange={(v) => upd('need_reason', v)} options={NEED_REASON_OPTIONS} />
               </div>
               <div style={{ display: 'flex', gap: 10, marginBottom: 6 }}>
                 <div style={{ flex: 1 }}>
