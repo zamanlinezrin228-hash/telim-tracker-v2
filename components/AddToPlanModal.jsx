@@ -1,4 +1,8 @@
 import { useState } from 'react';
+import {
+  SuggestInput, OptionSelect, useValueOptions, refreshValueOptions,
+  LEARNING_METHOD_OPTIONS, ACTIVITY_DURATION_OPTIONS, NEED_REASON_OPTIONS, TRANSFORMATION_AREA_OPTIONS,
+} from '../lib/options';
 import { ListPlus } from 'lucide-react';
 import { sb } from '../lib/supabase';
 import { computeBudgetStatus, computeGapMetrics } from '../lib/helpers';
@@ -13,7 +17,9 @@ export default function AddToPlanModal({ request, planYear, onClose, onSubmitted
   const [vendor, setVendor] = useState(request.vendor || '');
   const [manHours, setManHours] = useState(request.man_hours ?? 0);
   const [budget, setBudget] = useState(request.budget ?? 0);
-  const [usedBudget, setUsedBudget] = useState(0);
+  // Boş = hələ xərclənməyib. 0 yazılsa, təlim "tam qənaət" kimi sayılardı.
+  const [usedBudget, setUsedBudget] = useState('');
+  const valueOpts = useValueOptions();
   const [category, setCategory] = useState('');
   const [compCat, setCompCat] = useState(request.comp_cat || '');
   const [transformationArea, setTransformationArea] = useState(request.transformation_area || '');
@@ -38,10 +44,11 @@ export default function AddToPlanModal({ request, planYear, onClose, onSubmitted
     const gap = computeGapMetrics(request.current_skill_level, request.required_skill_level, request.importance_level);
     const trainingPayload = {
       employee_id: request.employee_id || null,
-      dept: request.dept, sube: request.sube || null, employee_name: request.employee_name,
+      dept: request.dept || request.sube, sube: request.sube || null, employee_name: request.employee_name,
       position: request.position || null, skill: request.training_title,
+      competency: request.competency || null,
       comp_cat: compCat || null, vendor: vendor.trim() || null,
-      man_hours: Number(manHours) || 0, budget: Number(budget) || 0, used_budget: Number(usedBudget) || 0,
+      man_hours: Number(manHours) || 0, budget: Number(budget) || 0, used_budget: usedBudget === '' || usedBudget === null ? null : Number(usedBudget),
       status: 'Scheduled to Commence on Planned Date',
       plan_year: planYear || new Date().getFullYear(),
       start_date: request.preferred_start || null, end_date: request.preferred_end || null,
@@ -64,6 +71,7 @@ export default function AddToPlanModal({ request, planYear, onClose, onSubmitted
     // The training row already exists at this point — say so rather than
     // letting the request look un-added and invite a duplicate insert.
     if (linkErr) showToast(`Təlim plana əlavə edildi (#${data.id}), amma sorğu ilə əlaqələndirilmədi: ${linkErr.message}`, 'error');
+    refreshValueOptions();
     onSubmitted();
   }
 
@@ -75,7 +83,7 @@ export default function AddToPlanModal({ request, planYear, onClose, onSubmitted
           {request.employee_name} — {request.dept}{request.sube ? ' / ' + request.sube : ''} — <b>{request.training_title}</b>
         </div>
 
-        <div className={'notice ' + (budgetStatus === 'Büdcədən kənar' ? 'notice-warning' : 'notice-success')} style={{ marginBottom: 14 }}>
+        <div className="notice note-red" style={{ marginBottom: 14 }}>
           {budgetStatus === 'Büdcədən kənar' ? (
             <>Bu təlim illik büdcə planlaşdırma dövründən (Oktyabr–Yanvar) kənarda təsdiqlənir, ona görə <b>&quot;Büdcədən kənar&quot;</b> kateqoriyasında qeyd olunacaq. Əvvəlcədən planlaşdırılmış büdcəyə daxil olmadığı üçün <b>təsdiq ehtimalı aşağıdır</b> və əlavə təsdiq tələb oluna bilər.</>
           ) : (
@@ -85,7 +93,7 @@ export default function AddToPlanModal({ request, planYear, onClose, onSubmitted
 
         <div style={{ marginBottom: 10 }}>
           <label>Vendor</label>
-          <input type="text" value={vendor} onChange={(e) => setVendor(e.target.value)} />
+          <SuggestInput value={vendor} onChange={setVendor} options={valueOpts.vendor} />
         </div>
         <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
           <div style={{ flex: 1 }}>
@@ -98,7 +106,7 @@ export default function AddToPlanModal({ request, planYear, onClose, onSubmitted
           </div>
           <div style={{ flex: 1 }}>
             <label>İstifadə olunmuş Büdcə (₼)</label>
-            <input type="number" value={usedBudget} onChange={(e) => setUsedBudget(e.target.value)} />
+            <input type="number" value={usedBudget} placeholder="Təlim keçiriləndə" onChange={(e) => setUsedBudget(e.target.value)} />
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
@@ -126,21 +134,21 @@ export default function AddToPlanModal({ request, planYear, onClose, onSubmitted
         </div>
         <div style={{ marginBottom: 10 }}>
           <label>Transformation Capability Area</label>
-          <input type="text" value={transformationArea} onChange={(e) => setTransformationArea(e.target.value)} />
+          <OptionSelect value={transformationArea} onChange={setTransformationArea} options={TRANSFORMATION_AREA_OPTIONS} />
         </div>
         <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
           <div style={{ flex: 1 }}>
             <label>Öyrənmə metodu</label>
-            <input type="text" value={learningMethod} onChange={(e) => setLearningMethod(e.target.value)} />
+            <OptionSelect value={learningMethod} onChange={setLearningMethod} options={LEARNING_METHOD_OPTIONS} />
           </div>
           <div style={{ flex: 1 }}>
             <label>Təlim/İnkişaf Aktivliyinin Müddəti</label>
-            <input type="text" value={activityDuration} onChange={(e) => setActivityDuration(e.target.value)} />
+            <OptionSelect value={activityDuration} onChange={setActivityDuration} options={ACTIVITY_DURATION_OPTIONS} />
           </div>
         </div>
         <div style={{ marginBottom: 10 }}>
           <label>Təlim və inkişaf ehtiyacının yaranma səbəbi</label>
-          <textarea rows={2} value={needReason} onChange={(e) => setNeedReason(e.target.value)} />
+          <OptionSelect value={needReason} onChange={setNeedReason} options={NEED_REASON_OPTIONS} />
         </div>
         <div style={{ marginBottom: 14 }}>
           <label>Öyrənmə Məqsədi</label>
