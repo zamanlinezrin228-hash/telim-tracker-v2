@@ -1204,3 +1204,14 @@ html {
   .tree-fan { grid-template-columns: 1fr; }
   .tree-fan::before, .tree-branch::before { display: none; }
 }
+
+/* Qeydlər — hamısı qırmızı, gözə çarpsın */
+.note-red {
+  display: flex; align-items: flex-start; gap: 6px;
+  background: #fef2f2; border: 1px solid #fecaca; border-left: 4px solid #dc2626;
+  color: #b91c1c; font-weight: 600; font-size: 12.5px; line-height: 1.45;
+  border-radius: 8px; padding: 8px 10px;
+}
+.note-red b, .note-red strong { color: #991b1b; }
+[data-theme="dark"] .note-red { background: rgba(220, 38, 38, 0.14); border-color: rgba(248, 113, 113, 0.45); color: #fca5a5; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .note-red { background: rgba(220, 38, 38, 0.14); border-color: rgba(248, 113, 113, 0.45); color: #fca5a5; } }
